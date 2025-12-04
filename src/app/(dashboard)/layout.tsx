@@ -36,8 +36,8 @@ export default async function DashboardLayout({
         id: authUser.id,
         email: authUser.email || '',
         plan: 'free',
-        analysis_count: 0,
-        analysis_limit: 3,
+        monthly_analysis_count: 0,
+        monthly_analysis_limit: 3,
       })
       .select()
       .single()
