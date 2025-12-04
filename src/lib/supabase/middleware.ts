@@ -44,6 +44,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // 認証コールバックはスキップ
+  if (pathname.startsWith('/api/auth/callback')) {
+    return supabaseResponse
+  }
+
   // 認証済みユーザーが認証ページにアクセスした場合、ダッシュボードにリダイレクト
   if (user && authRoutes.some(route => pathname.startsWith(route))) {
     const url = request.nextUrl.clone()
