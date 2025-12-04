@@ -1,51 +1,49 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Search, Download, ExternalLink, Globe, Users } from 'lucide-react'
+import { Search, ChevronDown, X, ExternalLink, Download, TrendingUp, TrendingDown, Minus, Globe, Users, BarChart2 } from 'lucide-react'
 
-// サンプルデータ
-const sampleMedia = [
-  { id: '1', name: 'マイナビ看護師', domain: 'kango.mynavi.jp', monthlyVisits: '2,500,000' },
-  { id: '2', name: 'ナース人材バンク', domain: 'nursejinzaibank.com', monthlyVisits: '1,800,000' },
-  { id: '3', name: '看護roo!', domain: 'kango-roo.com', monthlyVisits: '3,200,000' },
-  { id: '4', name: 'レバウェル看護', domain: 'levwell.jp', monthlyVisits: '980,000' },
-  { id: '5', name: 'ジョブメドレー', domain: 'job-medley.com', monthlyVisits: '2,100,000' },
+interface Media {
+  id: string
+  name: string
+  domain: string
+  monthlyTraffic: string
+  trafficChange: number
+  organic: number
+  paid: number
+  direct: number
+}
+
+interface Keyword {
+  keyword: string
+  intent: 'A' | 'B' | 'C'
+  rank: number
+  traffic: string
+  volume: string
+}
+
+const sampleMedia: Media[] = [
+  { id: '1', name: 'Indeed', domain: 'jp.indeed.com', monthlyTraffic: '45,000,000', trafficChange: 12.5, organic: 68, paid: 22, direct: 10 },
+  { id: '2', name: 'ジョブメドレー', domain: 'job-medley.com', monthlyTraffic: '8,500,000', trafficChange: 8.2, organic: 72, paid: 18, direct: 10 },
+  { id: '3', name: 'カイゴジョブ', domain: 'kaigojob.com', monthlyTraffic: '3,200,000', trafficChange: -2.3, organic: 65, paid: 25, direct: 10 },
+  { id: '4', name: 'マイナビ介護', domain: 'mynavi-kaigo.jp', monthlyTraffic: '2,800,000', trafficChange: 5.1, organic: 58, paid: 32, direct: 10 },
+  { id: '5', name: 'e介護転職', domain: 'ekaigotenshoku.com', monthlyTraffic: '1,500,000', trafficChange: 0, organic: 78, paid: 12, direct: 10 },
+  { id: '6', name: 'ナースではたらこ', domain: 'nurse-dework.jp', monthlyTraffic: '980,000', trafficChange: 15.8, organic: 62, paid: 28, direct: 10 },
 ]
 
-const sampleKeywords = [
-  { keyword: '看護師 求人', intent: 'A', rank: 3, traffic: '12,000', volume: '45,000' },
-  { keyword: '看護師 転職', intent: 'A', rank: 5, traffic: '8,500', volume: '38,000' },
-  { keyword: '病院 看護師 募集', intent: 'B', rank: 2, traffic: '5,200', volume: '18,000' },
-  { keyword: '看護師 パート', intent: 'B', rank: 7, traffic: '3,100', volume: '22,000' },
-  { keyword: '准看護師 求人', intent: 'A', rank: 4, traffic: '2,800', volume: '12,000' },
-  { keyword: '訪問看護 求人', intent: 'B', rank: 1, traffic: '4,500', volume: '15,000' },
-  { keyword: '看護師 夜勤専従', intent: 'C', rank: 3, traffic: '1,200', volume: '5,800' },
-  { keyword: '看護師 日勤のみ', intent: 'B', rank: 6, traffic: '2,100', volume: '9,500' },
+const sampleKeywords: Keyword[] = [
+  { keyword: '訪問介護 求人', intent: 'A', rank: 1, traffic: '15,200', volume: '48,000' },
+  { keyword: '介護職 転職', intent: 'A', rank: 3, traffic: '12,800', volume: '42,000' },
+  { keyword: '川崎市 介護 正社員', intent: 'A', rank: 2, traffic: '8,500', volume: '22,000' },
+  { keyword: 'ヘルパー 求人 神奈川', intent: 'B', rank: 5, traffic: '5,200', volume: '15,000' },
+  { keyword: '介護福祉士 訪問', intent: 'B', rank: 4, traffic: '4,800', volume: '12,000' },
+  { keyword: '介護職 未経験 OK', intent: 'B', rank: 8, traffic: '3,200', volume: '18,000' },
+  { keyword: '訪問介護 パート', intent: 'C', rank: 6, traffic: '2,800', volume: '9,500' },
+  { keyword: '介護 日勤のみ', intent: 'C', rank: 12, traffic: '1,500', volume: '6,200' },
 ]
 
 export default function CatalogPage() {
-  const [selectedMedia, setSelectedMedia] = useState<string>('')
+  const [selectedMedia, setSelectedMedia] = useState<Media | null>(null)
   const [intentFilter, setIntentFilter] = useState<string>('all')
   const [searchKeyword, setSearchKeyword] = useState('')
 
@@ -55,250 +53,237 @@ export default function CatalogPage() {
     return true
   })
 
+  const handleMediaClick = (media: Media) => {
+    setSelectedMedia(media)
+  }
+
+  const closePanel = () => {
+    setSelectedMedia(null)
+  }
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">媒体カタログ</h1>
-        <p className="text-muted-foreground mt-1">
-          登録されている媒体情報とキーワードデータを確認
-        </p>
-      </div>
+    <>
+      {/* ヘッダー */}
+      <header className="bg-white border-b border-[#E4E4E7] px-6 py-4 sticky top-0 z-40">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-[15px] font-semibold text-[#18181B] tracking-tight">媒体カタログ</h1>
+            <p className="text-[13px] text-[#A1A1AA] mt-0.5">媒体の獲得キーワード・流入経路を確認</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* 検索 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A1A1AA]" />
+              <input
+                type="text"
+                placeholder="媒体を検索..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="w-64 pl-9 pr-3 py-2 border border-[#E4E4E7] rounded-md text-[13px] focus:outline-none focus:border-[#A1A1AA] transition-colors"
+              />
+            </div>
+            {/* フィルター */}
+            <button className="px-3 py-2 border border-[#E4E4E7] rounded-md text-[13px] text-[#52525B] hover:bg-[#F4F4F5] transition-colors flex items-center gap-2">
+              フィルター
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </header>
 
-      <Tabs defaultValue="media" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="media">媒体で絞り込み</TabsTrigger>
-          <TabsTrigger value="keyword">キーワードで絞り込み</TabsTrigger>
-        </TabsList>
+      {/* コンテンツ */}
+      <div className="flex">
+        {/* メインテーブル */}
+        <div className={`flex-1 p-6 ${selectedMedia ? 'pr-0' : ''}`}>
+          <div className="bg-white border border-[#E4E4E7] rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#E4E4E7]">
+                  <th className="text-left px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">媒体名</th>
+                  <th className="text-left px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">ドメイン</th>
+                  <th className="text-right px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">月間トラフィック</th>
+                  <th className="text-right px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">変化</th>
+                  <th className="text-center px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">流入構成</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sampleMedia.map((media) => (
+                  <tr
+                    key={media.id}
+                    onClick={() => handleMediaClick(media)}
+                    className={`border-b border-[#F4F4F5] hover:bg-[#F4F4F5] cursor-pointer transition-colors ${
+                      selectedMedia?.id === media.id ? 'bg-[#F0FDFA]' : ''
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="text-[14px] font-medium text-[#18181B]">{media.name}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-[13px] text-[#A1A1AA]">{media.domain}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="text-[14px] font-medium text-[#18181B]">{media.monthlyTraffic}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className={`text-[13px] flex items-center justify-end gap-1 ${
+                        media.trafficChange > 0 ? 'text-[#10B981]' :
+                        media.trafficChange < 0 ? 'text-[#EF4444]' :
+                        'text-[#A1A1AA]'
+                      }`}>
+                        {media.trafficChange > 0 ? <TrendingUp className="h-3.5 w-3.5" /> :
+                         media.trafficChange < 0 ? <TrendingDown className="h-3.5 w-3.5" /> :
+                         <Minus className="h-3.5 w-3.5" />}
+                        {media.trafficChange > 0 ? '+' : ''}{media.trafficChange}%
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {/* ミニスタックバー */}
+                      <div className="flex items-center gap-2 justify-center">
+                        <div className="w-24 h-1.5 bg-[#F4F4F5] rounded-full flex overflow-hidden">
+                          <div className="bg-[#0D9488]" style={{ width: `${media.organic}%` }} />
+                          <div className="bg-[#F59E0B]" style={{ width: `${media.paid}%` }} />
+                          <div className="bg-[#A1A1AA]" style={{ width: `${media.direct}%` }} />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-        {/* 媒体で絞り込みモード */}
-        <TabsContent value="media" className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">検索条件</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>媒体を選択</Label>
-                  <Select value={selectedMedia} onValueChange={setSelectedMedia}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="媒体を選択してください" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sampleMedia.map((media) => (
-                        <SelectItem key={media.id} value={media.id}>
-                          {media.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+        {/* サイドパネル */}
+        {selectedMedia && (
+          <div className="w-[400px] border-l border-[#E4E4E7] bg-white h-[calc(100vh-120px)] overflow-y-auto sticky top-[73px]">
+            {/* パネルヘッダー */}
+            <div className="px-5 py-4 border-b border-[#E4E4E7] flex items-center justify-between sticky top-0 bg-white z-10">
+              <div>
+                <div className="text-[15px] font-semibold text-[#18181B]">{selectedMedia.name}</div>
+                <div className="text-[12px] text-[#A1A1AA] flex items-center gap-1">
+                  <Globe className="h-3 w-3" />
+                  {selectedMedia.domain}
                 </div>
-                <div className="space-y-2">
-                  <Label>応募意図フィルター</Label>
-                  <div className="flex gap-2">
-                    {['all', 'A', 'B', 'C'].map((intent) => (
-                      <Button
-                        key={intent}
-                        variant={intentFilter === intent ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setIntentFilter(intent)}
-                      >
-                        {intent === 'all' ? 'すべて' : intent}
-                      </Button>
-                    ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="p-1.5 hover:bg-[#F4F4F5] rounded-md transition-colors">
+                  <ExternalLink className="h-4 w-4 text-[#A1A1AA]" />
+                </button>
+                <button onClick={closePanel} className="p-1.5 hover:bg-[#F4F4F5] rounded-md transition-colors">
+                  <X className="h-4 w-4 text-[#A1A1AA]" />
+                </button>
+              </div>
+            </div>
+
+            {/* 概要 */}
+            <div className="px-5 py-4 border-b border-[#E4E4E7]">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-[11px] text-[#A1A1AA] mb-1">
+                    <Users className="h-3.5 w-3.5" />
+                    月間トラフィック
+                  </div>
+                  <div className="text-[18px] font-bold text-[#18181B]">{selectedMedia.monthlyTraffic}</div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-[11px] text-[#A1A1AA] mb-1">
+                    <BarChart2 className="h-3.5 w-3.5" />
+                    先月比
+                  </div>
+                  <div className={`text-[18px] font-bold flex items-center gap-1 ${
+                    selectedMedia.trafficChange > 0 ? 'text-[#10B981]' :
+                    selectedMedia.trafficChange < 0 ? 'text-[#EF4444]' :
+                    'text-[#A1A1AA]'
+                  }`}>
+                    {selectedMedia.trafficChange > 0 ? '+' : ''}{selectedMedia.trafficChange}%
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {selectedMedia && (
-            <>
-              {/* 媒体情報カード */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle>
-                        {sampleMedia.find((m) => m.id === selectedMedia)?.name}
-                      </CardTitle>
-                      <CardDescription className="flex items-center gap-2 mt-1">
-                        <Globe className="h-4 w-4" />
-                        {sampleMedia.find((m) => m.id === selectedMedia)?.domain}
-                      </CardDescription>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      サイトを開く
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-1">
-                        月間訪問数
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <Users className="h-5 w-5 text-primary" />
-                        <span className="text-2xl font-bold">
-                          {sampleMedia.find((m) => m.id === selectedMedia)?.monthlyVisits}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-2">
-                        流入経路
-                      </div>
-                      <div className="flex gap-2">
-                        <Badge variant="secondary">自然検索 65%</Badge>
-                        <Badge variant="secondary">広告 20%</Badge>
-                        <Badge variant="secondary">直接 15%</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* キーワード一覧 */}
-              <Card>
-                <CardHeader>
+              {/* 流入経路 */}
+              <div className="mt-4">
+                <div className="text-[11px] text-[#A1A1AA] mb-2">流入経路の内訳</div>
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">キーワード一覧</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Download className="h-4 w-4 mr-2" />
-                      CSVエクスポート
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#0D9488]" />
+                      <span className="text-[12px] text-[#52525B]">オーガニック検索</span>
+                    </div>
+                    <span className="text-[12px] font-medium text-[#18181B]">{selectedMedia.organic}%</span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>キーワード</TableHead>
-                        <TableHead className="w-20 text-center">意図</TableHead>
-                        <TableHead className="w-20 text-right">順位</TableHead>
-                        <TableHead className="w-28 text-right">推定流入</TableHead>
-                        <TableHead className="w-28 text-right">検索Vol</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredKeywords.map((kw, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{kw.keyword}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge
-                              variant="outline"
-                              className={
-                                kw.intent === 'A'
-                                  ? 'border-green-500 text-green-700'
-                                  : kw.intent === 'B'
-                                  ? 'border-amber-500 text-amber-700'
-                                  : 'border-gray-400 text-gray-600'
-                              }
-                            >
-                              {kw.intent}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{kw.rank}位</TableCell>
-                          <TableCell className="text-right">{kw.traffic}</TableCell>
-                          <TableCell className="text-right">{kw.volume}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {!selectedMedia && (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center text-muted-foreground">
-                  <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>媒体を選択してください</p>
-                  <p className="text-sm mt-1">
-                    選択した媒体のキーワードデータを表示します
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                      <span className="text-[12px] text-[#52525B]">有料広告</span>
+                    </div>
+                    <span className="text-[12px] font-medium text-[#18181B]">{selectedMedia.paid}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#A1A1AA]" />
+                      <span className="text-[12px] text-[#52525B]">ダイレクト</span>
+                    </div>
+                    <span className="text-[12px] font-medium text-[#18181B]">{selectedMedia.direct}%</span>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* キーワードで絞り込みモード */}
-        <TabsContent value="keyword" className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">キーワード検索</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="キーワードを入力..."
-                    className="pl-9"
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                  />
-                </div>
-                <Button>検索</Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {searchKeyword && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  検索結果: 「{searchKeyword}」
-                </CardTitle>
-                <CardDescription>
-                  {filteredKeywords.length}件のキーワードが見つかりました
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>媒体名</TableHead>
-                      <TableHead>キーワード</TableHead>
-                      <TableHead className="w-20 text-right">順位</TableHead>
-                      <TableHead className="w-28 text-right">推定流入</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredKeywords.map((kw, index) => (
-                      <TableRow key={index}>
-                        <TableCell>マイナビ看護師</TableCell>
-                        <TableCell className="font-medium">{kw.keyword}</TableCell>
-                        <TableCell className="text-right">{kw.rank}位</TableCell>
-                        <TableCell className="text-right">{kw.traffic}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
+            {/* キーワード一覧 */}
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[13px] font-semibold text-[#18181B]">獲得キーワード</span>
+                <button className="text-[12px] text-[#0D9488] hover:underline flex items-center gap-1">
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
+                </button>
+              </div>
 
-          {!searchKeyword && (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center text-muted-foreground">
-                  <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>キーワードを入力してください</p>
-                  <p className="text-sm mt-1">
-                    そのキーワードで上位表示されている媒体を検索します
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
+              {/* 意図フィルター */}
+              <div className="flex gap-1 mb-3">
+                {['all', 'A', 'B', 'C'].map((intent) => (
+                  <button
+                    key={intent}
+                    onClick={() => setIntentFilter(intent)}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                      intentFilter === intent
+                        ? 'bg-[#0D9488] text-white'
+                        : 'bg-[#F4F4F5] text-[#52525B] hover:bg-[#E4E4E7]'
+                    }`}
+                  >
+                    {intent === 'all' ? 'すべて' : `意図${intent}`}
+                  </button>
+                ))}
+              </div>
+
+              {/* キーワードテーブル */}
+              <div className="space-y-1">
+                {filteredKeywords.map((kw, index) => (
+                  <div key={index} className="flex items-center justify-between py-2 border-b border-[#F4F4F5] last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] text-[#18181B] truncate">{kw.keyword}</div>
+                      <div className="text-[11px] text-[#A1A1AA]">Vol: {kw.volume}</div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                        kw.intent === 'A' ? 'bg-[#D1FAE5] text-[#059669]' :
+                        kw.intent === 'B' ? 'bg-[#FEF3C7] text-[#D97706]' :
+                        'bg-[#F4F4F5] text-[#A1A1AA]'
+                      }`}>
+                        {kw.intent}
+                      </span>
+                      <div className="text-right">
+                        <div className="text-[13px] font-medium text-[#18181B]">{kw.rank}位</div>
+                        <div className="text-[10px] text-[#A1A1AA]">{kw.traffic}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }

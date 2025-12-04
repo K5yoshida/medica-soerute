@@ -4,11 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard,
-  BookOpen,
-  Target,
-  BarChart3,
-  History,
+  Home,
+  Grid2X2,
+  Star,
+  FileText,
+  Folder,
+  Clock,
   Settings,
   LogOut,
 } from 'lucide-react'
@@ -20,37 +21,48 @@ interface DashboardSidebarProps {
   user: User
 }
 
-const navigationItems = [
+const mainNavItems = [
   {
-    title: 'ダッシュボード',
+    title: 'ホーム',
     href: '/dashboard',
-    icon: LayoutDashboard,
+    icon: Home,
   },
+]
+
+const analysisNavItems = [
   {
     title: '媒体カタログ',
     href: '/dashboard/catalog',
-    icon: BookOpen,
+    icon: Grid2X2,
   },
   {
     title: '媒体マッチング',
     href: '/dashboard/matching',
-    icon: Target,
+    icon: Star,
   },
   {
     title: 'PESO診断',
     href: '/dashboard/peso',
-    icon: BarChart3,
+    icon: FileText,
+  },
+]
+
+const manageNavItems = [
+  {
+    title: 'フォルダ',
+    href: '/dashboard/folders',
+    icon: Folder,
   },
   {
     title: '履歴',
     href: '/dashboard/history',
-    icon: History,
+    icon: Clock,
   },
 ]
 
-const settingsItems = [
+const settingsNavItems = [
   {
-    title: '設定',
+    title: 'アカウント設定',
     href: '/dashboard/settings',
     icon: Settings,
   },
@@ -67,116 +79,114 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
     router.refresh()
   }
 
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return pathname === href
+    }
+    return pathname.startsWith(href)
+  }
+
+  const NavLink = ({ item }: { item: { title: string; href: string; icon: React.ComponentType<{ className?: string }> } }) => {
+    const active = isActive(item.href)
+    return (
+      <Link
+        href={item.href}
+        className={cn(
+          'flex items-center gap-3 rounded-md px-3 py-2 text-[13px] transition-colors',
+          active
+            ? 'bg-[rgba(13,148,136,0.12)] text-primary font-medium'
+            : 'text-[#A1A1AA] hover:bg-[rgba(255,255,255,0.04)] hover:text-[#FAFAFA]'
+        )}
+      >
+        <item.icon className={cn('h-4 w-4', active && 'stroke-[2]')} />
+        <span>{item.title}</span>
+      </Link>
+    )
+  }
+
   return (
-    <aside className="hidden md:flex w-60 flex-col bg-[#18181B] text-[#A1A1AA]">
+    <aside className="hidden md:flex w-60 flex-col bg-[#18181B] fixed top-0 left-0 h-screen z-50 border-r border-white/[0.06]">
       {/* ロゴ */}
-      <div className="h-16 flex items-center px-5 border-b border-white/10">
-        <Link href="/dashboard" className="text-lg font-semibold text-[#FAFAFA]">
-          MEDICA SOERUTE
+      <div className="px-4 py-5 border-b border-white/[0.06]">
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white text-sm">
+            🖐️
+          </div>
+          <div>
+            <div className="text-[14px] font-semibold text-[#FAFAFA] tracking-tight">
+              MEDICA SOERUTE
+            </div>
+            <div className="text-[11px] text-[#A1A1AA]">
+              Powered by CyXen
+            </div>
+          </div>
         </Link>
       </div>
 
       {/* ナビゲーション */}
-      <div className="flex-1 overflow-y-auto py-4">
-        <nav className="px-3 space-y-1">
-          {navigationItems.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/dashboard' && pathname.startsWith(item.href))
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'bg-[rgba(13,148,136,0.12)] text-[#FAFAFA]'
-                    : 'hover:bg-[rgba(255,255,255,0.04)] hover:text-[#FAFAFA]'
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.title}</span>
-              </Link>
-            )
-          })}
-        </nav>
-
-        <div className="mt-6 px-3">
-          <div className="border-t border-white/10 pt-4">
-            {settingsItems.map((item) => {
-              const isActive = pathname === item.href
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                    isActive
-                      ? 'bg-[rgba(13,148,136,0.12)] text-[#FAFAFA]'
-                      : 'hover:bg-[rgba(255,255,255,0.04)] hover:text-[#FAFAFA]'
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.title}</span>
-                </Link>
-              )
-            })}
-          </div>
+      <nav className="flex-1 overflow-y-auto py-3 px-2">
+        {/* ホーム */}
+        <div className="space-y-0.5">
+          {mainNavItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
         </div>
-      </div>
+
+        {/* 区切り線 */}
+        <div className="h-px bg-white/[0.06] mx-3 my-3" />
+
+        {/* 分析ツール */}
+        <div className="space-y-0.5">
+          {analysisNavItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
+        </div>
+
+        {/* 区切り線 */}
+        <div className="h-px bg-white/[0.06] mx-3 my-3" />
+
+        {/* 管理 */}
+        <div className="space-y-0.5">
+          {manageNavItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
+        </div>
+
+        {/* 区切り線 */}
+        <div className="h-px bg-white/[0.06] mx-3 my-3" />
+
+        {/* 設定 */}
+        <div className="space-y-0.5">
+          {settingsNavItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
+        </div>
+      </nav>
 
       {/* ユーザー情報 */}
-      <div className="border-t border-white/10 p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-sm font-medium text-primary">
-              {user.email?.charAt(0).toUpperCase()}
+      <div className="border-t border-white/[0.06] p-4">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
+            <span className="text-[11px] font-medium text-white">
+              {user.company_name?.charAt(0) || user.email?.charAt(0).toUpperCase() || '?'}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#FAFAFA] truncate">
-              {user.company_name || user.email}
-            </p>
-            <p className="text-xs text-[#A1A1AA] capitalize">{user.plan}プラン</p>
+            <div className="text-[13px] font-medium text-[#FAFAFA] truncate">
+              {user.company_name || user.email?.split('@')[0] || 'ユーザー'}
+            </div>
+            <div className="text-[11px] text-[#A1A1AA]">
+              {user.role === 'admin' ? '管理者' : 'コンサルタント'}
+            </div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="p-1 rounded text-[#A1A1AA] hover:bg-[rgba(255,255,255,0.04)] hover:text-[#FAFAFA] transition-colors"
+            title="ログアウト"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
-
-        {/* 利用状況 */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between text-xs text-[#A1A1AA] mb-1">
-            <span>今月の分析回数</span>
-            <span>
-              {user.monthly_analysis_count} /{' '}
-              {user.monthly_analysis_limit === -1
-                ? '無制限'
-                : user.monthly_analysis_limit}
-            </span>
-          </div>
-          <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all"
-              style={{
-                width:
-                  user.monthly_analysis_limit === -1
-                    ? '0%'
-                    : `${Math.min(
-                        (user.monthly_analysis_count /
-                          user.monthly_analysis_limit) *
-                          100,
-                        100
-                      )}%`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* ログアウト */}
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm text-[#A1A1AA] hover:bg-[rgba(255,255,255,0.04)] hover:text-[#FAFAFA] transition-colors"
-        >
-          <LogOut className="h-5 w-5" />
-          <span>ログアウト</span>
-        </button>
       </div>
     </aside>
   )

@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { DashboardSidebar } from '@/components/layout/dashboard-sidebar'
 import type { User } from '@/types'
 
@@ -69,14 +68,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[hsl(var(--bg-page))]">
-      <DashboardHeader />
-      <div className="flex flex-1">
-        <DashboardSidebar user={finalUser as User} />
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6">{children}</div>
-        </main>
-      </div>
+    <div className="min-h-screen bg-[#FAFAFA]">
+      {/* サイドバー（固定） */}
+      <DashboardSidebar user={finalUser as User} />
+
+      {/* メインコンテンツ（サイドバー分の左マージン） */}
+      <main className="md:ml-60 min-h-screen">
+        {children}
+      </main>
     </div>
   )
 }
