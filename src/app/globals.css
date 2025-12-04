@@ -8,65 +8,146 @@
   }
 }
 
-
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    /* プライマリカラー - Teal */
+    --primary: 168 84% 32%; /* #0D9488 */
+    --primary-light: 166 76% 97%; /* #F0FDFA */
+    --primary-dark: 168 80% 26%; /* #0F766E */
+    --primary-foreground: 0 0% 100%;
+
+    /* セマンティックカラー */
+    --success: 142 76% 45%; /* #22C55E */
+    --success-light: 142 76% 97%; /* #F0FDF4 */
+    --warning: 45 93% 47%; /* #EAB308 */
+    --warning-light: 48 96% 97%; /* #FEFCE8 */
+    --error: 0 84% 60%; /* #EF4444 */
+    --error-light: 0 86% 97%; /* #FEF2F2 */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* テキストカラー */
+    --text-primary: 240 6% 10%; /* #18181B */
+    --text-secondary: 240 4% 34%; /* #52525B */
+    --text-muted: 240 4% 66%; /* #A1A1AA */
+    --text-placeholder: 240 5% 84%; /* #D4D4D8 */
+
+    /* 背景カラー */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --bg-page: 0 0% 98%; /* #FAFAFA */
+    --bg-subtle: 240 5% 96%; /* #F4F4F5 */
+    --bg-hover: 240 5% 96%; /* #F4F4F5 */
+
+    /* ボーダーカラー */
+    --border: 240 6% 90%; /* #E4E4E7 */
+    --border-light: 240 5% 96%; /* #F4F4F5 */
+    --border-focus: 240 4% 66%; /* #A1A1AA */
+    --input: 240 6% 90%;
+    --ring: 168 84% 32%;
+
+    /* サイドバーカラー */
+    --sidebar-bg: 240 6% 10%; /* #18181B */
+    --sidebar-text: 240 4% 66%; /* #A1A1AA */
+    --sidebar-text-active: 0 0% 98%; /* #FAFAFA */
+    --sidebar-hover: 0 0% 100% / 0.04;
+    --sidebar-active: 168 84% 32% / 0.12;
+
+    /* カード */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 240 6% 10%;
+
+    /* ポップオーバー */
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --popover-foreground: 240 6% 10%;
+
+    /* セカンダリ */
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
+
+    /* ミュート */
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+
+    /* アクセント */
+    --accent: 240 5% 96%;
+    --accent-foreground: 240 6% 10%;
+
+    /* フォアグラウンド */
+    --foreground: 240 6% 10%;
+
+    /* チャート */
+    --chart-1: 168 84% 32%;
+    --chart-2: 142 76% 45%;
+    --chart-3: 45 93% 47%;
+    --chart-4: 0 84% 60%;
+    --chart-5: 280 65% 60%;
+
+    /* PESO象限カラー */
+    --peso-paid-bg: 213 94% 93%; /* #DBEAFE */
+    --peso-paid-text: 224 76% 41%; /* #1E40AF */
+    --peso-earned-bg: 48 96% 89%; /* #FEF3C7 */
+    --peso-earned-text: 21 90% 30%; /* #92400E */
+    --peso-shared-bg: 326 78% 95%; /* #FCE7F3 */
+    --peso-shared-text: 335 78% 35%; /* #9D174D */
+    --peso-owned-bg: 141 79% 90%; /* #D1FAE5 */
+    --peso-owned-text: 160 84% 20%; /* #065F46 */
+
+    /* スペーシング */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* 角丸 */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
     --radius: 0.5rem;
+
+    /* シャドウ */
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+
+    /* トランジション */
+    --transition-fast: 0.1s ease;
+    --transition-base: 0.15s ease;
+    --transition-slow: 0.3s ease;
+
+    /* レイアウト */
+    --sidebar-width: 240px;
+    --header-height: 64px;
+    --content-padding: 24px;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
+    --background: 240 6% 10%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    --card: 240 6% 10%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+    --popover: 240 6% 10%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
+    --primary: 168 84% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4% 16%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 168 84% 32%;
   }
 }
-
-
 
 @layer base {
   * {
@@ -74,5 +155,297 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
   }
+}
+
+/* スクリーンリーダー専用テキスト */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only-focusable:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* フォーカスインジケーター */
+:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* 施策チップ */
+.tactic-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tactic-chip-active {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.tactic-chip-low {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.tactic-chip-inactive {
+  background: #F3F4F6;
+  color: #6B7280;
+}
+
+/* PESO診断アンケートUI */
+.peso-survey-progress {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.peso-survey-progress-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.peso-survey-progress-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.peso-survey-progress-step.pending .peso-survey-progress-number {
+  background: hsl(var(--bg-subtle));
+  color: hsl(var(--text-muted));
+}
+
+.peso-survey-progress-step.current .peso-survey-progress-number {
+  background: hsl(var(--primary));
+  color: white;
+}
+
+.peso-survey-progress-step.completed .peso-survey-progress-number {
+  background: hsl(var(--success));
+  color: white;
+}
+
+/* チャネル選択グリッド */
+.peso-survey-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+}
+
+.peso-survey-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.peso-survey-item:hover {
+  border-color: hsl(var(--primary));
+}
+
+.peso-survey-item.selected {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary-light));
+}
+
+/* 深度スケールカード */
+.peso-survey-depth-scale {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.peso-survey-scale-option {
+  flex: 1;
+  min-width: 140px;
+  cursor: pointer;
+}
+
+.peso-survey-scale-option input {
+  display: none;
+}
+
+.peso-survey-scale-card {
+  background: hsl(var(--background));
+  border: 2px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  text-align: center;
+  transition: all var(--transition-fast);
+}
+
+.peso-survey-scale-card:hover {
+  border-color: hsl(var(--border-focus));
+}
+
+.peso-survey-scale-option input:checked + .peso-survey-scale-card {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary-light));
+}
+
+.peso-survey-scale-level {
+  font-size: 11px;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.peso-survey-scale-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--text-primary));
+  margin-bottom: var(--space-1);
+}
+
+.peso-survey-scale-desc {
+  font-size: 11px;
+  color: hsl(var(--text-secondary));
+  line-height: 1.4;
+}
+
+/* 管理画面スタイル */
+.admin-tactic-tree {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.admin-tactic-category {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.admin-tactic-category:last-child {
+  border-bottom: none;
+}
+
+.admin-tactic-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: hsl(var(--bg-subtle));
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-tactic-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  padding-left: var(--space-8);
+  border-bottom: 1px solid hsl(var(--border-light));
+}
+
+.admin-tactic-item:last-child {
+  border-bottom: none;
+}
+
+/* フレームワークマッピングタグ */
+.admin-framework-tags {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.admin-framework-tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.admin-framework-tag.peso {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.admin-framework-tag.funnel {
+  background: #E0E7FF;
+  color: #4338CA;
+}
+
+.admin-framework-tag.conversion {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.admin-framework-tag.journey {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+/* 新規媒体検出通知 */
+.admin-new-media-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.admin-new-media-alert-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: #D97706;
+}
+
+.admin-new-media-alert-content {
+  flex: 1;
+}
+
+.admin-new-media-alert-title {
+  font-weight: 600;
+  color: #92400E;
+  margin-bottom: var(--space-1);
+}
+
+.admin-new-media-alert-desc {
+  font-size: 13px;
+  color: #B45309;
+}
+
+.admin-new-media-alert-action {
+  flex-shrink: 0;
 }

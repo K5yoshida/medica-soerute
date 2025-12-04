@@ -9,6 +9,10 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['var(--font-inter)', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Noto Sans JP', 'sans-serif'],
+  			mono: ['JetBrains Mono', 'SF Mono', 'monospace'],
+  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',

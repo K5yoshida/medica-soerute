@@ -23,7 +23,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/analysis'
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,11 +66,16 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--bg-page))] py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            MEDICA SOERUTE
+          <div className="flex justify-center mb-4">
+            <Link href="/" className="text-2xl font-bold text-primary">
+              MEDICA SOERUTE
+            </Link>
+          </div>
+          <CardTitle className="text-xl font-semibold text-center">
+            ログイン
           </CardTitle>
           <CardDescription className="text-center">
             アカウントにログインしてください
@@ -94,7 +99,7 @@ function LoginForm() {
                 disabled={isLoading}
               />
               {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
+                <p className="text-sm text-destructive">{errors.email.message}</p>
               )}
             </div>
 
@@ -102,8 +107,8 @@ function LoginForm() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">パスワード</Label>
                 <Link
-                  href="/forgot-password"
-                  className="text-sm text-blue-600 hover:underline"
+                  href="/auth/password/forgot"
+                  className="text-sm text-primary hover:underline"
                 >
                   パスワードを忘れた方
                 </Link>
@@ -115,7 +120,7 @@ function LoginForm() {
                 disabled={isLoading}
               />
               {errors.password && (
-                <p className="text-sm text-red-500">{errors.password.message}</p>
+                <p className="text-sm text-destructive">{errors.password.message}</p>
               )}
             </div>
 
@@ -125,8 +130,8 @@ function LoginForm() {
           </form>
 
           <div className="mt-6 text-center text-sm">
-            <span className="text-gray-600">アカウントをお持ちでない方は</span>{' '}
-            <Link href="/register" className="text-blue-600 hover:underline">
+            <span className="text-muted-foreground">アカウントをお持ちでない方は</span>{' '}
+            <Link href="/auth/signup" className="text-primary hover:underline">
               新規登録
             </Link>
           </div>
@@ -139,8 +144,8 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-pulse text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--bg-page))]">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     }>
       <LoginForm />

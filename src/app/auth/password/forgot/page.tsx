@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ArrowLeft } from 'lucide-react'
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('有効なメールアドレスを入力してください'),
@@ -40,7 +41,7 @@ export default function ForgotPasswordPage() {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         data.email,
         {
-          redirectTo: `${window.location.origin}/api/auth/callback?next=/settings`,
+          redirectTo: `${window.location.origin}/auth/password/reset`,
         }
       )
 
@@ -51,7 +52,7 @@ export default function ForgotPasswordPage() {
 
       setSuccess(true)
     } catch {
-      setError('パスワードリセットメールの送信に失敗しました')
+      setError('エラーが発生しました。もう一度お試しください。')
     } finally {
       setIsLoading(false)
     }
@@ -59,25 +60,26 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--bg-page))] py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">
-              メール送信完了
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-center">
+              メールを送信しました
             </CardTitle>
-            <CardDescription className="text-center">
-              パスワードリセット用のメールを送信しました
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600 text-center">
-              メールに記載されたリンクをクリックして、パスワードをリセットしてください。
+          <CardContent className="text-center space-y-4">
+            <p className="text-muted-foreground">
+              パスワードリセット用のメールを送信しました。
+              <br />
+              メール内のリンクをクリックしてパスワードを再設定してください。
             </p>
-            <div className="text-center">
-              <Link href="/login" className="text-blue-600 hover:underline">
-                ログインページに戻る
-              </Link>
-            </div>
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center gap-2 text-primary hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              ログインに戻る
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -85,14 +87,19 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--bg-page))] py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            パスワードをお忘れの方
+          <div className="flex justify-center mb-4">
+            <Link href="/" className="text-2xl font-bold text-primary">
+              MEDICA SOERUTE
+            </Link>
+          </div>
+          <CardTitle className="text-xl font-semibold text-center">
+            パスワードをリセット
           </CardTitle>
           <CardDescription className="text-center">
-            登録済みのメールアドレスを入力してください
+            登録したメールアドレスを入力してください
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,7 +120,7 @@ export default function ForgotPasswordPage() {
                 disabled={isLoading}
               />
               {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
+                <p className="text-sm text-destructive">{errors.email.message}</p>
               )}
             </div>
 
@@ -122,9 +129,13 @@ export default function ForgotPasswordPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm">
-            <Link href="/login" className="text-blue-600 hover:underline">
-              ログインページに戻る
+          <div className="mt-6 text-center">
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              ログインに戻る
             </Link>
           </div>
         </CardContent>

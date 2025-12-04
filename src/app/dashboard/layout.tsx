@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/header'
-import { Sidebar } from '@/components/layout/sidebar'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { DashboardSidebar } from '@/components/layout/dashboard-sidebar'
 import type { User } from '@/types'
 
 export default async function DashboardLayout({
@@ -17,7 +17,7 @@ export default async function DashboardLayout({
   } = await supabase.auth.getUser()
 
   if (!authUser) {
-    redirect('/login')
+    redirect('/auth/login')
   }
 
   // ユーザー情報を取得
@@ -65,16 +65,16 @@ export default async function DashboardLayout({
   }
 
   if (!finalUser) {
-    redirect('/login')
+    redirect('/auth/login')
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header user={finalUser as User} />
+    <div className="min-h-screen flex flex-col bg-[hsl(var(--bg-page))]">
+      <DashboardHeader />
       <div className="flex flex-1">
-        <Sidebar user={finalUser as User} />
-        <main className="flex-1 overflow-y-auto bg-gray-50">
-          <div className="container py-6">{children}</div>
+        <DashboardSidebar user={finalUser as User} />
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6">{children}</div>
         </main>
       </div>
     </div>

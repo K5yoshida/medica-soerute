@@ -24,6 +24,7 @@ const registerSchema = z
         'パスワードは英大文字、英小文字、数字を含む必要があります'
       ),
     confirmPassword: z.string(),
+    displayName: z.string().min(1, '表示名を入力してください'),
     companyName: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -33,7 +34,7 @@ const registerSchema = z
 
 type RegisterFormData = z.infer<typeof registerSchema>
 
-export default function RegisterPage() {
+export default function SignupPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +59,7 @@ export default function RegisterPage() {
         password: data.password,
         options: {
           data: {
+            display_name: data.displayName,
             company_name: data.companyName,
           },
           emailRedirectTo: `${window.location.origin}/api/auth/callback`,
@@ -83,22 +85,22 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--bg-page))] py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center text-green-600">
+            <CardTitle className="text-2xl font-bold text-center text-[hsl(var(--success))]">
               登録完了
             </CardTitle>
           </CardHeader>
           <CardContent className="text-center space-y-4">
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               確認メールを送信しました。
               <br />
               メール内のリンクをクリックして登録を完了してください。
             </p>
             <Button
               variant="outline"
-              onClick={() => router.push('/login')}
+              onClick={() => router.push('/auth/login')}
               className="w-full"
             >
               ログインページへ
@@ -110,10 +112,15 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--bg-page))] py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
+          <div className="flex justify-center mb-4">
+            <Link href="/" className="text-2xl font-bold text-primary">
+              MEDICA SOERUTE
+            </Link>
+          </div>
+          <CardTitle className="text-xl font-semibold text-center">
             新規アカウント登録
           </CardTitle>
           <CardDescription className="text-center">
@@ -129,7 +136,9 @@ export default function RegisterPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">メールアドレス *</Label>
+              <Label htmlFor="email">
+                メールアドレス <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -138,7 +147,23 @@ export default function RegisterPage() {
                 disabled={isLoading}
               />
               {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
+                <p className="text-sm text-destructive">{errors.email.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="displayName">
+                表示名 <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="山田 太郎"
+                {...register('displayName')}
+                disabled={isLoading}
+              />
+              {errors.displayName && (
+                <p className="text-sm text-destructive">{errors.displayName.message}</p>
               )}
             </div>
 
@@ -154,7 +179,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">パスワード *</Label>
+              <Label htmlFor="password">
+                パスワード <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="password"
                 type="password"
@@ -162,15 +189,17 @@ export default function RegisterPage() {
                 disabled={isLoading}
               />
               {errors.password && (
-                <p className="text-sm text-red-500">{errors.password.message}</p>
+                <p className="text-sm text-destructive">{errors.password.message}</p>
               )}
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 8文字以上、英大文字・英小文字・数字を含む
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">パスワード（確認）*</Label>
+              <Label htmlFor="confirmPassword">
+                パスワード（確認）<span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -178,7 +207,7 @@ export default function RegisterPage() {
                 disabled={isLoading}
               />
               {errors.confirmPassword && (
-                <p className="text-sm text-red-500">
+                <p className="text-sm text-destructive">
                   {errors.confirmPassword.message}
                 </p>
               )}
@@ -190,8 +219,8 @@ export default function RegisterPage() {
           </form>
 
           <div className="mt-6 text-center text-sm">
-            <span className="text-gray-600">既にアカウントをお持ちの方は</span>{' '}
-            <Link href="/login" className="text-blue-600 hover:underline">
+            <span className="text-muted-foreground">既にアカウントをお持ちの方は</span>{' '}
+            <Link href="/auth/login" className="text-primary hover:underline">
               ログイン
             </Link>
           </div>
