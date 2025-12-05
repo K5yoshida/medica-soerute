@@ -24,7 +24,7 @@ export function Header({ user }: HeaderProps) {
   const handleSignOut = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push('/login')
+    router.push('/auth/login')
     router.refresh()
   }
 
@@ -41,28 +41,28 @@ export function Header({ user }: HeaderProps) {
           {user && (
             <nav className="hidden md:flex items-center gap-6">
               <Link
-                href="/analysis"
+                href="/dashboard"
                 className="text-sm font-medium text-gray-600 hover:text-gray-900"
               >
-                媒体分析
+                ダッシュボード
               </Link>
               <Link
-                href="/media"
+                href="/dashboard/catalog"
                 className="text-sm font-medium text-gray-600 hover:text-gray-900"
               >
-                媒体一覧
+                媒体カタログ
               </Link>
               <Link
-                href="/peso"
+                href="/dashboard/matching"
+                className="text-sm font-medium text-gray-600 hover:text-gray-900"
+              >
+                媒体マッチング
+              </Link>
+              <Link
+                href="/dashboard/peso"
                 className="text-sm font-medium text-gray-600 hover:text-gray-900"
               >
                 PESO診断
-              </Link>
-              <Link
-                href="/recommendations"
-                className="text-sm font-medium text-gray-600 hover:text-gray-900"
-              >
-                施策提案
               </Link>
             </nav>
           )}
@@ -91,10 +91,7 @@ export function Header({ user }: HeaderProps) {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/settings">設定</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/settings/billing">プラン・請求</Link>
+                  <Link href="/dashboard/settings">設定</Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
@@ -105,10 +102,10 @@ export function Header({ user }: HeaderProps) {
           ) : (
             <div className="flex items-center gap-2">
               <Button variant="ghost" asChild>
-                <Link href="/login">ログイン</Link>
+                <Link href="/auth/login">ログイン</Link>
               </Button>
               <Button asChild>
-                <Link href="/register">無料で始める</Link>
+                <Link href="/auth/signup">無料で始める</Link>
               </Button>
             </div>
           )}

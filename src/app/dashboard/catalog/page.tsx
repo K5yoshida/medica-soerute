@@ -1,689 +1,588 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Search,
   ChevronDown,
   X,
   ExternalLink,
   Download,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Globe,
   Users,
   BarChart2,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
 
-/**
- * Media Catalog Page
- *
- * Design spec: 03_ブランディングとデザインガイド.md
- *
- * Layout:
- * - Header: sticky, bg white, border-bottom
- * - Content: flex layout with main table and side panel
- * - Side panel: 400px width, slides in from right
- */
-
-interface Media {
+interface MediaMaster {
   id: string
   name: string
-  domain: string
-  monthlyTraffic: string
-  trafficChange: number
-  organic: number
-  paid: number
-  direct: number
+  domain: string | null
+  category: string
+  description: string | null
+  monthly_visits: number | null
+  bounce_rate: number | null
+  pages_per_visit: number | null
+  avg_visit_duration: number | null
+  is_active: boolean
+  keyword_count: number
+  latest_traffic: TrafficData | null
+}
+
+interface TrafficData {
+  id: string
+  media_id: string
+  period: string
+  search_pct: number
+  direct_pct: number
+  referral_pct: number
+  display_pct: number
+  email_pct: number
+  social_pct: number
 }
 
 interface Keyword {
+  id: string
   keyword: string
-  intent: 'A' | 'B' | 'C'
-  rank: number
-  traffic: string
-  volume: string
+  intent: 'A' | 'B' | 'C' | null
+  search_volume: number | null
+  rank: number | null
+  estimated_traffic: number | null
+  seo_difficulty: number | null
+  cpc: number | null
 }
 
-const sampleMedia: Media[] = [
-  {
-    id: '1',
-    name: 'Indeed',
-    domain: 'jp.indeed.com',
-    monthlyTraffic: '45,000,000',
-    trafficChange: 12.5,
-    organic: 68,
-    paid: 22,
-    direct: 10,
-  },
-  {
-    id: '2',
-    name: 'ジョブメドレー',
-    domain: 'job-medley.com',
-    monthlyTraffic: '8,500,000',
-    trafficChange: 8.2,
-    organic: 72,
-    paid: 18,
-    direct: 10,
-  },
-  {
-    id: '3',
-    name: 'カイゴジョブ',
-    domain: 'kaigojob.com',
-    monthlyTraffic: '3,200,000',
-    trafficChange: -2.3,
-    organic: 65,
-    paid: 25,
-    direct: 10,
-  },
-  {
-    id: '4',
-    name: 'マイナビ介護',
-    domain: 'mynavi-kaigo.jp',
-    monthlyTraffic: '2,800,000',
-    trafficChange: 5.1,
-    organic: 58,
-    paid: 32,
-    direct: 10,
-  },
-  {
-    id: '5',
-    name: 'e介護転職',
-    domain: 'ekaigotenshoku.com',
-    monthlyTraffic: '1,500,000',
-    trafficChange: 0,
-    organic: 78,
-    paid: 12,
-    direct: 10,
-  },
-  {
-    id: '6',
-    name: 'ナースではたらこ',
-    domain: 'nurse-dework.jp',
-    monthlyTraffic: '980,000',
-    trafficChange: 15.8,
-    organic: 62,
-    paid: 28,
-    direct: 10,
-  },
-]
+interface KeywordStats {
+  total: number
+  intent_a: number
+  intent_b: number
+  intent_c: number
+  total_search_volume: number
+  total_estimated_traffic: number
+}
 
-const sampleKeywords: Keyword[] = [
-  { keyword: '訪問介護 求人', intent: 'A', rank: 1, traffic: '15,200', volume: '48,000' },
-  { keyword: '介護職 転職', intent: 'A', rank: 3, traffic: '12,800', volume: '42,000' },
-  { keyword: '川崎市 介護 正社員', intent: 'A', rank: 2, traffic: '8,500', volume: '22,000' },
-  { keyword: 'ヘルパー 求人 神奈川', intent: 'B', rank: 5, traffic: '5,200', volume: '15,000' },
-  { keyword: '介護福祉士 訪問', intent: 'B', rank: 4, traffic: '4,800', volume: '12,000' },
-  { keyword: '介護職 未経験 OK', intent: 'B', rank: 8, traffic: '3,200', volume: '18,000' },
-  { keyword: '訪問介護 パート', intent: 'C', rank: 6, traffic: '2,800', volume: '9,500' },
-  { keyword: '介護 日勤のみ', intent: 'C', rank: 12, traffic: '1,500', volume: '6,200' },
-]
+const CATEGORY_LABELS: Record<string, string> = {
+  all: 'すべて',
+  nursing: '看護師',
+  welfare: '介護・福祉',
+  pharmacy: '薬剤師',
+  dental: '歯科',
+  rehabilitation: 'リハビリ',
+  general: '総合',
+}
+
+function formatNumber(num: number | null | undefined): string {
+  if (num === null || num === undefined) return '-'
+  return num.toLocaleString('ja-JP')
+}
 
 export default function CatalogPage() {
-  const [selectedMedia, setSelectedMedia] = useState<Media | null>(null)
+  const router = useRouter()
+  const [mediaList, setMediaList] = useState<MediaMaster[]>([])
+  const [selectedMedia, setSelectedMedia] = useState<MediaMaster | null>(null)
+  const [keywords, setKeywords] = useState<Keyword[]>([])
+  const [keywordStats, setKeywordStats] = useState<KeywordStats | null>(null)
   const [intentFilter, setIntentFilter] = useState<string>('all')
-  const [searchKeyword, setSearchKeyword] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingKeywords, setIsLoadingKeywords] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
 
-  const filteredKeywords = sampleKeywords.filter((kw) => {
-    if (intentFilter !== 'all' && kw.intent !== intentFilter) return false
-    if (searchKeyword && !kw.keyword.includes(searchKeyword)) return false
-    return true
-  })
+  // 媒体一覧を取得
+  const fetchMedia = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (categoryFilter !== 'all') {
+        params.set('category', categoryFilter)
+      }
+      if (searchQuery) {
+        params.set('search', searchQuery)
+      }
+      params.set('sort_by', 'monthly_visits')
+      params.set('sort_order', 'desc')
+
+      const res = await fetch(`/api/media?${params.toString()}`)
+      const data = await res.json()
+
+      if (!data.success) {
+        throw new Error(data.error?.message || '媒体データの取得に失敗しました')
+      }
+
+      setMediaList(data.data || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '予期せぬエラーが発生しました')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [categoryFilter, searchQuery])
+
+  // 選択した媒体のキーワードを取得
+  const fetchKeywords = useCallback(async (mediaId: string, intent?: string) => {
+    setIsLoadingKeywords(true)
+    try {
+      const params = new URLSearchParams()
+      if (intent && intent !== 'all') {
+        params.set('intent', intent)
+      }
+      params.set('limit', '20')
+      params.set('sort_by', 'search_volume')
+      params.set('sort_order', 'desc')
+
+      const res = await fetch(`/api/media/${mediaId}/keywords?${params.toString()}`)
+      const data = await res.json()
+
+      if (!data.success) {
+        throw new Error(data.error?.message || 'キーワードデータの取得に失敗しました')
+      }
+
+      setKeywords(data.data?.keywords || [])
+      setKeywordStats(data.data?.stats || null)
+    } catch (err) {
+      console.error('Failed to fetch keywords:', err)
+      setKeywords([])
+      setKeywordStats(null)
+    } finally {
+      setIsLoadingKeywords(false)
+    }
+  }, [])
+
+  // 初期読み込み
+  useEffect(() => {
+    fetchMedia()
+  }, [fetchMedia])
+
+  // 媒体選択時にキーワードを取得
+  useEffect(() => {
+    if (selectedMedia) {
+      setIntentFilter('all')
+      fetchKeywords(selectedMedia.id)
+    }
+  }, [selectedMedia, fetchKeywords])
+
+  // インテントフィルター変更時
+  useEffect(() => {
+    if (selectedMedia) {
+      fetchKeywords(selectedMedia.id, intentFilter)
+    }
+  }, [intentFilter, selectedMedia, fetchKeywords])
+
+  // CSVダウンロード
+  const handleDownloadCSV = async () => {
+    if (!selectedMedia) return
+
+    try {
+      const res = await fetch(`/api/media/${selectedMedia.id}/keywords?limit=1000`)
+      const data = await res.json()
+
+      if (!data.success || !data.data?.keywords) return
+
+      const csvContent = [
+        ['キーワード', '応募意図', '検索順位', '検索ボリューム', '推定流入数', 'SEO難易度'].join(','),
+        ...data.data.keywords.map((kw: Keyword) =>
+          [
+            `"${kw.keyword}"`,
+            kw.intent || '',
+            kw.rank || '',
+            kw.search_volume || '',
+            kw.estimated_traffic || '',
+            kw.seo_difficulty || '',
+          ].join(',')
+        ),
+      ].join('\n')
+
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${selectedMedia.name}_keywords.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('CSV download failed:', err)
+    }
+  }
 
   return (
     <>
-      {/* Header: sticky, bg white, border-bottom, padding 16px 24px */}
-      <header
-        style={{
-          background: '#FFFFFF',
-          borderBottom: '1px solid #E4E4E7',
-          padding: '16px 24px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 40,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
+      {/* Header */}
+      <header className="bg-white border-b border-zinc-200 px-6 py-4 sticky top-0 z-40">
+        <div className="flex items-center justify-between">
           <div>
-            {/* Title: 15px, weight 600, color #18181B */}
-            <h1
-              style={{
-                fontSize: '15px',
-                fontWeight: 600,
-                color: '#18181B',
-                letterSpacing: '-0.01em',
-                margin: 0,
-              }}
-            >
+            <h1 className="text-[15px] font-semibold text-zinc-900 tracking-tight">
               媒体カタログ
             </h1>
-            {/* Subtitle: 13px, color #A1A1AA */}
-            <p
-              style={{
-                fontSize: '13px',
-                color: '#A1A1AA',
-                marginTop: '2px',
-                fontWeight: 400,
-              }}
-            >
+            <p className="text-[13px] text-zinc-400 mt-0.5">
               媒体の獲得キーワード・流入経路を確認
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="flex items-center gap-3">
             {/* Search input */}
-            <div style={{ position: 'relative' }}>
-              <Search
-                style={{
-                  position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: 16,
-                  height: 16,
-                  color: '#A1A1AA',
-                }}
-              />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <input
                 type="text"
                 placeholder="媒体を検索..."
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                style={{
-                  width: '256px',
-                  paddingLeft: '36px',
-                  paddingRight: '12px',
-                  paddingTop: '8px',
-                  paddingBottom: '8px',
-                  border: '1px solid #E4E4E7',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  outline: 'none',
-                  transition: 'border-color 0.15s ease',
-                }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchMedia()}
+                className="w-64 pl-9 pr-3 py-2 border border-zinc-200 rounded-md text-[13px] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
               />
             </div>
 
-            {/* Filter button */}
+            {/* Category filter */}
+            <div className="relative">
+              <button
+                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                className="px-3 py-2 border border-zinc-200 rounded-md text-[13px] text-zinc-600 bg-white flex items-center gap-2 hover:bg-zinc-50 transition"
+              >
+                {CATEGORY_LABELS[categoryFilter]}
+                <ChevronDown className="w-4 h-4" />
+              </button>
+
+              {showCategoryDropdown && (
+                <div className="absolute right-0 mt-1 w-40 bg-white border border-zinc-200 rounded-md shadow-lg py-1 z-50">
+                  {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setCategoryFilter(value)
+                        setShowCategoryDropdown(false)
+                      }}
+                      className={`w-full px-3 py-2 text-left text-[13px] hover:bg-zinc-50 transition ${
+                        categoryFilter === value ? 'text-teal-600 bg-teal-50' : 'text-zinc-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Refresh button */}
             <button
-              style={{
-                padding: '8px 12px',
-                border: '1px solid #E4E4E7',
-                borderRadius: '6px',
-                fontSize: '13px',
-                color: '#52525B',
-                background: '#FFFFFF',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'background 0.15s ease',
-              }}
+              onClick={fetchMedia}
+              disabled={isLoading}
+              className="p-2 border border-zinc-200 rounded-md text-zinc-600 bg-white hover:bg-zinc-50 transition disabled:opacity-50"
             >
-              フィルター
-              <ChevronDown style={{ width: 16, height: 16 }} />
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
       </header>
 
       {/* Content area */}
-      <div style={{ display: 'flex' }}>
+      <div className="flex">
         {/* Main table area */}
-        <div
-          style={{
-            flex: 1,
-            padding: '24px',
-            paddingRight: selectedMedia ? '0' : '24px',
-          }}
-        >
-          {/* Table card */}
-          <div
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E4E4E7',
-              borderRadius: '8px',
-              overflow: 'hidden',
-            }}
-          >
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #E4E4E7' }}>
-                  <th
-                    style={{
-                      textAlign: 'left',
-                      padding: '12px 16px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: '#A1A1AA',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    媒体名
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'left',
-                      padding: '12px 16px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: '#A1A1AA',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    ドメイン
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'right',
-                      padding: '12px 16px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: '#A1A1AA',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    月間トラフィック
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'right',
-                      padding: '12px 16px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: '#A1A1AA',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    変化
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'center',
-                      padding: '12px 16px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: '#A1A1AA',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    流入構成
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sampleMedia.map((media) => (
-                  <tr
-                    key={media.id}
-                    onClick={() => setSelectedMedia(media)}
-                    style={{
-                      borderBottom: '1px solid #F4F4F5',
-                      cursor: 'pointer',
-                      transition: 'background 0.1s ease',
-                      background: selectedMedia?.id === media.id ? '#F0FDFA' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedMedia?.id !== media.id) {
-                        e.currentTarget.style.background = '#F4F4F5'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedMedia?.id !== media.id) {
-                        e.currentTarget.style.background = 'transparent'
-                      }
-                    }}
-                  >
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#18181B' }}>
-                        {media.name}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontSize: '13px', color: '#A1A1AA' }}>{media.domain}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#18181B' }}>
-                        {media.monthlyTraffic}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <div
-                        style={{
-                          fontSize: '13px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'flex-end',
-                          gap: '4px',
-                          color:
-                            media.trafficChange > 0
-                              ? '#10B981'
-                              : media.trafficChange < 0
-                                ? '#EF4444'
-                                : '#A1A1AA',
-                        }}
-                      >
-                        {media.trafficChange > 0 ? (
-                          <TrendingUp style={{ width: 14, height: 14 }} />
-                        ) : media.trafficChange < 0 ? (
-                          <TrendingDown style={{ width: 14, height: 14 }} />
-                        ) : (
-                          <Minus style={{ width: 14, height: 14 }} />
-                        )}
-                        {media.trafficChange > 0 ? '+' : ''}
-                        {media.trafficChange}%
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      {/* Mini stack bar */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '96px',
-                            height: '6px',
-                            background: '#F4F4F5',
-                            borderRadius: '999px',
-                            display: 'flex',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div style={{ background: '#0D9488', width: `${media.organic}%` }} />
-                          <div style={{ background: '#F59E0B', width: `${media.paid}%` }} />
-                          <div style={{ background: '#A1A1AA', width: `${media.direct}%` }} />
-                        </div>
-                      </div>
-                    </td>
+        <div className={`flex-1 p-6 ${selectedMedia ? 'pr-0' : ''}`}>
+          {error ? (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg text-[13px]">
+              {error}
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
+              <span className="ml-2 text-[13px] text-zinc-500">読み込み中...</span>
+            </div>
+          ) : mediaList.length === 0 ? (
+            <div className="text-center py-12 text-zinc-500 text-[13px]">
+              媒体が見つかりません
+            </div>
+          ) : (
+            <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-zinc-200">
+                    <th className="text-left px-4 py-3 text-[12px] font-medium text-zinc-400 uppercase tracking-wider">
+                      媒体名
+                    </th>
+                    <th className="text-left px-4 py-3 text-[12px] font-medium text-zinc-400 uppercase tracking-wider">
+                      ドメイン
+                    </th>
+                    <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-400 uppercase tracking-wider">
+                      月間トラフィック
+                    </th>
+                    <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-400 uppercase tracking-wider">
+                      KW数
+                    </th>
+                    <th className="text-center px-4 py-3 text-[12px] font-medium text-zinc-400 uppercase tracking-wider">
+                      流入構成
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {mediaList.map((media) => (
+                    <tr
+                      key={media.id}
+                      onClick={() => setSelectedMedia(media)}
+                      className={`border-b border-zinc-100 cursor-pointer transition ${
+                        selectedMedia?.id === media.id
+                          ? 'bg-teal-50'
+                          : 'hover:bg-zinc-50'
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="text-[14px] font-medium text-zinc-900">
+                          {media.name}
+                        </div>
+                        <div className="text-[11px] text-zinc-400">
+                          {CATEGORY_LABELS[media.category] || media.category}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-[13px] text-zinc-400">
+                          {media.domain || '-'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="text-[14px] font-medium text-zinc-900">
+                          {formatNumber(media.monthly_visits)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="text-[14px] font-medium text-zinc-900">
+                          {formatNumber(media.keyword_count)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {media.latest_traffic ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-24 h-1.5 bg-zinc-100 rounded-full flex overflow-hidden">
+                              <div
+                                className="bg-teal-500"
+                                style={{ width: `${media.latest_traffic.search_pct}%` }}
+                              />
+                              <div
+                                className="bg-amber-500"
+                                style={{ width: `${media.latest_traffic.direct_pct}%` }}
+                              />
+                              <div
+                                className="bg-zinc-400"
+                                style={{ width: `${media.latest_traffic.referral_pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center text-[12px] text-zinc-400">-</div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Side panel */}
         {selectedMedia && (
-          <div
-            style={{
-              width: '400px',
-              borderLeft: '1px solid #E4E4E7',
-              background: '#FFFFFF',
-              height: 'calc(100vh - 120px)',
-              overflowY: 'auto',
-              position: 'sticky',
-              top: '73px',
-            }}
-          >
+          <div className="w-[400px] border-l border-zinc-200 bg-white h-[calc(100vh-120px)] overflow-y-auto sticky top-[73px]">
             {/* Panel header */}
-            <div
-              style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid #E4E4E7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                position: 'sticky',
-                top: 0,
-                background: '#FFFFFF',
-                zIndex: 10,
-              }}
-            >
+            <div className="px-5 py-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 600, color: '#18181B' }}>
+                <div className="text-[15px] font-semibold text-zinc-900">
                   {selectedMedia.name}
                 </div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: '#A1A1AA',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    marginTop: '2px',
-                  }}
-                >
-                  <Globe style={{ width: 12, height: 12 }} />
-                  {selectedMedia.domain}
+                <div className="flex items-center gap-1 text-[12px] text-zinc-400 mt-0.5">
+                  <Globe className="w-3 h-3" />
+                  {selectedMedia.domain || 'ドメイン未設定'}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  style={{
-                    padding: '6px',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    transition: 'background 0.1s ease',
-                  }}
-                >
-                  <ExternalLink style={{ width: 16, height: 16, color: '#A1A1AA' }} />
-                </button>
+              <div className="flex items-center gap-2">
+                {selectedMedia.domain && (
+                  <a
+                    href={`https://${selectedMedia.domain}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-md hover:bg-zinc-100 transition"
+                  >
+                    <ExternalLink className="w-4 h-4 text-zinc-400" />
+                  </a>
+                )}
                 <button
                   onClick={() => setSelectedMedia(null)}
-                  style={{
-                    padding: '6px',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    transition: 'background 0.1s ease',
-                  }}
+                  className="p-1.5 rounded-md hover:bg-zinc-100 transition"
                 >
-                  <X style={{ width: 16, height: 16, color: '#A1A1AA' }} />
+                  <X className="w-4 h-4 text-zinc-400" />
                 </button>
               </div>
             </div>
 
             {/* Summary section */}
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E4E4E7' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+            <div className="px-5 py-4 border-b border-zinc-200">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '11px',
-                      color: '#A1A1AA',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    <Users style={{ width: 14, height: 14 }} />
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 mb-1">
+                    <Users className="w-3.5 h-3.5" />
                     月間トラフィック
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#18181B' }}>
-                    {selectedMedia.monthlyTraffic}
+                  <div className="text-[18px] font-bold text-zinc-900">
+                    {formatNumber(selectedMedia.monthly_visits)}
                   </div>
                 </div>
                 <div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '11px',
-                      color: '#A1A1AA',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    <BarChart2 style={{ width: 14, height: 14 }} />
-                    先月比
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 mb-1">
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    獲得KW数
                   </div>
-                  <div
-                    style={{
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      color:
-                        selectedMedia.trafficChange > 0
-                          ? '#10B981'
-                          : selectedMedia.trafficChange < 0
-                            ? '#EF4444'
-                            : '#A1A1AA',
-                    }}
-                  >
-                    {selectedMedia.trafficChange > 0 ? '+' : ''}
-                    {selectedMedia.trafficChange}%
+                  <div className="text-[18px] font-bold text-zinc-900">
+                    {formatNumber(selectedMedia.keyword_count)}
                   </div>
                 </div>
               </div>
 
               {/* Traffic sources */}
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ fontSize: '11px', color: '#A1A1AA', marginBottom: '8px' }}>
-                  流入経路の内訳
+              {selectedMedia.latest_traffic && (
+                <div className="mt-4">
+                  <div className="text-[11px] text-zinc-400 mb-2">流入経路の内訳</div>
+                  <div className="space-y-2">
+                    <TrafficSourceRow
+                      color="#0D9488"
+                      label="オーガニック検索"
+                      value={selectedMedia.latest_traffic.search_pct}
+                    />
+                    <TrafficSourceRow
+                      color="#F59E0B"
+                      label="ダイレクト"
+                      value={selectedMedia.latest_traffic.direct_pct}
+                    />
+                    <TrafficSourceRow
+                      color="#6366F1"
+                      label="リファラル"
+                      value={selectedMedia.latest_traffic.referral_pct}
+                    />
+                    <TrafficSourceRow
+                      color="#EC4899"
+                      label="ディスプレイ広告"
+                      value={selectedMedia.latest_traffic.display_pct}
+                    />
+                    <TrafficSourceRow
+                      color="#8B5CF6"
+                      label="SNS"
+                      value={selectedMedia.latest_traffic.social_pct}
+                    />
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <TrafficSourceRow
-                    color="#0D9488"
-                    label="オーガニック検索"
-                    value={selectedMedia.organic}
-                  />
-                  <TrafficSourceRow color="#F59E0B" label="有料広告" value={selectedMedia.paid} />
-                  <TrafficSourceRow color="#A1A1AA" label="ダイレクト" value={selectedMedia.direct} />
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Keywords section */}
-            <div style={{ padding: '16px 20px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '12px',
-                }}
-              >
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[13px] font-semibold text-zinc-900">
                   獲得キーワード
+                  {keywordStats && (
+                    <span className="ml-2 text-[12px] font-normal text-zinc-400">
+                      ({keywordStats.total}件)
+                    </span>
+                  )}
                 </span>
                 <button
-                  style={{
-                    fontSize: '12px',
-                    color: '#0D9488',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
+                  onClick={handleDownloadCSV}
+                  className="text-[12px] text-teal-600 flex items-center gap-1 hover:text-teal-700 transition"
                 >
-                  <Download style={{ width: 14, height: 14 }} />
+                  <Download className="w-3.5 h-3.5" />
                   CSV
                 </button>
               </div>
 
               {/* Intent filter */}
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
+              <div className="flex gap-1 mb-3">
                 {['all', 'A', 'B', 'C'].map((intent) => (
                   <button
                     key={intent}
                     onClick={() => setIntentFilter(intent)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      background: intentFilter === intent ? '#0D9488' : '#F4F4F5',
-                      color: intentFilter === intent ? '#FFFFFF' : '#52525B',
-                    }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                      intentFilter === intent
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
                   >
                     {intent === 'all' ? 'すべて' : `意図${intent}`}
                   </button>
                 ))}
               </div>
 
+              {/* Keyword stats */}
+              {keywordStats && (
+                <div className="flex gap-2 mb-3 text-[11px]">
+                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">
+                    A: {keywordStats.intent_a}
+                  </span>
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
+                    B: {keywordStats.intent_b}
+                  </span>
+                  <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded">
+                    C: {keywordStats.intent_c}
+                  </span>
+                </div>
+              )}
+
               {/* Keywords list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {filteredKeywords.map((kw, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 0',
-                      borderBottom: index < filteredKeywords.length - 1 ? '1px solid #F4F4F5' : 'none',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: '13px',
-                          color: '#18181B',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {kw.keyword}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#A1A1AA' }}>Vol: {kw.volume}</div>
-                    </div>
+              {isLoadingKeywords ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+                </div>
+              ) : keywords.length === 0 ? (
+                <div className="text-center py-8 text-zinc-400 text-[13px]">
+                  キーワードデータがありません
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {keywords.map((kw) => (
                     <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        flexShrink: 0,
-                      }}
+                      key={kw.id}
+                      className="flex items-center justify-between py-2 border-b border-zinc-100 last:border-0"
                     >
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background:
-                            kw.intent === 'A'
-                              ? '#D1FAE5'
-                              : kw.intent === 'B'
-                                ? '#FEF3C7'
-                                : '#F4F4F5',
-                          color:
-                            kw.intent === 'A'
-                              ? '#059669'
-                              : kw.intent === 'B'
-                                ? '#D97706'
-                                : '#A1A1AA',
-                        }}
-                      >
-                        {kw.intent}
-                      </span>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>
-                          {kw.rank}位
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] text-zinc-900 truncate">
+                          {kw.keyword}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#A1A1AA' }}>{kw.traffic}</div>
+                        <div className="text-[11px] text-zinc-400">
+                          Vol: {formatNumber(kw.search_volume)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                            kw.intent === 'A'
+                              ? 'bg-green-100 text-green-700'
+                              : kw.intent === 'B'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-zinc-100 text-zinc-500'
+                          }`}
+                        >
+                          {kw.intent || '-'}
+                        </span>
+                        <div className="text-right">
+                          <div className="text-[13px] font-medium text-zinc-900">
+                            {kw.rank ? `${kw.rank}位` : '-'}
+                          </div>
+                          <div className="text-[10px] text-zinc-400">
+                            {formatNumber(kw.estimated_traffic)}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+
+              {/* View all button */}
+              {keywords.length > 0 && keywordStats && keywordStats.total > 20 && (
+                <button
+                  onClick={() => router.push(`/dashboard/catalog/${selectedMedia.id}/keywords`)}
+                  className="w-full mt-4 py-2 text-[13px] text-teal-600 border border-teal-200 rounded-md hover:bg-teal-50 transition"
+                >
+                  すべてのキーワードを見る ({keywordStats.total}件)
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -692,9 +591,6 @@ export default function CatalogPage() {
   )
 }
 
-/**
- * Traffic Source Row Component
- */
 function TrafficSourceRow({
   color,
   label,
@@ -705,19 +601,17 @@ function TrafficSourceRow({
   value: number
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
         <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: color,
-          }}
+          className="w-2 h-2 rounded-full"
+          style={{ backgroundColor: color }}
         />
-        <span style={{ fontSize: '12px', color: '#52525B' }}>{label}</span>
+        <span className="text-[12px] text-zinc-600">{label}</span>
       </div>
-      <span style={{ fontSize: '12px', fontWeight: 500, color: '#18181B' }}>{value}%</span>
+      <span className="text-[12px] font-medium text-zinc-900">
+        {value.toFixed(1)}%
+      </span>
     </div>
   )
 }

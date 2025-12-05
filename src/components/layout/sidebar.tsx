@@ -4,12 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
-  BarChart3,
-  FileSearch,
-  LayoutGrid,
-  Lightbulb,
+  Home,
+  Grid2X2,
+  Star,
+  FileText,
+  Clock,
   Settings,
-  CreditCard,
 } from 'lucide-react'
 import type { User } from '@/types'
 
@@ -19,41 +19,42 @@ interface SidebarProps {
 
 const navigationItems = [
   {
-    title: '媒体分析',
-    href: '/analysis',
-    icon: FileSearch,
+    title: 'ホーム',
+    href: '/dashboard',
+    icon: Home,
+    description: 'ダッシュボードホーム',
+  },
+  {
+    title: '媒体カタログ',
+    href: '/dashboard/catalog',
+    icon: Grid2X2,
+    description: '媒体の獲得キーワード・流入経路を確認',
+  },
+  {
+    title: '媒体マッチング',
+    href: '/dashboard/matching',
+    icon: Star,
     description: '求人条件から最適な媒体を分析',
   },
   {
-    title: '媒体一覧',
-    href: '/media',
-    icon: LayoutGrid,
-    description: '登録されている媒体情報を確認',
-  },
-  {
     title: 'PESO診断',
-    href: '/peso',
-    icon: BarChart3,
+    href: '/dashboard/peso',
+    icon: FileText,
     description: '採用活動のPESO分析',
   },
   {
-    title: '施策提案',
-    href: '/recommendations',
-    icon: Lightbulb,
-    description: '分析結果に基づく施策提案',
+    title: '履歴',
+    href: '/dashboard/history',
+    icon: Clock,
+    description: '分析履歴を確認',
   },
 ]
 
 const settingsItems = [
   {
     title: '設定',
-    href: '/settings',
+    href: '/dashboard/settings',
     icon: Settings,
-  },
-  {
-    title: 'プラン・請求',
-    href: '/settings/billing',
-    icon: CreditCard,
   },
 ]
 
@@ -70,7 +71,9 @@ export function Sidebar({ user }: SidebarProps) {
             </p>
           </div>
           {navigationItems.map((item) => {
-            const isActive = pathname.startsWith(item.href)
+            const isActive = item.href === '/dashboard'
+              ? pathname === item.href
+              : pathname.startsWith(item.href)
             return (
               <Link
                 key={item.href}

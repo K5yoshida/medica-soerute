@@ -8,6 +8,7 @@ import {
   Users,
   Loader2,
   AlertCircle,
+  X,
 } from 'lucide-react'
 
 /**
@@ -18,6 +19,7 @@ import {
  * - Tab navigation: PESO切り口 / ファネル切り口 / Imp→PV→CV / 求職者の動き
  * - 2x2 grid layout for PESO categories
  * - Selectable tags within each category
+ * - Survey modal with 3 steps
  *
  * PESO colors:
  * - P (Paid): #3B82F6 (blue)
@@ -36,6 +38,93 @@ interface PESOCategory {
   bgLight: string
   tags: { id: string; label: string; selected: boolean }[]
 }
+
+// Survey modal types
+interface SurveyCategory {
+  id: string
+  label: string
+  options: { id: string; label: string }[]
+}
+
+const surveyCategories: SurveyCategory[] = [
+  {
+    id: 'job_media',
+    label: '求人媒体',
+    options: [
+      { id: 'indeed', label: 'Indeed' },
+      { id: 'jobmedley', label: 'ジョブメドレー' },
+      { id: 'mynavi', label: 'マイナビ転職' },
+      { id: 'rikunabi', label: 'リクナビNEXT' },
+      { id: 'doda', label: 'doda' },
+      { id: 'engage', label: 'エンゲージ' },
+      { id: 'agent', label: '人材紹介' },
+    ],
+  },
+  {
+    id: 'sns',
+    label: 'SNS',
+    options: [
+      { id: 'instagram', label: 'Instagram' },
+      { id: 'x_twitter', label: 'X（Twitter）' },
+      { id: 'facebook', label: 'Facebook' },
+      { id: 'youtube', label: 'YouTube' },
+      { id: 'tiktok', label: 'TikTok' },
+      { id: 'line', label: 'LINE公式' },
+    ],
+  },
+  {
+    id: 'web',
+    label: '自社サイト・Web',
+    options: [
+      { id: 'career_site', label: '採用サイト' },
+      { id: 'corporate_site', label: 'コーポレートサイト' },
+      { id: 'staff_blog', label: 'スタッフブログ' },
+      { id: 'google_business', label: 'Googleビジネス' },
+    ],
+  },
+  {
+    id: 'review',
+    label: '口コミ・評判',
+    options: [
+      { id: 'google_review', label: 'Googleクチコミ' },
+      { id: 'openwork', label: 'OpenWork' },
+      { id: 'tenshoku_kaigi', label: '転職会議' },
+    ],
+  },
+  {
+    id: 'ads',
+    label: '広告',
+    options: [
+      { id: 'google_ads', label: 'Google広告' },
+      { id: 'yahoo_ads', label: 'Yahoo!広告' },
+      { id: 'sns_ads', label: 'SNS広告' },
+    ],
+  },
+  {
+    id: 'other',
+    label: 'その他',
+    options: [
+      { id: 'referral', label: 'リファラル採用' },
+      { id: 'school', label: '学校・養成校訪問' },
+    ],
+  },
+]
+
+const photoDepthOptions = [
+  { value: 'none', level: 'Lv.0', title: '写真なし', desc: '求人に写真を掲載していない' },
+  { value: 'free', level: 'Lv.1', title: 'フリー素材', desc: 'フリー画像を活用している' },
+  { value: 'original', level: 'Lv.2', title: '撮影写真', desc: '自社で撮影した写真を使用' },
+  { value: 'edited', level: 'Lv.3', title: '加工・編集', desc: '撮影写真を加工・編集して使用' },
+  { value: 'ab_test', level: 'Lv.4', title: 'A/Bテスト', desc: '複数パターンでA/Bテスト実施中' },
+]
+
+const textDepthOptions = [
+  { value: 'basic', level: 'Lv.0', title: '基本情報のみ', desc: '給与・勤務地など最低限の情報' },
+  { value: 'detailed', level: 'Lv.1', title: '詳細記載', desc: '仕事内容・職場環境を詳しく記載' },
+  { value: 'interview', level: 'Lv.2', title: '従業員の声', desc: '従業員インタビューを反映' },
+  { value: 'competitive', level: 'Lv.3', title: '競合分析', desc: '競合求人を調査し相対比較で差別化' },
+  { value: 'ab_test', level: 'Lv.4', title: 'A/Bテスト', desc: '複数パターンでA/Bテスト実施中' },
+]
 
 const initialPesoData: PESOCategory[] = [
   {
@@ -100,6 +189,13 @@ export default function PESOPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Survey modal state
+  const [isSurveyOpen, setIsSurveyOpen] = useState(false)
+  const [surveyStep, setSurveyStep] = useState(1)
+  const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set())
+  const [photoDepth, setPhotoDepth] = useState<string | null>(null)
+  const [textDepth, setTextDepth] = useState<string | null>(null)
+
   const toggleTag = (categoryKey: string, tagId: string) => {
     setPesoData((prev) =>
       prev.map((category) =>
@@ -113,6 +209,95 @@ export default function PESOPage() {
           : category
       )
     )
+  }
+
+  // Survey modal handlers
+  const openSurvey = () => {
+    setSurveyStep(1)
+    setSelectedActivities(new Set())
+    setPhotoDepth(null)
+    setTextDepth(null)
+    setIsSurveyOpen(true)
+  }
+
+  const closeSurvey = () => {
+    setIsSurveyOpen(false)
+  }
+
+  const toggleActivity = (activityId: string) => {
+    setSelectedActivities((prev) => {
+      const next = new Set(prev)
+      if (next.has(activityId)) {
+        next.delete(activityId)
+      } else {
+        next.add(activityId)
+      }
+      return next
+    })
+  }
+
+  const handleSurveyNext = () => {
+    if (surveyStep < 3) {
+      setSurveyStep(surveyStep + 1)
+    }
+  }
+
+  const handleSurveyBack = () => {
+    if (surveyStep > 1) {
+      setSurveyStep(surveyStep - 1)
+    }
+  }
+
+  const handleSurveySubmit = async () => {
+    setIsSurveyOpen(false)
+    setIsAnalyzing(true)
+    setError(null)
+
+    try {
+      // Map selected activities to PESO categories
+      const paid = Array.from(selectedActivities).filter((id) =>
+        ['indeed', 'jobmedley', 'mynavi', 'rikunabi', 'doda', 'engage', 'agent', 'google_ads', 'yahoo_ads', 'sns_ads'].includes(id)
+      )
+      const earned = Array.from(selectedActivities).filter((id) =>
+        ['google_review', 'openwork', 'tenshoku_kaigi'].includes(id)
+      )
+      const shared = Array.from(selectedActivities).filter((id) =>
+        ['instagram', 'x_twitter', 'facebook', 'youtube', 'tiktok', 'line'].includes(id)
+      )
+      const owned = Array.from(selectedActivities).filter((id) =>
+        ['career_site', 'corporate_site', 'staff_blog', 'google_business', 'referral', 'school'].includes(id)
+      )
+
+      const response = await fetch('/api/peso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentActivities: { paid, earned, shared, owned },
+          contentDepth: { photo: photoDepth, text: textDepth },
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        if (data.error?.code === 'PLAN_RESTRICTION') {
+          setError('PESO診断機能を利用するにはライトプラン以上へのアップグレードが必要です。')
+        } else {
+          setError(data.error?.message || '診断中にエラーが発生しました')
+        }
+      } else {
+        console.log('Survey analysis result:', data.data)
+      }
+    } catch (err) {
+      console.error('Survey diagnosis error:', err)
+      setError('通信エラーが発生しました')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const getProgressPercent = () => {
+    return (surveyStep / 3) * 100
   }
 
   const handleAnalyze = async () => {
@@ -232,6 +417,7 @@ export default function PESOPage() {
             </button>
             <span style={{ fontSize: '13px', color: '#A1A1AA' }}>or</span>
             <button
+              onClick={openSurvey}
               style={{
                 padding: '8px 16px',
                 background: '#FFFFFF',
@@ -562,6 +748,478 @@ export default function PESOPage() {
           </div>
         )}
       </div>
+
+      {/* Survey Modal */}
+      {isSurveyOpen && (
+        <div
+          onClick={closeSurvey}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              width: '100%',
+              maxWidth: '720px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid #E4E4E7',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#18181B', margin: 0 }}>
+                  採用活動アンケート
+                </h2>
+                <button
+                  onClick={closeSurvey}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X style={{ width: 20, height: 20, color: '#A1A1AA' }} />
+                </button>
+              </div>
+              {/* Progress bar */}
+              <div style={{ background: '#E4E4E7', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    background: '#0D9488',
+                    height: '100%',
+                    width: `${getProgressPercent()}%`,
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#A1A1AA' }}>
+                STEP {surveyStep} / 3
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px', overflow: 'auto', flex: 1 }}>
+              {/* STEP 1: やっていること */}
+              {surveyStep === 1 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '24px' }}>
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '6px',
+                        background: '#0D9488',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      1
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0' }}>
+                        やっていること
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#A1A1AA', margin: 0 }}>
+                        現在、採用活動で行っていることをすべて選択してください
+                      </p>
+                    </div>
+                  </div>
+
+                  {surveyCategories.map((category) => (
+                    <div key={category.id} style={{ marginBottom: '20px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 500, color: '#52525B', marginBottom: '10px' }}>
+                        {category.label}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {category.options.map((option) => {
+                          const isSelected = selectedActivities.has(option.id)
+                          return (
+                            <label
+                              key={option.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '8px 14px',
+                                border: isSelected ? '1px solid #0D9488' : '1px solid #E4E4E7',
+                                borderRadius: '6px',
+                                background: isSelected ? 'rgba(13,148,136,0.05)' : '#FFFFFF',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleActivity(option.id)}
+                                style={{ display: 'none' }}
+                              />
+                              <div
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: '4px',
+                                  border: isSelected ? '1px solid #0D9488' : '1px solid #D4D4D8',
+                                  background: isSelected ? '#0D9488' : '#FFFFFF',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                {isSelected && (
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3">
+                                    <path d="M5 12l5 5L20 7" />
+                                  </svg>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '13px', color: isSelected ? '#0D9488' : '#52525B' }}>
+                                {option.label}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div
+                    style={{
+                      marginTop: '24px',
+                      padding: '12px 16px',
+                      background: '#F4F4F5',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      color: '#52525B',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#0D9488' }}>{selectedActivities.size}</span>件選択中
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: 詳細 */}
+              {surveyStep === 2 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '24px' }}>
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '6px',
+                        background: '#0D9488',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      2
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0' }}>
+                        詳細を教えてください
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#A1A1AA', margin: 0 }}>
+                        選択した項目について、具体的な活動内容を教えてください
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedActivities.size === 0 ? (
+                    <div
+                      style={{
+                        padding: '48px 24px',
+                        textAlign: 'center',
+                        color: '#A1A1AA',
+                        background: '#F9FAFB',
+                        borderRadius: '8px',
+                      }}
+                    >
+                      <p style={{ fontSize: '14px' }}>STEP 1で選択した項目の詳細入力欄がここに表示されます</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {Array.from(selectedActivities).map((activityId) => {
+                        const allOptions = surveyCategories.flatMap((c) => c.options)
+                        const option = allOptions.find((o) => o.id === activityId)
+                        if (!option) return null
+                        return (
+                          <div
+                            key={activityId}
+                            style={{
+                              padding: '16px',
+                              border: '1px solid #E4E4E7',
+                              borderRadius: '8px',
+                              background: '#FFFFFF',
+                            }}
+                          >
+                            <div style={{ fontSize: '14px', fontWeight: 500, color: '#18181B', marginBottom: '8px' }}>
+                              {option.label}
+                            </div>
+                            <textarea
+                              placeholder={`${option.label}について、具体的な取り組み内容を教えてください`}
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                border: '1px solid #E4E4E7',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                                resize: 'vertical',
+                                minHeight: '80px',
+                                outline: 'none',
+                              }}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: 求人コンテンツ */}
+              {surveyStep === 3 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '24px' }}>
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '6px',
+                        background: '#0D9488',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      3
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0' }}>
+                        求人コンテンツについて
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#A1A1AA', margin: 0 }}>
+                        求人原稿の写真・テキストへの取り組みを教えてください
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 求人写真 */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 500, color: '#52525B', marginBottom: '12px' }}>
+                      求人写真
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                      {photoDepthOptions.map((option) => {
+                        const isSelected = photoDepth === option.value
+                        return (
+                          <label
+                            key={option.value}
+                            style={{
+                              flex: '1 0 auto',
+                              minWidth: '120px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="photo-depth"
+                              value={option.value}
+                              checked={isSelected}
+                              onChange={() => setPhotoDepth(option.value)}
+                              style={{ display: 'none' }}
+                            />
+                            <div
+                              style={{
+                                padding: '12px',
+                                border: isSelected ? '2px solid #0D9488' : '1px solid #E4E4E7',
+                                borderRadius: '8px',
+                                background: isSelected ? 'rgba(13,148,136,0.05)' : '#FFFFFF',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: isSelected ? '#0D9488' : '#A1A1AA',
+                                  marginBottom: '4px',
+                                }}
+                              >
+                                {option.level}
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: '#18181B', marginBottom: '4px' }}>
+                                {option.title}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#A1A1AA', lineHeight: 1.4 }}>
+                                {option.desc}
+                              </div>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 求人テキスト */}
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 500, color: '#52525B', marginBottom: '12px' }}>
+                      求人テキスト
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                      {textDepthOptions.map((option) => {
+                        const isSelected = textDepth === option.value
+                        return (
+                          <label
+                            key={option.value}
+                            style={{
+                              flex: '1 0 auto',
+                              minWidth: '120px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="text-depth"
+                              value={option.value}
+                              checked={isSelected}
+                              onChange={() => setTextDepth(option.value)}
+                              style={{ display: 'none' }}
+                            />
+                            <div
+                              style={{
+                                padding: '12px',
+                                border: isSelected ? '2px solid #0D9488' : '1px solid #E4E4E7',
+                                borderRadius: '8px',
+                                background: isSelected ? 'rgba(13,148,136,0.05)' : '#FFFFFF',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: isSelected ? '#0D9488' : '#A1A1AA',
+                                  marginBottom: '4px',
+                                }}
+                              >
+                                {option.level}
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: '#18181B', marginBottom: '4px' }}>
+                                {option.title}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#A1A1AA', lineHeight: 1.4 }}>
+                                {option.desc}
+                              </div>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid #E4E4E7',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              {surveyStep > 1 ? (
+                <button
+                  onClick={handleSurveyBack}
+                  style={{
+                    padding: '10px 20px',
+                    background: '#FFFFFF',
+                    color: '#52525B',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  戻る
+                </button>
+              ) : (
+                <div />
+              )}
+              {surveyStep < 3 ? (
+                <button
+                  onClick={handleSurveyNext}
+                  style={{
+                    padding: '10px 24px',
+                    background: '#0D9488',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  次へ
+                </button>
+              ) : (
+                <button
+                  onClick={handleSurveySubmit}
+                  style={{
+                    padding: '10px 24px',
+                    background: '#0D9488',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  診断結果を見る
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

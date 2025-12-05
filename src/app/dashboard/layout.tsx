@@ -46,6 +46,7 @@ export default async function DashboardLayout({
       .insert({
         id: authUser.id,
         email: authUser.email || '',
+        role: 'user',
         plan: 'free',
         monthly_analysis_count: 0,
         monthly_analysis_limit: 3,

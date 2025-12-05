@@ -11,9 +11,18 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  // 環境変数のチェック
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing Supabase environment variables')
+    return supabaseResponse
+  }
+
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -34,13 +43,17 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch (error) {
+    console.error('Error getting user:', error)
+  }
 
   // 認証が必要なルートの保護
-  const protectedRoutes = ['/analysis', '/media', '/peso', '/recommendations', '/settings']
-  const authRoutes = ['/login', '/register', '/forgot-password']
+  const protectedRoutes = ['/dashboard']
+  const authRoutes = ['/auth/login', '/auth/signup', '/auth/password']
 
   const pathname = request.nextUrl.pathname
 
@@ -52,26 +65,25 @@ export async function updateSession(request: NextRequest) {
   // 認証済みユーザーが認証ページにアクセスした場合、ダッシュボードにリダイレクト
   if (user && authRoutes.some(route => pathname.startsWith(route))) {
     const url = request.nextUrl.clone()
-    url.pathname = '/analysis'
+    url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
   // 未認証ユーザーが保護されたルートにアクセスした場合、ログインページにリダイレクト
   if (!user && protectedRoutes.some(route => pathname.startsWith(route))) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
+    url.pathname = '/auth/login'
     url.searchParams.set('redirect', pathname)
     return NextResponse.redirect(url)
   }
 
-  // 管理者ルートの保護（要実装：ユーザーロールの確認）
+  // 管理者ルートの保護
   if (pathname.startsWith('/admin')) {
     if (!user) {
       const url = request.nextUrl.clone()
-      url.pathname = '/login'
+      url.pathname = '/auth/login'
       return NextResponse.redirect(url)
     }
-    // TODO: 管理者ロールの確認を追加
   }
 
   return supabaseResponse

@@ -1,4 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Grid2X2, Star, FileText, ChevronRight, Clock } from 'lucide-react'
 
@@ -6,42 +8,25 @@ import { Grid2X2, Star, FileText, ChevronRight, Clock } from 'lucide-react'
  * Dashboard Home Page
  *
  * Design spec: 03_ブランディングとデザインガイド.md
- *
- * Header:
- * - bg: #FFFFFF
- * - border-bottom: 1px solid #E4E4E7
- * - padding: 16px 24px
- * - title: 15px, weight 600, color #18181B, letter-spacing -0.01em
- * - subtitle: 13px, color #A1A1AA, margin-top 2px
- *
- * Content:
- * - padding: 24px
- *
- * Stats grid: 4 columns, gap 16px
- * - card: bg white, border 1px solid #E4E4E7, radius 8px, padding 16px 20px
- * - label: 12px, color #A1A1AA
- * - value: 24px, weight 600, color #18181B (changed from 28px to match spec)
- * - change: 12px, color #0D9488
- *
- * Action cards: 3 columns, gap 16px
- * - padding: 20px
- * - icon container: 32x32, radius 6px
- * - title: 13px, weight 600
- * - desc: 12px, color #A1A1AA
  */
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
+interface UserData {
+  monthly_analysis_count: number
+}
 
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
+export default function DashboardPage() {
+  const [user, setUser] = useState<UserData | null>(null)
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUser?.id)
-    .single()
+  useEffect(() => {
+    fetch('/api/user/profile')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setUser(data.data)
+        }
+      })
+      .catch(console.error)
+  }, [])
 
   const recentAnalyses = [
     {
@@ -62,7 +47,7 @@ export default async function DashboardPage() {
 
   return (
     <>
-      {/* Header: bg white, border-bottom, padding 16px 24px, sticky */}
+      {/* Header */}
       <header
         style={{
           background: '#FFFFFF',
@@ -73,7 +58,6 @@ export default async function DashboardPage() {
           zIndex: 40,
         }}
       >
-        {/* Title: 15px, weight 600, color #18181B, letter-spacing -0.01em */}
         <h1
           style={{
             fontSize: '15px',
@@ -85,7 +69,6 @@ export default async function DashboardPage() {
         >
           ホーム
         </h1>
-        {/* Subtitle: 13px, color #A1A1AA, margin-top 2px */}
         <p
           style={{
             fontSize: '13px',
@@ -98,9 +81,9 @@ export default async function DashboardPage() {
         </p>
       </header>
 
-      {/* Content: padding 24px */}
+      {/* Content */}
       <div style={{ padding: '24px' }}>
-        {/* Stats grid: 4 columns, gap 16px, margin-bottom 24px */}
+        {/* Stats grid */}
         <div
           style={{
             display: 'grid',
@@ -128,7 +111,6 @@ export default async function DashboardPage() {
             marginBottom: '24px',
           }}
         >
-          {/* Card header: padding 16px 20px */}
           <div
             style={{
               padding: '16px 20px',
@@ -149,9 +131,7 @@ export default async function DashboardPage() {
             </span>
           </div>
 
-          {/* Card body: padding 20px */}
           <div style={{ padding: '20px' }}>
-            {/* Action cards grid: 3 columns, gap 16px */}
             <div
               style={{
                 display: 'grid',
@@ -249,16 +229,6 @@ export default async function DashboardPage() {
   )
 }
 
-/**
- * Stat Card Component
- *
- * Style:
- * - bg: white, border: 1px solid #E4E4E7, radius: 8px
- * - padding: 16px 20px
- * - label: 12px, color #A1A1AA, margin-bottom 4px
- * - value: 24px, weight 600, color #18181B
- * - change: 12px, color #0D9488, margin-top 4px
- */
 function StatCard({
   label,
   value,
@@ -295,18 +265,6 @@ function StatCard({
   )
 }
 
-/**
- * Action Card Component
- *
- * Style:
- * - bg: white, border: 1px solid #E4E4E7, radius: 8px
- * - padding: 20px
- * - position: relative (for arrow)
- * - hover: border-color changes, shadow-sm
- * - icon container: 32x32, radius 6px
- * - title: 13px, weight 600, color #18181B
- * - desc: 12px, color #A1A1AA, line-height 1.5
- */
 function ActionCard({
   href,
   icon,
@@ -322,27 +280,24 @@ function ActionCard({
   title: string
   description: string
 }) {
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
     <Link
       href={href}
       style={{
         position: 'relative',
         background: '#FFFFFF',
-        border: '1px solid #E4E4E7',
+        border: `1px solid ${isHovered ? hoverBorder : '#E4E4E7'}`,
         borderRadius: '8px',
         padding: '20px',
         textDecoration: 'none',
         display: 'block',
         transition: 'all 0.15s ease',
+        boxShadow: isHovered ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = hoverBorder
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#E4E4E7'
-        e.currentTarget.style.boxShadow = 'none'
-      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
         <div
@@ -378,9 +333,6 @@ function ActionCard({
   )
 }
 
-/**
- * History Item Component
- */
 function HistoryItem({
   item,
 }: {
@@ -392,6 +344,7 @@ function HistoryItem({
     result: { label: string; value: string }
   }
 }) {
+  const [isHovered, setIsHovered] = useState(false)
   const isMatching = item.type === 'matching'
   const bgColor = isMatching ? 'rgba(245,158,11,0.1)' : 'rgba(139,92,246,0.1)'
   const iconColor = isMatching ? '#D97706' : '#7C3AED'
@@ -407,15 +360,11 @@ function HistoryItem({
         borderRadius: '8px',
         textDecoration: 'none',
         transition: 'background 0.1s ease',
+        background: isHovered ? '#F4F4F5' : 'transparent',
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = '#F4F4F5'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'transparent'
-      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Icon: 36x36, radius 8px */}
       <div
         style={{
           width: 36,
@@ -435,7 +384,6 @@ function HistoryItem({
         )}
       </div>
 
-      {/* Content */}
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>{item.title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
@@ -463,7 +411,6 @@ function HistoryItem({
         </div>
       </div>
 
-      {/* Result */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: '11px', color: '#A1A1AA' }}>{item.result.label}</div>
         <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>

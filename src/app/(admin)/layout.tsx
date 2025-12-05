@@ -15,7 +15,7 @@ export default async function AdminLayout({
   } = await supabase.auth.getUser()
 
   if (!authUser) {
-    redirect('/login')
+    redirect('/auth/login')
   }
 
   // ユーザー情報を取得
@@ -26,14 +26,14 @@ export default async function AdminLayout({
     .single()
 
   if (!user) {
-    redirect('/login')
+    redirect('/auth/login')
   }
 
   const typedUser = user as User
 
   // 管理者権限チェック
   if (typedUser.role !== 'admin' && typedUser.role !== 'super_admin') {
-    redirect('/analysis')
+    redirect('/dashboard')
   }
 
   return (
@@ -75,7 +75,7 @@ export default async function AdminLayout({
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-400">{typedUser.email}</span>
             <Link
-              href="/analysis"
+              href="/dashboard"
               className="text-sm text-blue-400 hover:text-blue-300"
             >
               ユーザー画面へ
