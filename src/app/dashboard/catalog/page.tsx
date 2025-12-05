@@ -8,6 +8,8 @@ import {
   Loader2,
   RefreshCw,
   ChevronRight,
+  HelpCircle,
+  X,
 } from 'lucide-react'
 
 interface TrafficData {
@@ -34,6 +36,77 @@ interface MediaMaster {
   total_search_volume: number | null
   total_estimated_traffic: number | null
   latest_traffic: TrafficData | null
+}
+
+interface ColumnHelp {
+  title: string
+  description: string
+  source: string
+  note?: string
+}
+
+const COLUMN_HELP: Record<string, ColumnHelp> = {
+  monthly_visits: {
+    title: '月間訪問数',
+    description: 'サイト全体の月間ユニーク訪問者数です。検索・直接アクセス・SNS・広告など、すべての流入経路からの訪問を含みます。',
+    source: 'SimilarWeb',
+    note: '直近1ヶ月のデータを表示しています。',
+  },
+  bounce_rate: {
+    title: '直帰率',
+    description: 'サイトに訪問後、他のページを閲覧せずに離脱した訪問者の割合です。低いほどサイト内の回遊性が高いことを示します。',
+    source: 'SimilarWeb',
+    note: '一般的に40%以下が良好とされています。',
+  },
+  pages_per_visit: {
+    title: 'PV/訪問',
+    description: '1回の訪問あたりの平均閲覧ページ数です。高いほどユーザーがサイト内のコンテンツを多く閲覧していることを示します。',
+    source: 'SimilarWeb',
+  },
+  avg_visit_duration: {
+    title: '滞在時間',
+    description: '1回の訪問あたりの平均滞在時間です。長いほどユーザーがコンテンツをじっくり閲覧していることを示します。',
+    source: 'SimilarWeb',
+    note: '求人サイトでは3分以上が良好とされています。',
+  },
+  search_pct: {
+    title: '検索流入',
+    description: 'Google等の検索エンジンからの流入割合です。オーガニック検索（自然検索）と有料検索（リスティング広告）の合計です。',
+    source: 'SimilarWeb',
+    note: 'SEO対策の効果を測る指標として重要です。',
+  },
+  direct_pct: {
+    title: '直接流入',
+    description: 'URLを直接入力したり、ブックマークからアクセスした訪問の割合です。ブランド認知度の指標となります。',
+    source: 'SimilarWeb',
+  },
+  referral_pct: {
+    title: '参照流入',
+    description: '他のWebサイトからのリンク経由でアクセスした訪問の割合です。外部サイトでの露出度を示します。',
+    source: 'SimilarWeb',
+  },
+  display_pct: {
+    title: '広告流入',
+    description: 'ディスプレイ広告（バナー広告等）からの流入割合です。有料広告への依存度を示します。',
+    source: 'SimilarWeb',
+  },
+  social_pct: {
+    title: 'SNS流入',
+    description: 'Twitter、Facebook、Instagram等のSNSからの流入割合です。ソーシャルメディアでの認知度を示します。',
+    source: 'SimilarWeb',
+  },
+  keyword_count: {
+    title: 'キーワード数',
+    description: 'この媒体が検索上位を獲得しているキーワードの数です。多いほどSEOが強いことを示します。',
+    source: 'ラッコキーワード',
+    note: '検索順位100位以内のキーワードを集計しています。',
+  },
+  estimated_traffic: {
+    title: '推定流入',
+    description: '各キーワードの検索ボリュームと順位から算出した、検索経由の推定月間流入数の合計です。',
+    source: 'ラッコキーワード',
+    note: '月間訪問数とは計算方法が異なるため、数値が一致しないことがあります。',
+  },
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -68,6 +141,70 @@ function formatDuration(seconds: number | null | undefined): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+// ヘルプモーダルコンポーネント
+function HelpModal({ helpKey, onClose }: { helpKey: string; onClose: () => void }) {
+  const help = COLUMN_HELP[helpKey]
+  if (!help) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 transition"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <h3 className="text-lg font-semibold text-zinc-900 mb-3">{help.title}</h3>
+        <p className="text-sm text-zinc-600 leading-relaxed mb-4">{help.description}</p>
+        <div className="flex items-center gap-2 text-xs text-zinc-500 mb-2">
+          <span className="px-2 py-0.5 bg-zinc-100 rounded">データソース: {help.source}</span>
+        </div>
+        {help.note && (
+          <p className="text-xs text-zinc-400 mt-3 pt-3 border-t border-zinc-100">
+            {help.note}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ヘルプ付きテーブルヘッダーコンポーネント
+function TableHeader({
+  label,
+  helpKey,
+  align = 'right',
+  onHelpClick,
+  sticky = false,
+}: {
+  label: string
+  helpKey: string
+  align?: 'left' | 'right'
+  onHelpClick: (key: string) => void
+  sticky?: boolean
+}) {
+  return (
+    <th
+      className={`${align === 'left' ? 'text-left' : 'text-right'} px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider ${sticky ? 'sticky left-0 bg-zinc-50' : ''}`}
+    >
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+        <span>{label}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onHelpClick(helpKey)
+          }}
+          className="text-zinc-300 hover:text-teal-500 transition"
+        >
+          <HelpCircle className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </th>
+  )
+}
+
 export default function CatalogPage() {
   const router = useRouter()
   const [mediaList, setMediaList] = useState<MediaMaster[]>([])
@@ -76,6 +213,7 @@ export default function CatalogPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
+  const [activeHelp, setActiveHelp] = useState<string | null>(null)
 
   // 媒体一覧を取得
   const fetchMedia = useCallback(async () => {
@@ -113,6 +251,11 @@ export default function CatalogPage() {
 
   return (
     <>
+      {/* ヘルプモーダル */}
+      {activeHelp && (
+        <HelpModal helpKey={activeHelp} onClose={() => setActiveHelp(null)} />
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-zinc-200 px-6 py-4 sticky top-0 z-40">
         <div className="flex items-center justify-between">
@@ -203,39 +346,17 @@ export default function CatalogPage() {
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider sticky left-0 bg-zinc-50 w-[180px] min-w-[180px] max-w-[180px]">
                     媒体名
                   </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    月間訪問
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    直帰率
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    PV/訪問
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    滞在時間
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    検索
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    直接
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    参照
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    広告
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    SNS
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    KW数
-                  </th>
-                  <th className="text-right px-2 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    推定流入
-                  </th>
+                  <TableHeader label="月間訪問" helpKey="monthly_visits" onHelpClick={setActiveHelp} />
+                  <TableHeader label="直帰率" helpKey="bounce_rate" onHelpClick={setActiveHelp} />
+                  <TableHeader label="PV/訪問" helpKey="pages_per_visit" onHelpClick={setActiveHelp} />
+                  <TableHeader label="滞在時間" helpKey="avg_visit_duration" onHelpClick={setActiveHelp} />
+                  <TableHeader label="検索" helpKey="search_pct" onHelpClick={setActiveHelp} />
+                  <TableHeader label="直接" helpKey="direct_pct" onHelpClick={setActiveHelp} />
+                  <TableHeader label="参照" helpKey="referral_pct" onHelpClick={setActiveHelp} />
+                  <TableHeader label="広告" helpKey="display_pct" onHelpClick={setActiveHelp} />
+                  <TableHeader label="SNS" helpKey="social_pct" onHelpClick={setActiveHelp} />
+                  <TableHeader label="KW数" helpKey="keyword_count" onHelpClick={setActiveHelp} />
+                  <TableHeader label="推定流入" helpKey="estimated_traffic" onHelpClick={setActiveHelp} />
                   <th className="w-6"></th>
                 </tr>
               </thead>
