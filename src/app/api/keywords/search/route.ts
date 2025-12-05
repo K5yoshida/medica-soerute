@@ -5,12 +5,11 @@ interface KeywordWithMedia {
   id: string
   media_id: string
   keyword: string
-  intent: string | null
-  search_volume: number | null
-  rank: number | null
+  monthly_search_volume: number | null
+  search_rank: number | null
   estimated_traffic: number | null
   seo_difficulty: number | null
-  cpc: number | null
+  cpc_usd: number | null
   competition: number | null
   url: string | null
   media_master: {
@@ -41,11 +40,10 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
-    const intent = searchParams.get('intent')
     const category = searchParams.get('category')
     const minVolume = searchParams.get('min_volume')
     const maxRank = searchParams.get('max_rank')
-    const sortBy = searchParams.get('sort_by') || 'search_volume'
+    const sortBy = searchParams.get('sort_by') || 'monthly_search_volume'
     const sortOrder = searchParams.get('sort_order') || 'desc'
     const limit = parseInt(searchParams.get('limit') || '50', 10)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
@@ -75,20 +73,16 @@ export async function GET(request: Request) {
       .eq('media_master.is_active', true)
 
     // フィルター
-    if (intent) {
-      keywordQuery = keywordQuery.eq('intent', intent)
-    }
-
     if (category && category !== 'all') {
       keywordQuery = keywordQuery.eq('media_master.category', category)
     }
 
     if (minVolume) {
-      keywordQuery = keywordQuery.gte('search_volume', parseInt(minVolume, 10))
+      keywordQuery = keywordQuery.gte('monthly_search_volume', parseInt(minVolume, 10))
     }
 
     if (maxRank) {
-      keywordQuery = keywordQuery.lte('rank', parseInt(maxRank, 10))
+      keywordQuery = keywordQuery.lte('search_rank', parseInt(maxRank, 10))
     }
 
     // ソート
@@ -97,18 +91,24 @@ export async function GET(request: Request) {
       case 'keyword':
         keywordQuery = keywordQuery.order('keyword', { ascending })
         break
-      case 'rank':
-        keywordQuery = keywordQuery.order('rank', { ascending, nullsFirst: false })
+      case 'search_rank':
+        keywordQuery = keywordQuery.order('search_rank', { ascending, nullsFirst: false })
         break
       case 'estimated_traffic':
         keywordQuery = keywordQuery.order('estimated_traffic', { ascending, nullsFirst: false })
         break
+      case 'seo_difficulty':
+        keywordQuery = keywordQuery.order('seo_difficulty', { ascending, nullsFirst: false })
+        break
+      case 'cpc_usd':
+        keywordQuery = keywordQuery.order('cpc_usd', { ascending, nullsFirst: false })
+        break
       case 'media_name':
         keywordQuery = keywordQuery.order('media_master(name)', { ascending })
         break
-      case 'search_volume':
+      case 'monthly_search_volume':
       default:
-        keywordQuery = keywordQuery.order('search_volume', { ascending, nullsFirst: false })
+        keywordQuery = keywordQuery.order('monthly_search_volume', { ascending, nullsFirst: false })
         break
     }
 
@@ -132,23 +132,17 @@ export async function GET(request: Request) {
     const stats = {
       total_results: count || 0,
       media_count: new Set(typedKeywords?.map((k: KeywordWithMedia) => k.media_id)).size,
-      intent_breakdown: {
-        A: typedKeywords?.filter((k: KeywordWithMedia) => k.intent === 'A').length || 0,
-        B: typedKeywords?.filter((k: KeywordWithMedia) => k.intent === 'B').length || 0,
-        C: typedKeywords?.filter((k: KeywordWithMedia) => k.intent === 'C').length || 0,
-      },
     }
 
     // レスポンスデータを整形
     const formattedKeywords = typedKeywords?.map((k: KeywordWithMedia) => ({
       id: k.id,
       keyword: k.keyword,
-      intent: k.intent,
-      search_volume: k.search_volume,
-      rank: k.rank,
+      monthly_search_volume: k.monthly_search_volume,
+      search_rank: k.search_rank,
       estimated_traffic: k.estimated_traffic,
       seo_difficulty: k.seo_difficulty,
-      cpc: k.cpc,
+      cpc_usd: k.cpc_usd,
       competition: k.competition,
       url: k.url,
       media: {

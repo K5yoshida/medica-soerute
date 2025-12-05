@@ -6,8 +6,7 @@ interface RouteParams {
 }
 
 interface KeywordStats {
-  intent: string | null
-  search_volume: number | null
+  monthly_search_volume: number | null
   estimated_traffic: number | null
 }
 
@@ -43,9 +42,8 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
 
     const { searchParams } = new URL(request.url)
-    const intent = searchParams.get('intent')
     const search = searchParams.get('search')
-    const sortBy = searchParams.get('sort_by') || 'search_volume'
+    const sortBy = searchParams.get('sort_by') || 'monthly_search_volume'
     const sortOrder = searchParams.get('sort_order') || 'desc'
     const limit = parseInt(searchParams.get('limit') || '50', 10)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
@@ -57,10 +55,6 @@ export async function GET(request: Request, { params }: RouteParams) {
       .eq('media_id', id)
 
     // フィルター
-    if (intent) {
-      query = query.eq('intent', intent)
-    }
-
     if (search) {
       query = query.ilike('keyword', `%${search}%`)
     }
@@ -71,15 +65,21 @@ export async function GET(request: Request, { params }: RouteParams) {
       case 'keyword':
         query = query.order('keyword', { ascending })
         break
-      case 'rank':
-        query = query.order('rank', { ascending, nullsFirst: false })
+      case 'search_rank':
+        query = query.order('search_rank', { ascending, nullsFirst: false })
         break
       case 'estimated_traffic':
         query = query.order('estimated_traffic', { ascending, nullsFirst: false })
         break
-      case 'search_volume':
+      case 'seo_difficulty':
+        query = query.order('seo_difficulty', { ascending, nullsFirst: false })
+        break
+      case 'cpc_usd':
+        query = query.order('cpc_usd', { ascending, nullsFirst: false })
+        break
+      case 'monthly_search_volume':
       default:
-        query = query.order('search_volume', { ascending, nullsFirst: false })
+        query = query.order('monthly_search_volume', { ascending, nullsFirst: false })
         break
     }
 
@@ -99,17 +99,14 @@ export async function GET(request: Request, { params }: RouteParams) {
     // 統計情報を計算
     const { data: allKeywords } = await supabase
       .from('keywords')
-      .select('intent, search_volume, estimated_traffic')
+      .select('monthly_search_volume, estimated_traffic')
       .eq('media_id', id)
 
     const typedAllKeywords = allKeywords as KeywordStats[] | null
 
     const stats = {
       total: typedAllKeywords?.length || 0,
-      intent_a: typedAllKeywords?.filter((k: KeywordStats) => k.intent === 'A').length || 0,
-      intent_b: typedAllKeywords?.filter((k: KeywordStats) => k.intent === 'B').length || 0,
-      intent_c: typedAllKeywords?.filter((k: KeywordStats) => k.intent === 'C').length || 0,
-      total_search_volume: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.search_volume || 0), 0) || 0,
+      total_monthly_search_volume: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.monthly_search_volume || 0), 0) || 0,
       total_estimated_traffic: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.estimated_traffic || 0), 0) || 0,
     }
 

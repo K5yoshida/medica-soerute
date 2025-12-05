@@ -15,12 +15,13 @@ import {
 interface SearchKeyword {
   id: string
   keyword: string
-  intent: 'A' | 'B' | 'C' | null
-  search_volume: number | null
-  rank: number | null
+  monthly_search_volume: number | null
+  search_rank: number | null
   estimated_traffic: number | null
   seo_difficulty: number | null
-  cpc: number | null
+  cpc_usd: number | null
+  competition: number | null
+  url: string | null
   media: {
     id: string
     name: string
@@ -33,11 +34,6 @@ interface SearchKeyword {
 interface SearchStats {
   total_results: number
   media_count: number
-  intent_breakdown: {
-    A: number
-    B: number
-    C: number
-  }
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -66,7 +62,6 @@ function KeywordSearchContent() {
   const [error, setError] = useState<string | null>(null)
 
   // Filters
-  const [intentFilter, setIntentFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [minVolume, setMinVolume] = useState<string>('')
   const [maxRank, setMaxRank] = useState<string>('')
@@ -97,9 +92,6 @@ function KeywordSearchContent() {
       params.set('limit', limit.toString())
       params.set('offset', resetOffset ? '0' : offset.toString())
 
-      if (intentFilter !== 'all') {
-        params.set('intent', intentFilter)
-      }
       if (categoryFilter !== 'all') {
         params.set('category', categoryFilter)
       }
@@ -132,7 +124,7 @@ function KeywordSearchContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [searchQuery, intentFilter, categoryFilter, minVolume, maxRank, offset])
+  }, [searchQuery, categoryFilter, minVolume, maxRank, offset])
 
   // Initial search if query exists
   useEffect(() => {
@@ -150,7 +142,6 @@ function KeywordSearchContent() {
       const params = new URLSearchParams()
       params.set('q', searchQuery)
       params.set('limit', '1000')
-      if (intentFilter !== 'all') params.set('intent', intentFilter)
       if (categoryFilter !== 'all') params.set('category', categoryFilter)
 
       const res = await fetch(`/api/keywords/search?${params.toString()}`)
@@ -159,17 +150,19 @@ function KeywordSearchContent() {
       if (!data.success || !data.data?.keywords) return
 
       const csvContent = [
-        ['キーワード', '媒体名', 'カテゴリ', '応募意図', '検索順位', '検索ボリューム', '推定流入数', 'SEO難易度'].join(','),
+        ['キーワード', '媒体名', 'カテゴリ', 'SEO難易度', '月間検索数', '検索順位', '推定流入数', 'CPC ($)', '競合性', 'URL'].join(','),
         ...data.data.keywords.map((kw: SearchKeyword) =>
           [
             `"${kw.keyword}"`,
             `"${kw.media.name}"`,
             CATEGORY_LABELS[kw.media.category] || kw.media.category,
-            kw.intent || '',
-            kw.rank || '',
-            kw.search_volume || '',
-            kw.estimated_traffic || '',
             kw.seo_difficulty || '',
+            kw.monthly_search_volume || '',
+            kw.search_rank || '',
+            kw.estimated_traffic || '',
+            kw.cpc_usd || '',
+            kw.competition || '',
+            kw.url ? `"${kw.url}"` : '',
           ].join(',')
         ),
       ].join('\n')
@@ -258,26 +251,6 @@ function KeywordSearchContent() {
         {/* Filter panel */}
         {showFilters && (
           <div className="mt-4 pt-4 border-t border-zinc-200 flex items-center gap-4">
-            {/* Intent filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] text-zinc-500">応募意図:</span>
-              <div className="flex gap-1">
-                {['all', 'A', 'B', 'C'].map((intent) => (
-                  <button
-                    key={intent}
-                    onClick={() => setIntentFilter(intent)}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                      intentFilter === intent
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                    }`}
-                  >
-                    {intent === 'all' ? 'すべて' : intent}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Category filter */}
             <div className="relative">
               <span className="text-[12px] text-zinc-500 mr-2">カテゴリ:</span>
@@ -366,22 +339,11 @@ function KeywordSearchContent() {
             {stats && (
               <div className="mb-4 flex items-center gap-4 text-[13px]">
                 <span className="text-zinc-600">
-                  <span className="font-semibold text-zinc-900">{stats.total_results}</span> 件のキーワード
+                  <span className="font-semibold text-zinc-900">{formatNumber(stats.total_results)}</span> 件のキーワード
                 </span>
                 <span className="text-zinc-600">
                   <span className="font-semibold text-zinc-900">{stats.media_count}</span> 媒体
                 </span>
-                <div className="flex gap-2">
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-[11px]">
-                    A: {stats.intent_breakdown.A}
-                  </span>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[11px]">
-                    B: {stats.intent_breakdown.B}
-                  </span>
-                  <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded text-[11px]">
-                    C: {stats.intent_breakdown.C}
-                  </span>
-                </div>
               </div>
             )}
 
@@ -396,20 +358,23 @@ function KeywordSearchContent() {
                     <th className="text-left px-4 py-3 text-[12px] font-medium text-zinc-500">
                       媒体
                     </th>
-                    <th className="text-center px-4 py-3 text-[12px] font-medium text-zinc-500">
-                      意図
+                    <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
+                      SEO難易度
+                    </th>
+                    <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
+                      月間検索数
                     </th>
                     <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
                       順位
                     </th>
                     <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
-                      検索Vol
-                    </th>
-                    <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
                       推定流入
                     </th>
                     <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
-                      SEO難易度
+                      CPC ($)
+                    </th>
+                    <th className="text-right px-4 py-3 text-[12px] font-medium text-zinc-500">
+                      競合性
                     </th>
                   </tr>
                 </thead>
@@ -423,6 +388,16 @@ function KeywordSearchContent() {
                         <div className="text-[13px] font-medium text-zinc-900">
                           {kw.keyword}
                         </div>
+                        {kw.url && (
+                          <a
+                            href={kw.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-teal-600 hover:underline truncate block max-w-[200px]"
+                          >
+                            {kw.url}
+                          </a>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <Link
@@ -434,34 +409,6 @@ function KeywordSearchContent() {
                         <div className="text-[11px] text-zinc-400">
                           {CATEGORY_LABELS[kw.media.category] || kw.media.category}
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                            kw.intent === 'A'
-                              ? 'bg-green-100 text-green-700'
-                              : kw.intent === 'B'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-zinc-100 text-zinc-500'
-                          }`}
-                        >
-                          {kw.intent || '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-[13px] font-medium text-zinc-900">
-                          {kw.rank ? `${kw.rank}位` : '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-[13px] text-zinc-900">
-                          {formatNumber(kw.search_volume)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-[13px] text-zinc-900">
-                          {formatNumber(kw.estimated_traffic)}
-                        </span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         {kw.seo_difficulty !== null ? (
@@ -478,13 +425,38 @@ function KeywordSearchContent() {
                                 style={{ width: `${kw.seo_difficulty}%` }}
                               />
                             </div>
-                            <span className="text-[12px] text-zinc-600">
+                            <span className="text-[12px] text-zinc-600 w-6">
                               {kw.seo_difficulty}
                             </span>
                           </div>
                         ) : (
                           <span className="text-[13px] text-zinc-400">-</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-[13px] text-zinc-900">
+                          {formatNumber(kw.monthly_search_volume)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-[13px] font-medium text-zinc-900">
+                          {kw.search_rank ? `${kw.search_rank}位` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-[13px] text-zinc-900">
+                          {formatNumber(kw.estimated_traffic)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-[13px] text-zinc-600">
+                          {kw.cpc_usd !== null ? `$${kw.cpc_usd.toFixed(2)}` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-[13px] text-zinc-600">
+                          {kw.competition !== null ? kw.competition : '-'}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -496,7 +468,7 @@ function KeywordSearchContent() {
             {total > limit && (
               <div className="mt-4 flex items-center justify-between">
                 <span className="text-[13px] text-zinc-500">
-                  {offset + 1} - {Math.min(offset + limit, total)} / {total} 件
+                  {offset + 1} - {Math.min(offset + limit, total)} / {formatNumber(total)} 件
                 </span>
                 <div className="flex gap-2">
                   <button

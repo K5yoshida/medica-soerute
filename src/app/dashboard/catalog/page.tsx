@@ -45,20 +45,18 @@ interface TrafficData {
 interface Keyword {
   id: string
   keyword: string
-  intent: 'A' | 'B' | 'C' | null
-  search_volume: number | null
-  rank: number | null
+  monthly_search_volume: number | null
+  search_rank: number | null
   estimated_traffic: number | null
   seo_difficulty: number | null
-  cpc: number | null
+  cpc_usd: number | null
+  competition: number | null
+  url: string | null
 }
 
 interface KeywordStats {
   total: number
-  intent_a: number
-  intent_b: number
-  intent_c: number
-  total_search_volume: number
+  total_monthly_search_volume: number
   total_estimated_traffic: number
 }
 
@@ -83,7 +81,6 @@ export default function CatalogPage() {
   const [selectedMedia, setSelectedMedia] = useState<MediaMaster | null>(null)
   const [keywords, setKeywords] = useState<Keyword[]>([])
   const [keywordStats, setKeywordStats] = useState<KeywordStats | null>(null)
-  const [intentFilter, setIntentFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -122,15 +119,12 @@ export default function CatalogPage() {
   }, [categoryFilter, searchQuery])
 
   // 選択した媒体のキーワードを取得
-  const fetchKeywords = useCallback(async (mediaId: string, intent?: string) => {
+  const fetchKeywords = useCallback(async (mediaId: string) => {
     setIsLoadingKeywords(true)
     try {
       const params = new URLSearchParams()
-      if (intent && intent !== 'all') {
-        params.set('intent', intent)
-      }
       params.set('limit', '20')
-      params.set('sort_by', 'search_volume')
+      params.set('sort_by', 'monthly_search_volume')
       params.set('sort_order', 'desc')
 
       const res = await fetch(`/api/media/${mediaId}/keywords?${params.toString()}`)
@@ -159,17 +153,9 @@ export default function CatalogPage() {
   // 媒体選択時にキーワードを取得
   useEffect(() => {
     if (selectedMedia) {
-      setIntentFilter('all')
       fetchKeywords(selectedMedia.id)
     }
   }, [selectedMedia, fetchKeywords])
-
-  // インテントフィルター変更時
-  useEffect(() => {
-    if (selectedMedia) {
-      fetchKeywords(selectedMedia.id, intentFilter)
-    }
-  }, [intentFilter, selectedMedia, fetchKeywords])
 
   // CSVダウンロード
   const handleDownloadCSV = async () => {
@@ -182,15 +168,17 @@ export default function CatalogPage() {
       if (!data.success || !data.data?.keywords) return
 
       const csvContent = [
-        ['キーワード', '応募意図', '検索順位', '検索ボリューム', '推定流入数', 'SEO難易度'].join(','),
+        ['キーワード', 'SEO難易度', '月間検索数', '検索順位', '推定流入数', 'CPC ($)', '競合性', 'URL'].join(','),
         ...data.data.keywords.map((kw: Keyword) =>
           [
             `"${kw.keyword}"`,
-            kw.intent || '',
-            kw.rank || '',
-            kw.search_volume || '',
-            kw.estimated_traffic || '',
             kw.seo_difficulty || '',
+            kw.monthly_search_volume || '',
+            kw.search_rank || '',
+            kw.estimated_traffic || '',
+            kw.cpc_usd || '',
+            kw.competition || '',
+            kw.url ? `"${kw.url}"` : '',
           ].join(',')
         ),
       ].join('\n')
@@ -492,35 +480,21 @@ export default function CatalogPage() {
                 </button>
               </div>
 
-              {/* Intent filter */}
-              <div className="flex gap-1 mb-3">
-                {['all', 'A', 'B', 'C'].map((intent) => (
-                  <button
-                    key={intent}
-                    onClick={() => setIntentFilter(intent)}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                      intentFilter === intent
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                    }`}
-                  >
-                    {intent === 'all' ? 'すべて' : `意図${intent}`}
-                  </button>
-                ))}
-              </div>
-
-              {/* Keyword stats */}
+              {/* Keyword stats summary */}
               {keywordStats && (
-                <div className="flex gap-2 mb-3 text-[11px]">
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">
-                    A: {keywordStats.intent_a}
-                  </span>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
-                    B: {keywordStats.intent_b}
-                  </span>
-                  <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded">
-                    C: {keywordStats.intent_c}
-                  </span>
+                <div className="flex gap-4 mb-4 text-[12px] bg-zinc-50 p-3 rounded-lg">
+                  <div>
+                    <div className="text-zinc-400">総検索ボリューム</div>
+                    <div className="font-semibold text-zinc-900">
+                      {formatNumber(keywordStats.total_monthly_search_volume)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-400">推定流入数合計</div>
+                    <div className="font-semibold text-zinc-900">
+                      {formatNumber(keywordStats.total_estimated_traffic)}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -544,28 +518,18 @@ export default function CatalogPage() {
                         <div className="text-[13px] text-zinc-900 truncate">
                           {kw.keyword}
                         </div>
-                        <div className="text-[11px] text-zinc-400">
-                          Vol: {formatNumber(kw.search_volume)}
+                        <div className="text-[11px] text-zinc-400 flex gap-2">
+                          <span>Vol: {formatNumber(kw.monthly_search_volume)}</span>
+                          <span>SEO難易度: {kw.seo_difficulty ?? '-'}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                            kw.intent === 'A'
-                              ? 'bg-green-100 text-green-700'
-                              : kw.intent === 'B'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-zinc-100 text-zinc-500'
-                          }`}
-                        >
-                          {kw.intent || '-'}
-                        </span>
                         <div className="text-right">
                           <div className="text-[13px] font-medium text-zinc-900">
-                            {kw.rank ? `${kw.rank}位` : '-'}
+                            {kw.search_rank ? `${kw.search_rank}位` : '-'}
                           </div>
                           <div className="text-[10px] text-zinc-400">
-                            {formatNumber(kw.estimated_traffic)}
+                            流入: {formatNumber(kw.estimated_traffic)}
                           </div>
                         </div>
                       </div>

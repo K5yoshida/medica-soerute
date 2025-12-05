@@ -6,8 +6,7 @@ interface RouteParams {
 }
 
 interface KeywordData {
-  intent: string | null
-  search_volume: number | null
+  monthly_search_volume: number | null
   estimated_traffic: number | null
 }
 
@@ -45,7 +44,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     // キーワード統計を取得
     const { data: keywords } = await supabase
       .from('keywords')
-      .select('intent, search_volume, estimated_traffic')
+      .select('monthly_search_volume, estimated_traffic')
       .eq('media_id', id)
 
     // トラフィックデータ（最新3ヶ月）を取得
@@ -60,10 +59,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const typedKeywords = keywords as KeywordData[] | null
     const keywordStats = {
       total: typedKeywords?.length || 0,
-      intent_a: typedKeywords?.filter((k: KeywordData) => k.intent === 'A').length || 0,
-      intent_b: typedKeywords?.filter((k: KeywordData) => k.intent === 'B').length || 0,
-      intent_c: typedKeywords?.filter((k: KeywordData) => k.intent === 'C').length || 0,
-      total_search_volume: typedKeywords?.reduce((sum: number, k: KeywordData) => sum + (k.search_volume || 0), 0) || 0,
+      total_monthly_search_volume: typedKeywords?.reduce((sum: number, k: KeywordData) => sum + (k.monthly_search_volume || 0), 0) || 0,
       total_estimated_traffic: typedKeywords?.reduce((sum: number, k: KeywordData) => sum + (k.estimated_traffic || 0), 0) || 0,
     }
 
