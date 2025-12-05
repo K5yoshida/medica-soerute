@@ -2,7 +2,28 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Search, ChevronDown, Star, FileText, Clock, Folder, Trash2, ExternalLink } from 'lucide-react'
+import {
+  Search,
+  ChevronDown,
+  Star,
+  FileText,
+  Clock,
+  Folder,
+  Trash2,
+  ExternalLink,
+} from 'lucide-react'
+
+/**
+ * History Page
+ *
+ * Design spec: 03_ブランディングとデザインガイド.md
+ *
+ * Features:
+ * - Filter by type (all, matching, peso)
+ * - Search functionality
+ * - Grouped by date
+ * - Hover actions
+ */
 
 interface HistoryItem {
   id: string
@@ -78,49 +99,132 @@ export default function HistoryPage() {
     return true
   })
 
-  // 日付でグルーピング
-  const groupedHistory = filteredHistory.reduce((acc, item) => {
-    if (!acc[item.date]) {
-      acc[item.date] = []
-    }
-    acc[item.date].push(item)
-    return acc
-  }, {} as Record<string, HistoryItem[]>)
+  // Group by date
+  const groupedHistory = filteredHistory.reduce(
+    (acc, item) => {
+      if (!acc[item.date]) {
+        acc[item.date] = []
+      }
+      acc[item.date].push(item)
+      return acc
+    },
+    {} as Record<string, HistoryItem[]>
+  )
 
   return (
     <>
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-[#E4E4E7] px-6 py-4 sticky top-0 z-40">
-        <div className="flex items-center justify-between">
+      {/* Header: sticky, bg white, border-bottom, padding 16px 24px */}
+      <header
+        style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E4E4E7',
+          padding: '16px 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <div>
-            <h1 className="text-[15px] font-semibold text-[#18181B] tracking-tight">履歴</h1>
-            <p className="text-[13px] text-[#A1A1AA] mt-0.5">過去の分析・診断結果</p>
+            <h1
+              style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: '#18181B',
+                letterSpacing: '-0.01em',
+                margin: 0,
+              }}
+            >
+              履歴
+            </h1>
+            <p
+              style={{
+                fontSize: '13px',
+                color: '#A1A1AA',
+                marginTop: '2px',
+                fontWeight: 400,
+              }}
+            >
+              過去の分析・診断結果
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* 検索 */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A1A1AA]" />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Search input */}
+            <div style={{ position: 'relative' }}>
+              <Search
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 16,
+                  height: 16,
+                  color: '#A1A1AA',
+                }}
+              />
               <input
                 type="text"
                 placeholder="履歴を検索..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-64 pl-9 pr-3 py-2 border border-[#E4E4E7] rounded-md text-[13px] focus:outline-none focus:border-[#A1A1AA] transition-colors"
+                style={{
+                  width: '256px',
+                  paddingLeft: '36px',
+                  paddingRight: '12px',
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  outline: 'none',
+                  transition: 'border-color 0.15s ease',
+                }}
               />
             </div>
-            {/* フィルター */}
-            <button className="px-3 py-2 border border-[#E4E4E7] rounded-md text-[13px] text-[#52525B] hover:bg-[#F4F4F5] transition-colors flex items-center gap-2">
+
+            {/* Filter button */}
+            <button
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #E4E4E7',
+                borderRadius: '6px',
+                fontSize: '13px',
+                color: '#52525B',
+                background: '#FFFFFF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'background 0.15s ease',
+              }}
+            >
               フィルター
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown style={{ width: 16, height: 16 }} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* コンテンツ */}
-      <div className="p-6">
-        {/* タブフィルター */}
-        <div className="flex gap-1 mb-6 bg-[#F4F4F5] p-1 rounded-lg inline-flex">
+      {/* Content area: padding 24px */}
+      <div style={{ padding: '24px' }}>
+        {/* Tab filter */}
+        <div
+          style={{
+            display: 'inline-flex',
+            gap: '4px',
+            marginBottom: '24px',
+            background: '#F4F4F5',
+            padding: '4px',
+            borderRadius: '8px',
+          }}
+        >
           {[
             { id: 'all', label: 'すべて' },
             { id: 'matching', label: '媒体マッチング' },
@@ -129,115 +233,72 @@ export default function HistoryPage() {
             <button
               key={tab.id}
               onClick={() => setFilter(tab.id as typeof filter)}
-              className={`px-4 py-2 rounded-md text-[13px] font-medium transition-colors ${
-                filter === tab.id
-                  ? 'bg-white text-[#18181B] shadow-sm'
-                  : 'text-[#A1A1AA] hover:text-[#52525B]'
-              }`}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 500,
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                background: filter === tab.id ? '#FFFFFF' : 'transparent',
+                color: filter === tab.id ? '#18181B' : '#A1A1AA',
+                boxShadow: filter === tab.id ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+              }}
             >
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* 履歴リスト */}
+        {/* History list */}
         {Object.keys(groupedHistory).length > 0 ? (
-          <div className="space-y-6">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {Object.entries(groupedHistory).map(([date, items]) => (
               <div key={date}>
-                {/* 日付ヘッダー */}
-                <div className="text-[12px] font-medium text-[#A1A1AA] mb-3">{date}</div>
+                {/* Date header */}
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: '#A1A1AA',
+                    marginBottom: '12px',
+                  }}
+                >
+                  {date}
+                </div>
 
-                {/* アイテム */}
-                <div className="space-y-2">
+                {/* Items */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-white border border-[#E4E4E7] rounded-lg p-4 hover:border-[#A1A1AA] transition-colors group"
-                    >
-                      <div className="flex items-center gap-4">
-                        {/* アイコン */}
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            item.type === 'matching'
-                              ? 'bg-[rgba(245,158,11,0.1)]'
-                              : 'bg-[rgba(139,92,246,0.1)]'
-                          }`}
-                        >
-                          {item.type === 'matching' ? (
-                            <Star className="h-5 w-5 text-[#D97706]" />
-                          ) : (
-                            <FileText className="h-5 w-5 text-[#7C3AED]" />
-                          )}
-                        </div>
-
-                        {/* コンテンツ */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[14px] font-medium text-[#18181B] truncate">
-                              {item.title}
-                            </span>
-                            {item.folder && (
-                              <span className="text-[11px] text-[#A1A1AA] flex items-center gap-1 flex-shrink-0">
-                                <Folder className="h-3 w-3" />
-                                {item.folder}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-[12px] text-[#A1A1AA]">
-                            <span
-                              className={`px-1.5 py-0.5 rounded font-medium ${
-                                item.type === 'matching'
-                                  ? 'bg-[rgba(245,158,11,0.1)] text-[#D97706]'
-                                  : 'bg-[rgba(139,92,246,0.1)] text-[#7C3AED]'
-                              }`}
-                            >
-                              {item.type === 'matching' ? 'マッチング' : 'PESO'}
-                            </span>
-                            <span className="w-1 h-1 rounded-full bg-[#D4D4D8]" />
-                            <span>{item.subtitle}</span>
-                            <span className="w-1 h-1 rounded-full bg-[#D4D4D8]" />
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {item.time}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 結果 */}
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-[11px] text-[#A1A1AA]">{item.result.label}</div>
-                          <div className="text-[14px] font-semibold text-[#18181B]">{item.result.value}</div>
-                        </div>
-
-                        {/* アクション（ホバー時表示） */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          <Link
-                            href={`/dashboard/history/${item.id}`}
-                            className="p-1.5 hover:bg-[#F4F4F5] rounded-md transition-colors"
-                          >
-                            <ExternalLink className="h-4 w-4 text-[#A1A1AA]" />
-                          </Link>
-                          <button className="p-1.5 hover:bg-[#F4F4F5] rounded-md transition-colors">
-                            <Folder className="h-4 w-4 text-[#A1A1AA]" />
-                          </button>
-                          <button className="p-1.5 hover:bg-[#FEF2F2] rounded-md transition-colors">
-                            <Trash2 className="h-4 w-4 text-[#A1A1AA] hover:text-[#EF4444]" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    <HistoryItemCard key={item.id} item={item} />
                   ))}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="bg-white border border-[#E4E4E7] rounded-lg py-12">
-            <div className="text-center text-[#A1A1AA]">
-              <Clock className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="text-[14px] font-medium text-[#52525B]">履歴がありません</p>
-              <p className="text-[13px] mt-1">
+          <div
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E4E4E7',
+              borderRadius: '8px',
+              padding: '48px 24px',
+            }}
+          >
+            <div style={{ textAlign: 'center', color: '#A1A1AA' }}>
+              <Clock
+                style={{
+                  width: 40,
+                  height: 40,
+                  margin: '0 auto 12px',
+                  opacity: 0.5,
+                }}
+              />
+              <p style={{ fontSize: '14px', fontWeight: 500, color: '#52525B' }}>
+                履歴がありません
+              </p>
+              <p style={{ fontSize: '13px', marginTop: '4px' }}>
                 媒体マッチングやPESO診断を実行すると、ここに履歴が表示されます
               </p>
             </div>
@@ -245,5 +306,184 @@ export default function HistoryPage() {
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * History Item Card Component
+ */
+function HistoryItemCard({ item }: { item: HistoryItem }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const isMatching = item.type === 'matching'
+  const iconBg = isMatching ? 'rgba(245,158,11,0.1)' : 'rgba(139,92,246,0.1)'
+  const iconColor = isMatching ? '#D97706' : '#7C3AED'
+
+  return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #E4E4E7',
+        borderRadius: '8px',
+        padding: '16px',
+        transition: 'border-color 0.15s ease',
+        borderColor: isHovered ? '#A1A1AA' : '#E4E4E7',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Icon */}
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            background: iconBg,
+          }}
+        >
+          {isMatching ? (
+            <Star style={{ width: 20, height: 20, color: iconColor }} />
+          ) : (
+            <FileText style={{ width: 20, height: 20, color: iconColor }} />
+          )}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span
+              style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                color: '#18181B',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {item.title}
+            </span>
+            {item.folder && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: '#A1A1AA',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  flexShrink: 0,
+                }}
+              >
+                <Folder style={{ width: 12, height: 12 }} />
+                {item.folder}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#A1A1AA' }}>
+            <span
+              style={{
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontWeight: 500,
+                background: iconBg,
+                color: iconColor,
+              }}
+            >
+              {isMatching ? 'マッチング' : 'PESO'}
+            </span>
+            <span
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: '50%',
+                background: '#D4D4D8',
+              }}
+            />
+            <span>{item.subtitle}</span>
+            <span
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: '50%',
+                background: '#D4D4D8',
+              }}
+            />
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Clock style={{ width: 12, height: 12 }} />
+              {item.time}
+            </span>
+          </div>
+        </div>
+
+        {/* Result */}
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: '11px', color: '#A1A1AA' }}>{item.result.label}</div>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
+            {item.result.value}
+          </div>
+        </div>
+
+        {/* Actions (visible on hover) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            opacity: isHovered ? 1 : 0,
+            transition: 'opacity 0.15s ease',
+            flexShrink: 0,
+          }}
+        >
+          <Link
+            href={`/dashboard/history/${item.id}`}
+            style={{
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.1s ease',
+              background: 'transparent',
+            }}
+          >
+            <ExternalLink style={{ width: 16, height: 16, color: '#A1A1AA' }} />
+          </Link>
+          <button
+            style={{
+              padding: '6px',
+              border: 'none',
+              borderRadius: '6px',
+              background: 'transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.1s ease',
+            }}
+          >
+            <Folder style={{ width: 16, height: 16, color: '#A1A1AA' }} />
+          </button>
+          <button
+            style={{
+              padding: '6px',
+              border: 'none',
+              borderRadius: '6px',
+              background: 'transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.1s ease',
+            }}
+          >
+            <Trash2 style={{ width: 16, height: 16, color: '#A1A1AA' }} />
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

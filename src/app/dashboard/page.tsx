@@ -2,6 +2,34 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Grid2X2, Star, FileText, ChevronRight, Clock } from 'lucide-react'
 
+/**
+ * Dashboard Home Page
+ *
+ * Design spec: 03_ブランディングとデザインガイド.md
+ *
+ * Header:
+ * - bg: #FFFFFF
+ * - border-bottom: 1px solid #E4E4E7
+ * - padding: 16px 24px
+ * - title: 15px, weight 600, color #18181B, letter-spacing -0.01em
+ * - subtitle: 13px, color #A1A1AA, margin-top 2px
+ *
+ * Content:
+ * - padding: 24px
+ *
+ * Stats grid: 4 columns, gap 16px
+ * - card: bg white, border 1px solid #E4E4E7, radius 8px, padding 16px 20px
+ * - label: 12px, color #A1A1AA
+ * - value: 24px, weight 600, color #18181B (changed from 28px to match spec)
+ * - change: 12px, color #0D9488
+ *
+ * Action cards: 3 columns, gap 16px
+ * - padding: 20px
+ * - icon container: 32x32, radius 6px
+ * - title: 13px, weight 600
+ * - desc: 12px, color #A1A1AA
+ */
+
 export default async function DashboardPage() {
   const supabase = await createClient()
 
@@ -15,7 +43,6 @@ export default async function DashboardPage() {
     .eq('id', authUser?.id)
     .single()
 
-  // サンプルの最近の分析データ
   const recentAnalyses = [
     {
       id: '1',
@@ -35,159 +62,182 @@ export default async function DashboardPage() {
 
   return (
     <>
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-[#E4E4E7] px-6 py-4 sticky top-0 z-40">
-        <h1 className="text-[15px] font-semibold text-[#18181B] tracking-tight">ホーム</h1>
-        <p className="text-[13px] text-[#A1A1AA] mt-0.5">分析を開始しましょう</p>
+      {/* Header: bg white, border-bottom, padding 16px 24px, sticky */}
+      <header
+        style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E4E4E7',
+          padding: '16px 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+        }}
+      >
+        {/* Title: 15px, weight 600, color #18181B, letter-spacing -0.01em */}
+        <h1
+          style={{
+            fontSize: '15px',
+            fontWeight: 600,
+            color: '#18181B',
+            letterSpacing: '-0.01em',
+            margin: 0,
+          }}
+        >
+          ホーム
+        </h1>
+        {/* Subtitle: 13px, color #A1A1AA, margin-top 2px */}
+        <p
+          style={{
+            fontSize: '13px',
+            color: '#A1A1AA',
+            marginTop: '2px',
+            fontWeight: 400,
+          }}
+        >
+          分析を開始しましょう
+        </p>
       </header>
 
-      {/* コンテンツエリア */}
-      <div className="p-6">
-        {/* 統計カード */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white border border-[#E4E4E7] rounded-lg p-5">
-            <div className="text-[12px] text-[#A1A1AA] mb-1">今月の分析数</div>
-            <div className="text-[28px] font-bold text-[#18181B]">{user?.monthly_analysis_count || 0}</div>
-            <div className="text-[12px] text-[#0D9488] mt-1">+23% vs 先月</div>
-          </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-lg p-5">
-            <div className="text-[12px] text-[#A1A1AA] mb-1">保存済み成果物</div>
-            <div className="text-[28px] font-bold text-[#18181B]">0</div>
-          </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-lg p-5">
-            <div className="text-[12px] text-[#A1A1AA] mb-1">フォルダ数</div>
-            <div className="text-[28px] font-bold text-[#18181B]">0</div>
-          </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-lg p-5">
-            <div className="text-[12px] text-[#A1A1AA] mb-1">登録媒体数</div>
-            <div className="text-[28px] font-bold text-[#18181B]">15</div>
-          </div>
+      {/* Content: padding 24px */}
+      <div style={{ padding: '24px' }}>
+        {/* Stats grid: 4 columns, gap 16px, margin-bottom 24px */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '16px',
+            marginBottom: '24px',
+          }}
+        >
+          <StatCard
+            label="今月の分析数"
+            value={user?.monthly_analysis_count || 0}
+            change="+23% vs 先月"
+          />
+          <StatCard label="保存済み成果物" value={0} />
+          <StatCard label="フォルダ数" value={0} />
+          <StatCard label="登録媒体数" value={15} />
         </div>
 
-        {/* 分析を始める */}
-        <div className="bg-white border border-[#E4E4E7] rounded-lg mb-6">
-          <div className="px-5 py-4 border-b border-[#E4E4E7] flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-[#18181B]">分析を始める</span>
+        {/* Action section card */}
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
+            borderRadius: '8px',
+            marginBottom: '24px',
+          }}
+        >
+          {/* Card header: padding 16px 20px */}
+          <div
+            style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #E4E4E7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#18181B',
+              }}
+            >
+              分析を始める
+            </span>
           </div>
-          <div className="p-5">
-            <div className="grid grid-cols-3 gap-4">
-              {/* 媒体カタログ */}
-              <Link
+
+          {/* Card body: padding 20px */}
+          <div style={{ padding: '20px' }}>
+            {/* Action cards grid: 3 columns, gap 16px */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '16px',
+              }}
+            >
+              <ActionCard
                 href="/dashboard/catalog"
-                className="group relative bg-white border border-[#E4E4E7] rounded-lg p-5 hover:border-[#0D9488] hover:shadow-sm transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 bg-[#F0FDFA] rounded-md flex items-center justify-center">
-                    <Grid2X2 className="h-4 w-4 text-[#0D9488]" />
-                  </div>
-                  <span className="text-[13px] font-semibold text-[#18181B]">媒体カタログ</span>
-                </div>
-                <p className="text-[12px] text-[#A1A1AA] leading-relaxed">
-                  媒体の獲得キーワード・流入経路を確認
-                </p>
-                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A1A1AA] group-hover:text-[#0D9488] transition-colors" />
-              </Link>
-
-              {/* 媒体マッチング */}
-              <Link
+                icon={<Grid2X2 style={{ width: 16, height: 16, color: '#0D9488' }} />}
+                iconBg="#F0FDFA"
+                hoverBorder="#0D9488"
+                title="媒体カタログ"
+                description="媒体の獲得キーワード・流入経路を確認"
+              />
+              <ActionCard
                 href="/dashboard/matching"
-                className="group relative bg-white border border-[#E4E4E7] rounded-lg p-5 hover:border-[#F59E0B] hover:shadow-sm transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 bg-[rgba(245,158,11,0.1)] rounded-md flex items-center justify-center">
-                    <Star className="h-4 w-4 text-[#D97706]" />
-                  </div>
-                  <span className="text-[13px] font-semibold text-[#18181B]">媒体マッチング</span>
-                </div>
-                <p className="text-[12px] text-[#A1A1AA] leading-relaxed">
-                  求人に最適な媒体をAIが提案
-                </p>
-                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A1A1AA] group-hover:text-[#F59E0B] transition-colors" />
-              </Link>
-
-              {/* PESO診断 */}
-              <Link
+                icon={<Star style={{ width: 16, height: 16, color: '#D97706' }} />}
+                iconBg="rgba(245,158,11,0.1)"
+                hoverBorder="#F59E0B"
+                title="媒体マッチング"
+                description="求人に最適な媒体をAIが提案"
+              />
+              <ActionCard
                 href="/dashboard/peso"
-                className="group relative bg-white border border-[#E4E4E7] rounded-lg p-5 hover:border-[#8B5CF6] hover:shadow-sm transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 bg-[rgba(139,92,246,0.1)] rounded-md flex items-center justify-center">
-                    <FileText className="h-4 w-4 text-[#7C3AED]" />
-                  </div>
-                  <span className="text-[13px] font-semibold text-[#18181B]">PESO診断</span>
-                </div>
-                <p className="text-[12px] text-[#A1A1AA] leading-relaxed">
-                  採用メディア戦略の現状を可視化
-                </p>
-                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A1A1AA] group-hover:text-[#8B5CF6] transition-colors" />
-              </Link>
+                icon={<FileText style={{ width: 16, height: 16, color: '#7C3AED' }} />}
+                iconBg="rgba(139,92,246,0.1)"
+                hoverBorder="#8B5CF6"
+                title="PESO診断"
+                description="採用メディア戦略の現状を可視化"
+              />
             </div>
           </div>
         </div>
 
-        {/* 最近の分析 */}
-        <div className="bg-white border border-[#E4E4E7] rounded-lg">
-          <div className="px-5 py-4 border-b border-[#E4E4E7] flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-[#18181B]">最近の分析</span>
-            <Link href="/dashboard/history" className="text-[13px] text-[#0D9488] hover:underline">
+        {/* Recent analyses card */}
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
+            borderRadius: '8px',
+          }}
+        >
+          <div
+            style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #E4E4E7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+              最近の分析
+            </span>
+            <Link
+              href="/dashboard/history"
+              style={{
+                fontSize: '13px',
+                color: '#0D9488',
+                textDecoration: 'none',
+              }}
+            >
               すべて見る
             </Link>
           </div>
-          <div className="p-5">
+
+          <div style={{ padding: '20px' }}>
             {recentAnalyses.length > 0 ? (
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {recentAnalyses.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/dashboard/history/${item.id}`}
-                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-[#F4F4F5] transition-colors cursor-pointer"
-                  >
-                    {/* アイコン */}
-                    <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                        item.type === 'matching'
-                          ? 'bg-[rgba(245,158,11,0.1)]'
-                          : 'bg-[rgba(139,92,246,0.1)]'
-                      }`}
-                    >
-                      {item.type === 'matching' ? (
-                        <Star className="h-4 w-4 text-[#D97706]" />
-                      ) : (
-                        <FileText className="h-4 w-4 text-[#7C3AED]" />
-                      )}
-                    </div>
-
-                    {/* コンテンツ */}
-                    <div className="flex-1">
-                      <div className="text-[13px] font-medium text-[#18181B]">{item.title}</div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span
-                          className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
-                            item.type === 'matching'
-                              ? 'bg-[rgba(245,158,11,0.1)] text-[#D97706]'
-                              : 'bg-[rgba(139,92,246,0.1)] text-[#7C3AED]'
-                          }`}
-                        >
-                          {item.type === 'matching' ? 'マッチング' : 'PESO'}
-                        </span>
-                        <span className="w-1 h-1 rounded-full bg-[#D4D4D8]" />
-                        <span className="text-[12px] text-[#A1A1AA]">{item.time}</span>
-                      </div>
-                    </div>
-
-                    {/* 結果 */}
-                    <div className="text-right">
-                      <div className="text-[11px] text-[#A1A1AA]">{item.result.label}</div>
-                      <div className="text-[13px] font-semibold text-[#18181B]">{item.result.value}</div>
-                    </div>
-                  </Link>
+                  <HistoryItem key={item.id} item={item} />
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center text-[#A1A1AA]">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-[13px]">まだ履歴がありません</p>
-                <p className="text-[12px] mt-1">
+              <div style={{ padding: '32px 0', textAlign: 'center', color: '#A1A1AA' }}>
+                <Clock
+                  style={{
+                    width: 32,
+                    height: 32,
+                    margin: '0 auto 8px',
+                    opacity: 0.5,
+                  }}
+                />
+                <p style={{ fontSize: '13px' }}>まだ履歴がありません</p>
+                <p style={{ fontSize: '12px', marginTop: '4px' }}>
                   媒体マッチングやPESO診断を実行すると、ここに履歴が表示されます
                 </p>
               </div>
@@ -196,5 +246,230 @@ export default async function DashboardPage() {
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Stat Card Component
+ *
+ * Style:
+ * - bg: white, border: 1px solid #E4E4E7, radius: 8px
+ * - padding: 16px 20px
+ * - label: 12px, color #A1A1AA, margin-bottom 4px
+ * - value: 24px, weight 600, color #18181B
+ * - change: 12px, color #0D9488, margin-top 4px
+ */
+function StatCard({
+  label,
+  value,
+  change,
+}: {
+  label: string
+  value: number | string
+  change?: string
+}) {
+  return (
+    <div
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #E4E4E7',
+        borderRadius: '8px',
+        padding: '16px 20px',
+      }}
+    >
+      <div style={{ fontSize: '12px', color: '#A1A1AA', marginBottom: '4px' }}>{label}</div>
+      <div
+        style={{
+          fontSize: '24px',
+          fontWeight: 600,
+          color: '#18181B',
+          lineHeight: 1.2,
+        }}
+      >
+        {value}
+      </div>
+      {change && (
+        <div style={{ fontSize: '12px', color: '#0D9488', marginTop: '4px' }}>{change}</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Action Card Component
+ *
+ * Style:
+ * - bg: white, border: 1px solid #E4E4E7, radius: 8px
+ * - padding: 20px
+ * - position: relative (for arrow)
+ * - hover: border-color changes, shadow-sm
+ * - icon container: 32x32, radius 6px
+ * - title: 13px, weight 600, color #18181B
+ * - desc: 12px, color #A1A1AA, line-height 1.5
+ */
+function ActionCard({
+  href,
+  icon,
+  iconBg,
+  hoverBorder,
+  title,
+  description,
+}: {
+  href: string
+  icon: React.ReactNode
+  iconBg: string
+  hoverBorder: string
+  title: string
+  description: string
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        position: 'relative',
+        background: '#FFFFFF',
+        border: '1px solid #E4E4E7',
+        borderRadius: '8px',
+        padding: '20px',
+        textDecoration: 'none',
+        display: 'block',
+        transition: 'all 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = hoverBorder
+        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = '#E4E4E7'
+        e.currentTarget.style.boxShadow = 'none'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            background: iconBg,
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {icon}
+        </div>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>{title}</span>
+      </div>
+      <p style={{ fontSize: '12px', color: '#A1A1AA', lineHeight: 1.5, margin: 0 }}>
+        {description}
+      </p>
+      <ChevronRight
+        style={{
+          position: 'absolute',
+          right: '16px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 16,
+          height: 16,
+          color: '#A1A1AA',
+        }}
+      />
+    </Link>
+  )
+}
+
+/**
+ * History Item Component
+ */
+function HistoryItem({
+  item,
+}: {
+  item: {
+    id: string
+    type: string
+    title: string
+    time: string
+    result: { label: string; value: string }
+  }
+}) {
+  const isMatching = item.type === 'matching'
+  const bgColor = isMatching ? 'rgba(245,158,11,0.1)' : 'rgba(139,92,246,0.1)'
+  const iconColor = isMatching ? '#D97706' : '#7C3AED'
+
+  return (
+    <Link
+      href={`/dashboard/history/${item.id}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px',
+        padding: '12px',
+        borderRadius: '8px',
+        textDecoration: 'none',
+        transition: 'background 0.1s ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = '#F4F4F5'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent'
+      }}
+    >
+      {/* Icon: 36x36, radius 8px */}
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: '8px',
+          background: bgColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {isMatching ? (
+          <Star style={{ width: 16, height: 16, color: iconColor }} />
+        ) : (
+          <FileText style={{ width: 16, height: 16, color: iconColor }} />
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>{item.title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+          <span
+            style={{
+              fontSize: '11px',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontWeight: 500,
+              background: bgColor,
+              color: iconColor,
+            }}
+          >
+            {isMatching ? 'マッチング' : 'PESO'}
+          </span>
+          <span
+            style={{
+              width: 4,
+              height: 4,
+              borderRadius: '50%',
+              background: '#D4D4D8',
+            }}
+          />
+          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>{item.time}</span>
+        </div>
+      </div>
+
+      {/* Result */}
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ fontSize: '11px', color: '#A1A1AA' }}>{item.result.label}</div>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+          {item.result.value}
+        </div>
+      </div>
+    </Link>
   )
 }

@@ -1,7 +1,30 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, ChevronDown, X, ExternalLink, Download, TrendingUp, TrendingDown, Minus, Globe, Users, BarChart2 } from 'lucide-react'
+import {
+  Search,
+  ChevronDown,
+  X,
+  ExternalLink,
+  Download,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Globe,
+  Users,
+  BarChart2,
+} from 'lucide-react'
+
+/**
+ * Media Catalog Page
+ *
+ * Design spec: 03_ブランディングとデザインガイド.md
+ *
+ * Layout:
+ * - Header: sticky, bg white, border-bottom
+ * - Content: flex layout with main table and side panel
+ * - Side panel: 400px width, slides in from right
+ */
 
 interface Media {
   id: string
@@ -23,12 +46,66 @@ interface Keyword {
 }
 
 const sampleMedia: Media[] = [
-  { id: '1', name: 'Indeed', domain: 'jp.indeed.com', monthlyTraffic: '45,000,000', trafficChange: 12.5, organic: 68, paid: 22, direct: 10 },
-  { id: '2', name: 'ジョブメドレー', domain: 'job-medley.com', monthlyTraffic: '8,500,000', trafficChange: 8.2, organic: 72, paid: 18, direct: 10 },
-  { id: '3', name: 'カイゴジョブ', domain: 'kaigojob.com', monthlyTraffic: '3,200,000', trafficChange: -2.3, organic: 65, paid: 25, direct: 10 },
-  { id: '4', name: 'マイナビ介護', domain: 'mynavi-kaigo.jp', monthlyTraffic: '2,800,000', trafficChange: 5.1, organic: 58, paid: 32, direct: 10 },
-  { id: '5', name: 'e介護転職', domain: 'ekaigotenshoku.com', monthlyTraffic: '1,500,000', trafficChange: 0, organic: 78, paid: 12, direct: 10 },
-  { id: '6', name: 'ナースではたらこ', domain: 'nurse-dework.jp', monthlyTraffic: '980,000', trafficChange: 15.8, organic: 62, paid: 28, direct: 10 },
+  {
+    id: '1',
+    name: 'Indeed',
+    domain: 'jp.indeed.com',
+    monthlyTraffic: '45,000,000',
+    trafficChange: 12.5,
+    organic: 68,
+    paid: 22,
+    direct: 10,
+  },
+  {
+    id: '2',
+    name: 'ジョブメドレー',
+    domain: 'job-medley.com',
+    monthlyTraffic: '8,500,000',
+    trafficChange: 8.2,
+    organic: 72,
+    paid: 18,
+    direct: 10,
+  },
+  {
+    id: '3',
+    name: 'カイゴジョブ',
+    domain: 'kaigojob.com',
+    monthlyTraffic: '3,200,000',
+    trafficChange: -2.3,
+    organic: 65,
+    paid: 25,
+    direct: 10,
+  },
+  {
+    id: '4',
+    name: 'マイナビ介護',
+    domain: 'mynavi-kaigo.jp',
+    monthlyTraffic: '2,800,000',
+    trafficChange: 5.1,
+    organic: 58,
+    paid: 32,
+    direct: 10,
+  },
+  {
+    id: '5',
+    name: 'e介護転職',
+    domain: 'ekaigotenshoku.com',
+    monthlyTraffic: '1,500,000',
+    trafficChange: 0,
+    organic: 78,
+    paid: 12,
+    direct: 10,
+  },
+  {
+    id: '6',
+    name: 'ナースではたらこ',
+    domain: 'nurse-dework.jp',
+    monthlyTraffic: '980,000',
+    trafficChange: 15.8,
+    organic: 62,
+    paid: 28,
+    direct: 10,
+  },
 ]
 
 const sampleKeywords: Keyword[] = [
@@ -53,96 +130,283 @@ export default function CatalogPage() {
     return true
   })
 
-  const handleMediaClick = (media: Media) => {
-    setSelectedMedia(media)
-  }
-
-  const closePanel = () => {
-    setSelectedMedia(null)
-  }
-
   return (
     <>
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-[#E4E4E7] px-6 py-4 sticky top-0 z-40">
-        <div className="flex items-center justify-between">
+      {/* Header: sticky, bg white, border-bottom, padding 16px 24px */}
+      <header
+        style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E4E4E7',
+          padding: '16px 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <div>
-            <h1 className="text-[15px] font-semibold text-[#18181B] tracking-tight">媒体カタログ</h1>
-            <p className="text-[13px] text-[#A1A1AA] mt-0.5">媒体の獲得キーワード・流入経路を確認</p>
+            {/* Title: 15px, weight 600, color #18181B */}
+            <h1
+              style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: '#18181B',
+                letterSpacing: '-0.01em',
+                margin: 0,
+              }}
+            >
+              媒体カタログ
+            </h1>
+            {/* Subtitle: 13px, color #A1A1AA */}
+            <p
+              style={{
+                fontSize: '13px',
+                color: '#A1A1AA',
+                marginTop: '2px',
+                fontWeight: 400,
+              }}
+            >
+              媒体の獲得キーワード・流入経路を確認
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* 検索 */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A1A1AA]" />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Search input */}
+            <div style={{ position: 'relative' }}>
+              <Search
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 16,
+                  height: 16,
+                  color: '#A1A1AA',
+                }}
+              />
               <input
                 type="text"
                 placeholder="媒体を検索..."
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                className="w-64 pl-9 pr-3 py-2 border border-[#E4E4E7] rounded-md text-[13px] focus:outline-none focus:border-[#A1A1AA] transition-colors"
+                style={{
+                  width: '256px',
+                  paddingLeft: '36px',
+                  paddingRight: '12px',
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  outline: 'none',
+                  transition: 'border-color 0.15s ease',
+                }}
               />
             </div>
-            {/* フィルター */}
-            <button className="px-3 py-2 border border-[#E4E4E7] rounded-md text-[13px] text-[#52525B] hover:bg-[#F4F4F5] transition-colors flex items-center gap-2">
+
+            {/* Filter button */}
+            <button
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #E4E4E7',
+                borderRadius: '6px',
+                fontSize: '13px',
+                color: '#52525B',
+                background: '#FFFFFF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'background 0.15s ease',
+              }}
+            >
               フィルター
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown style={{ width: 16, height: 16 }} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* コンテンツ */}
-      <div className="flex">
-        {/* メインテーブル */}
-        <div className={`flex-1 p-6 ${selectedMedia ? 'pr-0' : ''}`}>
-          <div className="bg-white border border-[#E4E4E7] rounded-lg overflow-hidden">
-            <table className="w-full">
+      {/* Content area */}
+      <div style={{ display: 'flex' }}>
+        {/* Main table area */}
+        <div
+          style={{
+            flex: 1,
+            padding: '24px',
+            paddingRight: selectedMedia ? '0' : '24px',
+          }}
+        >
+          {/* Table card */}
+          <div
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E4E4E7',
+              borderRadius: '8px',
+              overflow: 'hidden',
+            }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-[#E4E4E7]">
-                  <th className="text-left px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">媒体名</th>
-                  <th className="text-left px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">ドメイン</th>
-                  <th className="text-right px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">月間トラフィック</th>
-                  <th className="text-right px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">変化</th>
-                  <th className="text-center px-4 py-3 text-[12px] font-medium text-[#A1A1AA] uppercase tracking-wider">流入構成</th>
+                <tr style={{ borderBottom: '1px solid #E4E4E7' }}>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      padding: '12px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#A1A1AA',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    媒体名
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      padding: '12px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#A1A1AA',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    ドメイン
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'right',
+                      padding: '12px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#A1A1AA',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    月間トラフィック
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'right',
+                      padding: '12px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#A1A1AA',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    変化
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'center',
+                      padding: '12px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#A1A1AA',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    流入構成
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {sampleMedia.map((media) => (
                   <tr
                     key={media.id}
-                    onClick={() => handleMediaClick(media)}
-                    className={`border-b border-[#F4F4F5] hover:bg-[#F4F4F5] cursor-pointer transition-colors ${
-                      selectedMedia?.id === media.id ? 'bg-[#F0FDFA]' : ''
-                    }`}
+                    onClick={() => setSelectedMedia(media)}
+                    style={{
+                      borderBottom: '1px solid #F4F4F5',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s ease',
+                      background: selectedMedia?.id === media.id ? '#F0FDFA' : 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedMedia?.id !== media.id) {
+                        e.currentTarget.style.background = '#F4F4F5'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedMedia?.id !== media.id) {
+                        e.currentTarget.style.background = 'transparent'
+                      }
+                    }}
                   >
-                    <td className="px-4 py-3">
-                      <div className="text-[14px] font-medium text-[#18181B]">{media.name}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-[13px] text-[#A1A1AA]">{media.domain}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="text-[14px] font-medium text-[#18181B]">{media.monthlyTraffic}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`text-[13px] flex items-center justify-end gap-1 ${
-                        media.trafficChange > 0 ? 'text-[#10B981]' :
-                        media.trafficChange < 0 ? 'text-[#EF4444]' :
-                        'text-[#A1A1AA]'
-                      }`}>
-                        {media.trafficChange > 0 ? <TrendingUp className="h-3.5 w-3.5" /> :
-                         media.trafficChange < 0 ? <TrendingDown className="h-3.5 w-3.5" /> :
-                         <Minus className="h-3.5 w-3.5" />}
-                        {media.trafficChange > 0 ? '+' : ''}{media.trafficChange}%
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#18181B' }}>
+                        {media.name}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      {/* ミニスタックバー */}
-                      <div className="flex items-center gap-2 justify-center">
-                        <div className="w-24 h-1.5 bg-[#F4F4F5] rounded-full flex overflow-hidden">
-                          <div className="bg-[#0D9488]" style={{ width: `${media.organic}%` }} />
-                          <div className="bg-[#F59E0B]" style={{ width: `${media.paid}%` }} />
-                          <div className="bg-[#A1A1AA]" style={{ width: `${media.direct}%` }} />
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: '13px', color: '#A1A1AA' }}>{media.domain}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#18181B' }}>
+                        {media.monthlyTraffic}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          gap: '4px',
+                          color:
+                            media.trafficChange > 0
+                              ? '#10B981'
+                              : media.trafficChange < 0
+                                ? '#EF4444'
+                                : '#A1A1AA',
+                        }}
+                      >
+                        {media.trafficChange > 0 ? (
+                          <TrendingUp style={{ width: 14, height: 14 }} />
+                        ) : media.trafficChange < 0 ? (
+                          <TrendingDown style={{ width: 14, height: 14 }} />
+                        ) : (
+                          <Minus style={{ width: 14, height: 14 }} />
+                        )}
+                        {media.trafficChange > 0 ? '+' : ''}
+                        {media.trafficChange}%
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {/* Mini stack bar */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '96px',
+                            height: '6px',
+                            background: '#F4F4F5',
+                            borderRadius: '999px',
+                            display: 'flex',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div style={{ background: '#0D9488', width: `${media.organic}%` }} />
+                          <div style={{ background: '#F59E0B', width: `${media.paid}%` }} />
+                          <div style={{ background: '#A1A1AA', width: `${media.direct}%` }} />
                         </div>
                       </div>
                     </td>
@@ -153,128 +417,268 @@ export default function CatalogPage() {
           </div>
         </div>
 
-        {/* サイドパネル */}
+        {/* Side panel */}
         {selectedMedia && (
-          <div className="w-[400px] border-l border-[#E4E4E7] bg-white h-[calc(100vh-120px)] overflow-y-auto sticky top-[73px]">
-            {/* パネルヘッダー */}
-            <div className="px-5 py-4 border-b border-[#E4E4E7] flex items-center justify-between sticky top-0 bg-white z-10">
+          <div
+            style={{
+              width: '400px',
+              borderLeft: '1px solid #E4E4E7',
+              background: '#FFFFFF',
+              height: 'calc(100vh - 120px)',
+              overflowY: 'auto',
+              position: 'sticky',
+              top: '73px',
+            }}
+          >
+            {/* Panel header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #E4E4E7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                position: 'sticky',
+                top: 0,
+                background: '#FFFFFF',
+                zIndex: 10,
+              }}
+            >
               <div>
-                <div className="text-[15px] font-semibold text-[#18181B]">{selectedMedia.name}</div>
-                <div className="text-[12px] text-[#A1A1AA] flex items-center gap-1">
-                  <Globe className="h-3 w-3" />
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#18181B' }}>
+                  {selectedMedia.name}
+                </div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: '#A1A1AA',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginTop: '2px',
+                  }}
+                >
+                  <Globe style={{ width: 12, height: 12 }} />
                   {selectedMedia.domain}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className="p-1.5 hover:bg-[#F4F4F5] rounded-md transition-colors">
-                  <ExternalLink className="h-4 w-4 text-[#A1A1AA]" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  style={{
+                    padding: '6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'background 0.1s ease',
+                  }}
+                >
+                  <ExternalLink style={{ width: 16, height: 16, color: '#A1A1AA' }} />
                 </button>
-                <button onClick={closePanel} className="p-1.5 hover:bg-[#F4F4F5] rounded-md transition-colors">
-                  <X className="h-4 w-4 text-[#A1A1AA]" />
+                <button
+                  onClick={() => setSelectedMedia(null)}
+                  style={{
+                    padding: '6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'background 0.1s ease',
+                  }}
+                >
+                  <X style={{ width: 16, height: 16, color: '#A1A1AA' }} />
                 </button>
               </div>
             </div>
 
-            {/* 概要 */}
-            <div className="px-5 py-4 border-b border-[#E4E4E7]">
-              <div className="grid grid-cols-2 gap-4">
+            {/* Summary section */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E4E4E7' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                 <div>
-                  <div className="flex items-center gap-2 text-[11px] text-[#A1A1AA] mb-1">
-                    <Users className="h-3.5 w-3.5" />
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '11px',
+                      color: '#A1A1AA',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    <Users style={{ width: 14, height: 14 }} />
                     月間トラフィック
                   </div>
-                  <div className="text-[18px] font-bold text-[#18181B]">{selectedMedia.monthlyTraffic}</div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#18181B' }}>
+                    {selectedMedia.monthlyTraffic}
+                  </div>
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 text-[11px] text-[#A1A1AA] mb-1">
-                    <BarChart2 className="h-3.5 w-3.5" />
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '11px',
+                      color: '#A1A1AA',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    <BarChart2 style={{ width: 14, height: 14 }} />
                     先月比
                   </div>
-                  <div className={`text-[18px] font-bold flex items-center gap-1 ${
-                    selectedMedia.trafficChange > 0 ? 'text-[#10B981]' :
-                    selectedMedia.trafficChange < 0 ? 'text-[#EF4444]' :
-                    'text-[#A1A1AA]'
-                  }`}>
-                    {selectedMedia.trafficChange > 0 ? '+' : ''}{selectedMedia.trafficChange}%
+                  <div
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color:
+                        selectedMedia.trafficChange > 0
+                          ? '#10B981'
+                          : selectedMedia.trafficChange < 0
+                            ? '#EF4444'
+                            : '#A1A1AA',
+                    }}
+                  >
+                    {selectedMedia.trafficChange > 0 ? '+' : ''}
+                    {selectedMedia.trafficChange}%
                   </div>
                 </div>
               </div>
 
-              {/* 流入経路 */}
-              <div className="mt-4">
-                <div className="text-[11px] text-[#A1A1AA] mb-2">流入経路の内訳</div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#0D9488]" />
-                      <span className="text-[12px] text-[#52525B]">オーガニック検索</span>
-                    </div>
-                    <span className="text-[12px] font-medium text-[#18181B]">{selectedMedia.organic}%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-                      <span className="text-[12px] text-[#52525B]">有料広告</span>
-                    </div>
-                    <span className="text-[12px] font-medium text-[#18181B]">{selectedMedia.paid}%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#A1A1AA]" />
-                      <span className="text-[12px] text-[#52525B]">ダイレクト</span>
-                    </div>
-                    <span className="text-[12px] font-medium text-[#18181B]">{selectedMedia.direct}%</span>
-                  </div>
+              {/* Traffic sources */}
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ fontSize: '11px', color: '#A1A1AA', marginBottom: '8px' }}>
+                  流入経路の内訳
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <TrafficSourceRow
+                    color="#0D9488"
+                    label="オーガニック検索"
+                    value={selectedMedia.organic}
+                  />
+                  <TrafficSourceRow color="#F59E0B" label="有料広告" value={selectedMedia.paid} />
+                  <TrafficSourceRow color="#A1A1AA" label="ダイレクト" value={selectedMedia.direct} />
                 </div>
               </div>
             </div>
 
-            {/* キーワード一覧 */}
-            <div className="px-5 py-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[13px] font-semibold text-[#18181B]">獲得キーワード</span>
-                <button className="text-[12px] text-[#0D9488] hover:underline flex items-center gap-1">
-                  <Download className="h-3.5 w-3.5" />
+            {/* Keywords section */}
+            <div style={{ padding: '16px 20px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '12px',
+                }}
+              >
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+                  獲得キーワード
+                </span>
+                <button
+                  style={{
+                    fontSize: '12px',
+                    color: '#0D9488',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <Download style={{ width: 14, height: 14 }} />
                   CSV
                 </button>
               </div>
 
-              {/* 意図フィルター */}
-              <div className="flex gap-1 mb-3">
+              {/* Intent filter */}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
                 {['all', 'A', 'B', 'C'].map((intent) => (
                   <button
                     key={intent}
                     onClick={() => setIntentFilter(intent)}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-                      intentFilter === intent
-                        ? 'bg-[#0D9488] text-white'
-                        : 'bg-[#F4F4F5] text-[#52525B] hover:bg-[#E4E4E7]'
-                    }`}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      background: intentFilter === intent ? '#0D9488' : '#F4F4F5',
+                      color: intentFilter === intent ? '#FFFFFF' : '#52525B',
+                    }}
                   >
                     {intent === 'all' ? 'すべて' : `意図${intent}`}
                   </button>
                 ))}
               </div>
 
-              {/* キーワードテーブル */}
-              <div className="space-y-1">
+              {/* Keywords list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {filteredKeywords.map((kw, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b border-[#F4F4F5] last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] text-[#18181B] truncate">{kw.keyword}</div>
-                      <div className="text-[11px] text-[#A1A1AA]">Vol: {kw.volume}</div>
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 0',
+                      borderBottom: index < filteredKeywords.length - 1 ? '1px solid #F4F4F5' : 'none',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          color: '#18181B',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {kw.keyword}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#A1A1AA' }}>Vol: {kw.volume}</div>
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                        kw.intent === 'A' ? 'bg-[#D1FAE5] text-[#059669]' :
-                        kw.intent === 'B' ? 'bg-[#FEF3C7] text-[#D97706]' :
-                        'bg-[#F4F4F5] text-[#A1A1AA]'
-                      }`}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background:
+                            kw.intent === 'A'
+                              ? '#D1FAE5'
+                              : kw.intent === 'B'
+                                ? '#FEF3C7'
+                                : '#F4F4F5',
+                          color:
+                            kw.intent === 'A'
+                              ? '#059669'
+                              : kw.intent === 'B'
+                                ? '#D97706'
+                                : '#A1A1AA',
+                        }}
+                      >
                         {kw.intent}
                       </span>
-                      <div className="text-right">
-                        <div className="text-[13px] font-medium text-[#18181B]">{kw.rank}位</div>
-                        <div className="text-[10px] text-[#A1A1AA]">{kw.traffic}</div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>
+                          {kw.rank}位
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#A1A1AA' }}>{kw.traffic}</div>
                       </div>
                     </div>
                   </div>
@@ -285,5 +689,35 @@ export default function CatalogPage() {
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * Traffic Source Row Component
+ */
+function TrafficSourceRow({
+  color,
+  label,
+  value,
+}: {
+  color: string
+  label: string
+  value: number
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: color,
+          }}
+        />
+        <span style={{ fontSize: '12px', color: '#52525B' }}>{label}</span>
+      </div>
+      <span style={{ fontSize: '12px', fontWeight: 500, color: '#18181B' }}>{value}%</span>
+    </div>
   )
 }

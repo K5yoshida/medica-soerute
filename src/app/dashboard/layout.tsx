@@ -4,6 +4,17 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { DashboardSidebar } from '@/components/layout/dashboard-sidebar'
 import type { User } from '@/types'
 
+/**
+ * Dashboard Layout
+ *
+ * Design spec: 03_ブランディングとデザインガイド.md - 3.14 レイアウト
+ *
+ * Structure:
+ * - Sidebar: 240px (fixed, left)
+ * - Main content: margin-left: 240px
+ * - Background: #FAFAFA (var(--bg-page))
+ */
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -44,7 +55,6 @@ export default async function DashboardLayout({
 
     if (insertError) {
       console.error('Failed to create user:', insertError)
-      // ユーザー作成に失敗した場合でも、基本情報でダミーユーザーを作成
       finalUser = {
         id: authUser.id,
         email: authUser.email || '',
@@ -68,12 +78,24 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      {/* サイドバー（固定） */}
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#FAFAFA',
+        display: 'flex',
+      }}
+    >
+      {/* Sidebar (fixed, 240px) */}
       <DashboardSidebar user={finalUser as User} />
 
-      {/* メインコンテンツ（サイドバー分の左マージン） */}
-      <main className="md:ml-60 min-h-screen">
+      {/* Main content (margin-left: 240px) */}
+      <main
+        style={{
+          flex: 1,
+          marginLeft: '240px',
+          minHeight: '100vh',
+        }}
+      >
         {children}
       </main>
     </div>
