@@ -113,31 +113,77 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
       {/* Header */}
       <div
         style={{
-          padding: isCollapsed ? '20px 12px' : '20px 16px',
+          padding: isCollapsed ? '20px 8px' : '20px 16px',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
         }}
       >
-        <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-3 no-underline flex-1 min-w-0">
-            {/* Logo icon */}
-            <div
+        {isCollapsed ? (
+          /* 折り畳み時: ロゴとボタンを縦に配置 */
+          <div className="flex flex-col items-center gap-3">
+            <Link href="/dashboard" className="no-underline">
+              {/* Logo icon */}
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  background: '#0D9488',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                }}
+              >
+                M
+              </div>
+            </Link>
+            {/* Toggle Button */}
+            <button
+              onClick={toggleCollapse}
+              title="サイドバーを展開"
+              className="p-1.5 rounded transition-colors"
               style={{
-                width: '32px',
-                height: '32px',
-                background: '#0D9488',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: 600,
-                fontSize: '14px',
-                flexShrink: 0,
+                background: 'transparent',
+                border: 'none',
+                color: '#A1A1AA',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                e.currentTarget.style.color = '#FAFAFA'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = '#A1A1AA'
               }}
             >
-              M
-            </div>
-            {!isCollapsed && (
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          /* 展開時: 横に配置 */
+          <div className="flex items-center justify-between">
+            <Link href="/dashboard" className="flex items-center gap-3 no-underline flex-1 min-w-0">
+              {/* Logo icon */}
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  background: '#0D9488',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  flexShrink: 0,
+                }}
+              >
+                M
+              </div>
               <div className="min-w-0">
                 <div
                   style={{
@@ -161,31 +207,31 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                   採用メディア分析
                 </div>
               </div>
-            )}
-          </Link>
-          {/* Toggle Button */}
-          <button
-            onClick={toggleCollapse}
-            title={isCollapsed ? 'サイドバーを展開' : 'サイドバーを畳む'}
-            className="p-1.5 rounded transition-colors flex-shrink-0"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#A1A1AA',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-              e.currentTarget.style.color = '#FAFAFA'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = '#A1A1AA'
-            }}
-          >
-            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </button>
-        </div>
+            </Link>
+            {/* Toggle Button */}
+            <button
+              onClick={toggleCollapse}
+              title="サイドバーを畳む"
+              className="p-1.5 rounded transition-colors flex-shrink-0"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#A1A1AA',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                e.currentTarget.style.color = '#FAFAFA'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = '#A1A1AA'
+              }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
