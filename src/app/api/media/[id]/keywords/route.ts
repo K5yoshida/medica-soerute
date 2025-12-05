@@ -48,15 +48,64 @@ export async function GET(request: Request, { params }: RouteParams) {
     const limit = parseInt(searchParams.get('limit') || '50', 10)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
+    // ラッコキーワード風フィルターパラメータ
+    const intent = searchParams.get('intent') // A,B,C のカンマ区切り
+    const seoDifficultyMin = searchParams.get('seo_difficulty_min')
+    const seoDifficultyMax = searchParams.get('seo_difficulty_max')
+    const searchVolumeMin = searchParams.get('search_volume_min')
+    const searchVolumeMax = searchParams.get('search_volume_max')
+    const rankMin = searchParams.get('rank_min')
+    const rankMax = searchParams.get('rank_max')
+    const competitionMin = searchParams.get('competition_min')
+    const competitionMax = searchParams.get('competition_max')
+
     // キーワード取得クエリ
     let query = supabase
       .from('keywords')
       .select('*', { count: 'exact' })
       .eq('media_id', id)
 
-    // フィルター
+    // テキスト検索
     if (search) {
       query = query.ilike('keyword', `%${search}%`)
+    }
+
+    // 応募意図フィルター
+    if (intent) {
+      const intentArray = intent.split(',').map((i) => i.trim().toUpperCase())
+      query = query.in('intent', intentArray)
+    }
+
+    // SEO難易度フィルター
+    if (seoDifficultyMin) {
+      query = query.gte('seo_difficulty', parseInt(seoDifficultyMin, 10))
+    }
+    if (seoDifficultyMax) {
+      query = query.lte('seo_difficulty', parseInt(seoDifficultyMax, 10))
+    }
+
+    // 月間検索数フィルター
+    if (searchVolumeMin) {
+      query = query.gte('monthly_search_volume', parseInt(searchVolumeMin, 10))
+    }
+    if (searchVolumeMax) {
+      query = query.lte('monthly_search_volume', parseInt(searchVolumeMax, 10))
+    }
+
+    // 検索順位フィルター
+    if (rankMin) {
+      query = query.gte('search_rank', parseInt(rankMin, 10))
+    }
+    if (rankMax) {
+      query = query.lte('search_rank', parseInt(rankMax, 10))
+    }
+
+    // 競合性フィルター
+    if (competitionMin) {
+      query = query.gte('competition', parseInt(competitionMin, 10))
+    }
+    if (competitionMax) {
+      query = query.lte('competition', parseInt(competitionMax, 10))
     }
 
     // ソート

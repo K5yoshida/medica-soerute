@@ -17,8 +17,10 @@ interface MediaMaster {
   updated_at: string
 }
 
-interface KeywordCount {
+interface KeywordData {
   media_id: string
+  monthly_search_volume: number | null
+  estimated_traffic: number | null
 }
 
 interface TrafficData {
@@ -79,14 +81,19 @@ export async function GET(request: Request) {
       query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,domain.ilike.%${search}%`)
     }
 
-    // ソート
+    // ソート（keyword_countはDB外でソートするためここではnameでソート）
     const ascending = sortOrder === 'asc'
+    const sortByKeywordCount = sortBy === 'keyword_count'
     switch (sortBy) {
       case 'monthly_visits':
         query = query.order('monthly_visits', { ascending, nullsFirst: false })
         break
       case 'category':
         query = query.order('category', { ascending }).order('name', { ascending: true })
+        break
+      case 'keyword_count':
+        // キーワード数は後でソートするのでここではname順
+        query = query.order('name', { ascending: true })
         break
       default:
         query = query.order('name', { ascending })
@@ -116,12 +123,12 @@ export async function GET(request: Request) {
     // 型キャスト
     const typedMediaData = mediaData as MediaMaster[]
 
-    // 各媒体のキーワード数を取得
+    // 各媒体のキーワードデータを取得（数・検索ボリューム・推定流入を集計用）
     const mediaIds = typedMediaData.map((m: MediaMaster) => m.id)
 
-    const { data: keywordCounts } = await supabase
+    const { data: keywordData } = await supabase
       .from('keywords')
-      .select('media_id')
+      .select('media_id, monthly_search_volume, estimated_traffic')
       .in('media_id', mediaIds)
 
     // 各媒体の最新トラフィックデータを取得
@@ -131,12 +138,17 @@ export async function GET(request: Request) {
       .in('media_id', mediaIds)
       .order('period', { ascending: false })
 
-    // キーワード数をカウント
-    const typedKeywordCounts = keywordCounts as KeywordCount[] | null
-    const keywordCountMap: Record<string, number> = {}
-    if (typedKeywordCounts) {
-      typedKeywordCounts.forEach((k: KeywordCount) => {
-        keywordCountMap[k.media_id] = (keywordCountMap[k.media_id] || 0) + 1
+    // キーワード統計を集計
+    const typedKeywordData = keywordData as KeywordData[] | null
+    const keywordStatsMap: Record<string, { count: number; totalVolume: number; totalTraffic: number }> = {}
+    if (typedKeywordData) {
+      typedKeywordData.forEach((k: KeywordData) => {
+        if (!keywordStatsMap[k.media_id]) {
+          keywordStatsMap[k.media_id] = { count: 0, totalVolume: 0, totalTraffic: 0 }
+        }
+        keywordStatsMap[k.media_id].count += 1
+        keywordStatsMap[k.media_id].totalVolume += k.monthly_search_volume || 0
+        keywordStatsMap[k.media_id].totalTraffic += k.estimated_traffic || 0
       })
     }
 
@@ -152,11 +164,24 @@ export async function GET(request: Request) {
     }
 
     // データを結合
-    const enrichedData = typedMediaData.map((media: MediaMaster) => ({
-      ...media,
-      keyword_count: keywordCountMap[media.id] || 0,
-      latest_traffic: trafficMap[media.id] || null,
-    }))
+    let enrichedData = typedMediaData.map((media: MediaMaster) => {
+      const stats = keywordStatsMap[media.id] || { count: 0, totalVolume: 0, totalTraffic: 0 }
+      return {
+        ...media,
+        keyword_count: stats.count,
+        total_search_volume: stats.totalVolume,
+        total_estimated_traffic: stats.totalTraffic,
+        latest_traffic: trafficMap[media.id] || null,
+      }
+    })
+
+    // keyword_countでソートする場合
+    if (sortByKeywordCount) {
+      enrichedData = enrichedData.sort((a, b) => {
+        const diff = a.keyword_count - b.keyword_count
+        return ascending ? diff : -diff
+      })
+    }
 
     return NextResponse.json({
       success: true,

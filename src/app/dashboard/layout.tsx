@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { DashboardSidebar } from '@/components/layout/dashboard-sidebar'
+import { DashboardMain } from '@/components/layout/dashboard-layout-client'
 import type { User } from '@/types'
 
 /**
@@ -86,19 +87,11 @@ export default async function DashboardLayout({
         display: 'flex',
       }}
     >
-      {/* Sidebar (fixed, 240px) */}
+      {/* Sidebar (fixed, 240px or 64px when collapsed) */}
       <DashboardSidebar user={finalUser as User} />
 
-      {/* Main content (margin-left: 240px) */}
-      <main
-        style={{
-          flex: 1,
-          marginLeft: '240px',
-          minHeight: '100vh',
-        }}
-      >
-        {children}
-      </main>
+      {/* Main content (margin adjusts with sidebar) */}
+      <DashboardMain>{children}</DashboardMain>
     </div>
   )
 }

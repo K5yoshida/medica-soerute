@@ -12,6 +12,7 @@ interface KeywordWithMedia {
   cpc_usd: number | null
   competition: number | null
   url: string | null
+  intent: string | null
   media_master: {
     id: string
     name: string
@@ -41,12 +42,21 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
     const category = searchParams.get('category')
-    const minVolume = searchParams.get('min_volume')
-    const maxRank = searchParams.get('max_rank')
     const sortBy = searchParams.get('sort_by') || 'monthly_search_volume'
     const sortOrder = searchParams.get('sort_order') || 'desc'
     const limit = parseInt(searchParams.get('limit') || '50', 10)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
+
+    // ラッコキーワード風フィルターパラメータ
+    const intent = searchParams.get('intent') // A,B,C のカンマ区切り
+    const seoDifficultyMin = searchParams.get('seo_difficulty_min')
+    const seoDifficultyMax = searchParams.get('seo_difficulty_max')
+    const searchVolumeMin = searchParams.get('search_volume_min')
+    const searchVolumeMax = searchParams.get('search_volume_max')
+    const rankMin = searchParams.get('rank_min')
+    const rankMax = searchParams.get('rank_max')
+    const competitionMin = searchParams.get('competition_min')
+    const competitionMax = searchParams.get('competition_max')
 
     if (!query || query.trim().length < 2) {
       return NextResponse.json(
@@ -72,17 +82,47 @@ export async function GET(request: Request) {
       .ilike('keyword', `%${query}%`)
       .eq('media_master.is_active', true)
 
-    // フィルター
+    // カテゴリフィルター
     if (category && category !== 'all') {
       keywordQuery = keywordQuery.eq('media_master.category', category)
     }
 
-    if (minVolume) {
-      keywordQuery = keywordQuery.gte('monthly_search_volume', parseInt(minVolume, 10))
+    // 応募意図フィルター
+    if (intent) {
+      const intentArray = intent.split(',').map((i) => i.trim().toUpperCase())
+      keywordQuery = keywordQuery.in('intent', intentArray)
     }
 
-    if (maxRank) {
-      keywordQuery = keywordQuery.lte('search_rank', parseInt(maxRank, 10))
+    // SEO難易度フィルター
+    if (seoDifficultyMin) {
+      keywordQuery = keywordQuery.gte('seo_difficulty', parseInt(seoDifficultyMin, 10))
+    }
+    if (seoDifficultyMax) {
+      keywordQuery = keywordQuery.lte('seo_difficulty', parseInt(seoDifficultyMax, 10))
+    }
+
+    // 月間検索数フィルター
+    if (searchVolumeMin) {
+      keywordQuery = keywordQuery.gte('monthly_search_volume', parseInt(searchVolumeMin, 10))
+    }
+    if (searchVolumeMax) {
+      keywordQuery = keywordQuery.lte('monthly_search_volume', parseInt(searchVolumeMax, 10))
+    }
+
+    // 検索順位フィルター
+    if (rankMin) {
+      keywordQuery = keywordQuery.gte('search_rank', parseInt(rankMin, 10))
+    }
+    if (rankMax) {
+      keywordQuery = keywordQuery.lte('search_rank', parseInt(rankMax, 10))
+    }
+
+    // 競合性フィルター
+    if (competitionMin) {
+      keywordQuery = keywordQuery.gte('competition', parseInt(competitionMin, 10))
+    }
+    if (competitionMax) {
+      keywordQuery = keywordQuery.lte('competition', parseInt(competitionMax, 10))
     }
 
     // ソート
@@ -145,6 +185,7 @@ export async function GET(request: Request) {
       cpc_usd: k.cpc_usd,
       competition: k.competition,
       url: k.url,
+      intent: k.intent,
       media: {
         id: k.media_master.id,
         name: k.media_master.name,
