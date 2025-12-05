@@ -36,6 +36,9 @@ interface MediaMaster {
   total_search_volume: number | null
   total_estimated_traffic: number | null
   latest_traffic: TrafficData | null
+  intent_a_pct: number | null
+  intent_b_pct: number | null
+  intent_c_pct: number | null
 }
 
 interface ColumnHelp {
@@ -106,6 +109,24 @@ const COLUMN_HELP: Record<string, ColumnHelp> = {
     description: '各キーワードの検索ボリュームと順位から算出した、検索経由の推定月間流入数の合計です。',
     source: 'ラッコキーワード',
     note: '月間訪問数とは計算方法が異なるため、数値が一致しないことがあります。',
+  },
+  intent_a: {
+    title: '応募直前クエリ',
+    description: '「〇〇 求人」「〇〇 応募」など、求人への応募意欲が高いユーザーが検索するキーワードの割合です。',
+    source: 'ラッコキーワード（AI分類）',
+    note: 'コンバージョンに最も近いキーワードです。この割合が高い媒体は応募獲得に強いと言えます。',
+  },
+  intent_b: {
+    title: '比較検討クエリ',
+    description: '「〇〇 評判」「〇〇 口コミ」「〇〇 比較」など、転職先を比較検討しているユーザーが検索するキーワードの割合です。',
+    source: 'ラッコキーワード（AI分類）',
+    note: '検討段階のユーザーを獲得できるキーワードです。',
+  },
+  intent_c: {
+    title: '情報収集クエリ',
+    description: '「〇〇 年収」「〇〇 仕事内容」「〇〇 資格」など、業界や職種についての情報を収集しているユーザーが検索するキーワードの割合です。',
+    source: 'ラッコキーワード（AI分類）',
+    note: '潜在層向けのキーワードです。認知拡大に効果的です。',
   },
 }
 
@@ -340,7 +361,7 @@ export default function CatalogPage() {
           <div className="text-center py-12 text-zinc-500 text-[13px]">媒体が見つかりません</div>
         ) : (
           <div className="bg-white border border-zinc-200 rounded-lg overflow-x-auto">
-            <table className="w-full min-w-[1000px]">
+            <table className="w-full min-w-[1200px]">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50">
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wider sticky left-0 bg-zinc-50 w-[180px] min-w-[180px] max-w-[180px]">
@@ -357,6 +378,9 @@ export default function CatalogPage() {
                   <TableHeader label="SNS" helpKey="social_pct" onHelpClick={setActiveHelp} />
                   <TableHeader label="KW数" helpKey="keyword_count" onHelpClick={setActiveHelp} />
                   <TableHeader label="推定流入" helpKey="estimated_traffic" onHelpClick={setActiveHelp} />
+                  <TableHeader label="応募" helpKey="intent_a" onHelpClick={setActiveHelp} />
+                  <TableHeader label="比較" helpKey="intent_b" onHelpClick={setActiveHelp} />
+                  <TableHeader label="情報" helpKey="intent_c" onHelpClick={setActiveHelp} />
                   <th className="w-6"></th>
                 </tr>
               </thead>
@@ -435,6 +459,21 @@ export default function CatalogPage() {
                     <td className="px-2 py-2.5 text-right">
                       <span className="text-sm text-zinc-600">
                         {formatCompactNumber(media.total_estimated_traffic)}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-right">
+                      <span className="text-sm font-medium text-red-600">
+                        {media.intent_a_pct != null ? `${media.intent_a_pct}%` : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-right">
+                      <span className="text-sm font-medium text-orange-600">
+                        {media.intent_b_pct != null ? `${media.intent_b_pct}%` : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-right">
+                      <span className="text-sm font-medium text-cyan-600">
+                        {media.intent_c_pct != null ? `${media.intent_c_pct}%` : '-'}
                       </span>
                     </td>
                     <td className="px-1 py-2 text-right">

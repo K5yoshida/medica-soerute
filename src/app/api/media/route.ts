@@ -21,6 +21,7 @@ interface KeywordData {
   media_id: string
   monthly_search_volume: number | null
   estimated_traffic: number | null
+  intent: string | null
 }
 
 interface TrafficData {
@@ -34,6 +35,15 @@ interface TrafficData {
   email_pct: number | null
   social_pct: number | null
   created_at: string
+}
+
+interface KeywordStats {
+  count: number
+  totalVolume: number
+  totalTraffic: number
+  intentA: number // 応募直前
+  intentB: number // 比較検討
+  intentC: number // 情報収集
 }
 
 // 媒体一覧の取得（トラフィックデータ・キーワード数を含む）
@@ -123,12 +133,12 @@ export async function GET(request: Request) {
     // 型キャスト
     const typedMediaData = mediaData as MediaMaster[]
 
-    // 各媒体のキーワードデータを取得（数・検索ボリューム・推定流入を集計用）
+    // 各媒体のキーワードデータを取得（数・検索ボリューム・推定流入・意図を集計用）
     const mediaIds = typedMediaData.map((m: MediaMaster) => m.id)
 
     const { data: keywordData } = await supabase
       .from('keywords')
-      .select('media_id, monthly_search_volume, estimated_traffic')
+      .select('media_id, monthly_search_volume, estimated_traffic, intent')
       .in('media_id', mediaIds)
 
     // 各媒体の最新トラフィックデータを取得
@@ -138,17 +148,33 @@ export async function GET(request: Request) {
       .in('media_id', mediaIds)
       .order('period', { ascending: false })
 
-    // キーワード統計を集計
+    // キーワード統計を集計（意図別も含む）
     const typedKeywordData = keywordData as KeywordData[] | null
-    const keywordStatsMap: Record<string, { count: number; totalVolume: number; totalTraffic: number }> = {}
+    const keywordStatsMap: Record<string, KeywordStats> = {}
     if (typedKeywordData) {
       typedKeywordData.forEach((k: KeywordData) => {
         if (!keywordStatsMap[k.media_id]) {
-          keywordStatsMap[k.media_id] = { count: 0, totalVolume: 0, totalTraffic: 0 }
+          keywordStatsMap[k.media_id] = {
+            count: 0,
+            totalVolume: 0,
+            totalTraffic: 0,
+            intentA: 0,
+            intentB: 0,
+            intentC: 0,
+          }
         }
         keywordStatsMap[k.media_id].count += 1
         keywordStatsMap[k.media_id].totalVolume += k.monthly_search_volume || 0
         keywordStatsMap[k.media_id].totalTraffic += k.estimated_traffic || 0
+
+        // 意図別カウント
+        if (k.intent === 'A') {
+          keywordStatsMap[k.media_id].intentA += 1
+        } else if (k.intent === 'B') {
+          keywordStatsMap[k.media_id].intentB += 1
+        } else if (k.intent === 'C') {
+          keywordStatsMap[k.media_id].intentC += 1
+        }
       })
     }
 
@@ -165,13 +191,25 @@ export async function GET(request: Request) {
 
     // データを結合
     let enrichedData = typedMediaData.map((media: MediaMaster) => {
-      const stats = keywordStatsMap[media.id] || { count: 0, totalVolume: 0, totalTraffic: 0 }
+      const stats = keywordStatsMap[media.id] || {
+        count: 0,
+        totalVolume: 0,
+        totalTraffic: 0,
+        intentA: 0,
+        intentB: 0,
+        intentC: 0,
+      }
+      const total = stats.count || 1 // ゼロ除算防止
       return {
         ...media,
         keyword_count: stats.count,
         total_search_volume: stats.totalVolume,
         total_estimated_traffic: stats.totalTraffic,
         latest_traffic: trafficMap[media.id] || null,
+        // 意図別割合（%）
+        intent_a_pct: stats.count > 0 ? Math.round((stats.intentA / total) * 100) : null,
+        intent_b_pct: stats.count > 0 ? Math.round((stats.intentB / total) * 100) : null,
+        intent_c_pct: stats.count > 0 ? Math.round((stats.intentC / total) * 100) : null,
       }
     })
 
