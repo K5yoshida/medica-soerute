@@ -247,7 +247,7 @@ export default function CatalogPage() {
                     className="border-b border-zinc-100 hover:bg-zinc-50 cursor-pointer transition group"
                   >
                     <td className="px-3 py-2.5 sticky left-0 bg-white group-hover:bg-zinc-50 w-[180px] min-w-[180px] max-w-[180px]">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" title={`${media.name}\n${media.domain || ''}`}>
                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                           {media.name.charAt(0)}
                         </div>
