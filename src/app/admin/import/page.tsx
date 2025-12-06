@@ -820,6 +820,83 @@ export default function ImportPage() {
 
                   {currentJob ? (
                     <div>
+                      {/* Processing Steps Indicator */}
+                      {(currentJob.status === 'processing' || currentJob.status === 'completed') && (
+                        <div
+                          style={{
+                            background: '#FAFAFA',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            marginBottom: '16px',
+                          }}
+                        >
+                          <div style={{ fontSize: '12px', fontWeight: 500, color: '#52525B', marginBottom: '12px' }}>
+                            処理ステップ
+                          </div>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {(['parse', 'rule_classification', 'ai_classification', 'db_insert', 'finalize'] as const).map((step, index) => {
+                              const stepOrder = ['parse', 'rule_classification', 'ai_classification', 'db_insert', 'finalize']
+                              const currentStepIndex = currentJob.current_step ? stepOrder.indexOf(currentJob.current_step) : -1
+                              const thisStepIndex = stepOrder.indexOf(step)
+
+                              const isCompleted = currentJob.status === 'completed' || thisStepIndex < currentStepIndex
+                              const isCurrent = currentJob.status === 'processing' && currentJob.current_step === step
+
+                              return (
+                                <div key={step} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                  <div
+                                    style={{
+                                      width: '32px',
+                                      height: '32px',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      marginBottom: '6px',
+                                      background: isCompleted ? '#10B981' : isCurrent ? '#7C3AED' : '#E4E4E7',
+                                      color: isCompleted || isCurrent ? '#FFFFFF' : '#A1A1AA',
+                                      position: 'relative',
+                                    }}
+                                  >
+                                    {isCompleted ? (
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    ) : isCurrent ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <span style={{ fontSize: '12px', fontWeight: 600 }}>{index + 1}</span>
+                                    )}
+                                  </div>
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      fontWeight: isCurrent ? 600 : 400,
+                                      color: isCompleted ? '#059669' : isCurrent ? '#7C3AED' : '#A1A1AA',
+                                      textAlign: 'center',
+                                      lineHeight: 1.2,
+                                    }}
+                                  >
+                                    {STEP_LABELS[step]}
+                                  </span>
+                                  {/* Connector line */}
+                                  {index < 4 && (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        top: '16px',
+                                        left: 'calc(50% + 20px)',
+                                        width: 'calc(100% - 40px)',
+                                        height: '2px',
+                                        background: isCompleted ? '#10B981' : '#E4E4E7',
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Status Badge */}
                       <div
                         style={{
@@ -869,13 +946,13 @@ export default function ImportPage() {
                         </span>
                       </div>
 
-                      {/* Progress */}
+                      {/* Progress (rows) */}
                       {currentJob.status === 'processing' && currentJob.total_rows && (
                         <div style={{ marginBottom: '16px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <span style={{ fontSize: '12px', color: '#52525B' }}>進捗</span>
+                            <span style={{ fontSize: '12px', color: '#52525B' }}>データ処理進捗</span>
                             <span style={{ fontSize: '12px', color: '#52525B' }}>
-                              {currentJob.processed_rows} / {currentJob.total_rows}件
+                              {currentJob.processed_rows.toLocaleString()} / {currentJob.total_rows.toLocaleString()}件
                             </span>
                           </div>
                           <div
