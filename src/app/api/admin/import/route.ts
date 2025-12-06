@@ -43,8 +43,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ファイル内容を読み取り
-    const content = await file.text()
+    // ファイル内容を読み取り（UTF-16LE対応）
+    let content = await file.text()
+
+    // UTF-16LE BOM除去とエンコーディング検出
+    // ブラウザのFileReaderはUTF-16LEを自動検出しないため、arrayBufferで読んで変換
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+
+    // UTF-16LE BOM (FF FE) を検出
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+      // UTF-16LEとしてデコード
+      const decoder = new TextDecoder('utf-16le')
+      content = decoder.decode(buffer)
+    } else if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      // UTF-8 BOM
+      const decoder = new TextDecoder('utf-8')
+      content = decoder.decode(buffer)
+    }
+
+    // BOM文字を除去
+    content = content.replace(/^\uFEFF/, '')
 
     // Service clientを使用（RLSをバイパス）
     const serviceClient = createServiceClient()
