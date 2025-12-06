@@ -82,29 +82,42 @@ export interface PlanFeatures {
   customReports: boolean
 }
 
+// プラン体系:
+// - medica: 社内ユーザー（無制限）
+// - enterprise: 法人契約（無制限）
+// - trial: 14日間無料トライアル（無制限、期間限定）
+// - starter: 有料プラン（月20回）
+// - professional: 有料プラン（無制限）
 export const PLAN_FEATURES: Record<string, PlanFeatures> = {
-  free: {
-    analysisLimit: 3,
-    pesoAccess: false,
-    exportPdf: false,
-    prioritySupport: false,
-    customReports: false,
-  },
-  light: {
-    analysisLimit: 10,
+  medica: {
+    analysisLimit: -1, // 無制限
     pesoAccess: true,
-    exportPdf: false,
-    prioritySupport: false,
-    customReports: false,
+    exportPdf: true,
+    prioritySupport: true,
+    customReports: true,
   },
-  standard: {
-    analysisLimit: 30,
+  enterprise: {
+    analysisLimit: -1, // 無制限
+    pesoAccess: true,
+    exportPdf: true,
+    prioritySupport: true,
+    customReports: true,
+  },
+  trial: {
+    analysisLimit: -1, // 無制限（期間限定）
     pesoAccess: true,
     exportPdf: true,
     prioritySupport: false,
     customReports: false,
   },
-  premium: {
+  starter: {
+    analysisLimit: 20,
+    pesoAccess: true,
+    exportPdf: false,
+    prioritySupport: false,
+    customReports: false,
+  },
+  professional: {
     analysisLimit: -1, // 無制限
     pesoAccess: true,
     exportPdf: true,

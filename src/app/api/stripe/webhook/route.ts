@@ -4,10 +4,14 @@ import { getStripe } from '@/lib/stripe/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import Stripe from 'stripe'
 
+// 新プラン体系: starter(月20回), professional(無制限)
+// medica/enterprise/trialは無制限(-1)
 const PLAN_LIMITS: Record<string, number> = {
-  light: 10,
-  standard: 30,
-  premium: -1,
+  starter: 20,
+  professional: -1,
+  medica: -1,
+  enterprise: -1,
+  trial: -1,
 }
 
 export async function POST(request: Request) {
@@ -89,12 +93,10 @@ export async function POST(request: Request) {
           if (subscription.status === 'active') {
             // プランを更新（価格IDからプランを特定）
             const priceId = subscription.items.data[0]?.price.id
-            let planId = 'light'
+            let planId = 'starter'
 
-            if (priceId === process.env.STRIPE_PRICE_STANDARD) {
-              planId = 'standard'
-            } else if (priceId === process.env.STRIPE_PRICE_PREMIUM) {
-              planId = 'premium'
+            if (priceId === process.env.STRIPE_PRICE_PROFESSIONAL) {
+              planId = 'professional'
             }
 
             await supabase
@@ -131,13 +133,14 @@ export async function POST(request: Request) {
         if (users && users.length > 0) {
           const userId = users[0].id
 
-          // フリープランに戻す
+          // サブスクリプション解約時はtrialに戻す（ただし期限切れ状態）
           await supabase
             .from('users')
             .update({
-              plan: 'free',
-              monthly_analysis_limit: 3,
+              plan: 'trial',
+              monthly_analysis_limit: -1,
               stripe_subscription_id: null,
+              trial_ends_at: new Date().toISOString(), // 即座に期限切れ
             })
             .eq('id', userId)
 

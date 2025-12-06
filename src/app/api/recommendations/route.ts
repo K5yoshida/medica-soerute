@@ -35,18 +35,21 @@ export async function GET() {
 
     const typedUserData = userData as User
 
-    // フリープランは施策提案不可
-    if (typedUserData.plan === 'free') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'PLAN_RESTRICTION',
-            message: '施策提案機能を利用するにはライトプラン以上へのアップグレードが必要です。',
+    // トライアル期限切れチェック
+    if (typedUserData.plan === 'trial' && typedUserData.trial_ends_at) {
+      const trialEndsAt = new Date(typedUserData.trial_ends_at)
+      if (trialEndsAt < new Date()) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'TRIAL_EXPIRED',
+              message: 'トライアル期間が終了しました。有料プランへアップグレードしてください。',
+            },
           },
-        },
-        { status: 403 }
-      )
+          { status: 403 }
+        )
+      }
     }
 
     // 直近の分析結果を取得

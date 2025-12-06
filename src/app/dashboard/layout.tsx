@@ -39,6 +39,8 @@ export default async function DashboardLayout({
     .single()
 
   // ユーザーがusersテーブルに存在しない場合は作成
+  // 通常はauth.usersへの登録時にhandle_new_user()トリガーで自動作成されるが、
+  // 何らかの理由で存在しない場合のfallback
   let finalUser = user
   if (!user) {
     const serviceClient = createServiceClient()
@@ -48,9 +50,10 @@ export default async function DashboardLayout({
         id: authUser.id,
         email: authUser.email || '',
         role: 'user',
-        plan: 'free',
+        plan: 'trial',
         monthly_analysis_count: 0,
-        monthly_analysis_limit: 3,
+        monthly_analysis_limit: -1, // trialは無制限
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14日間
       })
       .select()
       .single()
@@ -60,13 +63,14 @@ export default async function DashboardLayout({
       finalUser = {
         id: authUser.id,
         email: authUser.email || '',
-        plan: 'free',
+        plan: 'trial',
         monthly_analysis_count: 0,
-        monthly_analysis_limit: 3,
+        monthly_analysis_limit: -1,
         role: 'user',
         company_name: null,
         stripe_customer_id: null,
         stripe_subscription_id: null,
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }

@@ -179,3 +179,123 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.3s ease forwards;
 }
+
+/* ============================================
+   Hide scrollbar utility
+   ============================================ */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+/* ============================================
+   DataTable - Row Hover Effects (共通)
+   ============================================ */
+.data-table-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.data-table-row:hover,
+.data-table-row.is-hovered {
+  background: #ECECEC;
+}
+
+/* Left accent line on hover - using td::before */
+.data-table-row td:first-child {
+  position: relative;
+}
+
+.data-table-row td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.data-table-row:hover td:first-child::before,
+.data-table-row.is-hovered td:first-child::before {
+  background: #0D9488;
+}
+
+/* Inline chevron animation */
+.data-table-row .inline-chevron {
+  opacity: 0;
+  color: #0D9488;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.data-table-row:hover .inline-chevron,
+.data-table-row.is-hovered .inline-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* Primary text color on hover */
+.data-table-row:hover .row-primary-text,
+.data-table-row.is-hovered .row-primary-text {
+  color: #0D9488;
+}
+
+/* ============================================
+   Catalog Table - Row Hover Effects (後方互換)
+   ============================================ */
+.catalog-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.catalog-row:hover,
+.catalog-row.is-hovered {
+  background: #ECECEC;
+}
+
+/* Left accent line on hover - using td::before */
+.catalog-row td:first-child {
+  position: relative;
+}
+
+.catalog-row td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.catalog-row:hover td:first-child::before,
+.catalog-row.is-hovered td:first-child::before {
+  background: #0D9488;
+}
+
+/* Inline chevron animation */
+.catalog-row .inline-chevron {
+  opacity: 0;
+  color: #0D9488;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.catalog-row:hover .inline-chevron,
+.catalog-row.is-hovered .inline-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* Media name color on hover */
+.catalog-row:hover .media-name,
+.catalog-row.is-hovered .media-name {
+  color: #0D9488;
+}

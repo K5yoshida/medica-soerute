@@ -11,10 +11,14 @@ export type Json =
   | Json[]
 
 // ----- Enums -----
-export type UserRole = 'user' | 'admin' | 'super_admin'
-export type PlanType = 'free' | 'light' | 'standard' | 'premium'
+// ロール: admin=システム管理者, internal=社内/法人ユーザー, user=外部個人ユーザー
+export type UserRole = 'admin' | 'internal' | 'user'
+// プラン: medica=社内, enterprise=法人契約, trial=14日間無料, starter/professional=有料プラン
+export type PlanType = 'medica' | 'enterprise' | 'trial' | 'starter' | 'professional'
 export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed'
 export type MediaCategory = 'general' | 'nursing' | 'pharmacy' | 'dental' | 'welfare' | 'rehabilitation'
+// クエリ意図: branded=指名検索, transactional=応募直前, commercial=比較検討, informational=情報収集
+export type QueryIntentType = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
 
 // ----- Tables -----
 export interface Database {
@@ -27,6 +31,7 @@ export interface Database {
           company_name: string | null
           role: UserRole
           plan: PlanType
+          trial_ends_at: string | null
           monthly_analysis_count: number
           monthly_analysis_limit: number
           stripe_customer_id: string | null
@@ -40,6 +45,7 @@ export interface Database {
           company_name?: string | null
           role?: UserRole
           plan?: PlanType
+          trial_ends_at?: string | null
           monthly_analysis_count?: number
           monthly_analysis_limit?: number
           stripe_customer_id?: string | null
@@ -53,6 +59,7 @@ export interface Database {
           company_name?: string | null
           role?: UserRole
           plan?: PlanType
+          trial_ends_at?: string | null
           monthly_analysis_count?: number
           monthly_analysis_limit?: number
           stripe_customer_id?: string | null
@@ -189,6 +196,129 @@ export interface Database {
           created_at?: string
         }
       }
+      allowed_domains: {
+        Row: {
+          id: string
+          domain: string
+          plan: 'medica' | 'enterprise'
+          organization_name: string | null
+          max_users: number | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          domain: string
+          plan: 'medica' | 'enterprise'
+          organization_name?: string | null
+          max_users?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          domain?: string
+          plan?: 'medica' | 'enterprise'
+          organization_name?: string | null
+          max_users?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      query_master: {
+        Row: {
+          id: string
+          keyword: string
+          keyword_normalized: string
+          intent: QueryIntentType
+          intent_confidence: string | null
+          intent_reason: string | null
+          intent_updated_at: string | null
+          max_monthly_search_volume: number | null
+          max_cpc: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          keyword: string
+          keyword_normalized: string
+          intent?: QueryIntentType
+          intent_confidence?: string | null
+          intent_reason?: string | null
+          intent_updated_at?: string | null
+          max_monthly_search_volume?: number | null
+          max_cpc?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          keyword?: string
+          keyword_normalized?: string
+          intent?: QueryIntentType
+          intent_confidence?: string | null
+          intent_reason?: string | null
+          intent_updated_at?: string | null
+          max_monthly_search_volume?: number | null
+          max_cpc?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      media_query_data: {
+        Row: {
+          id: string
+          query_id: string
+          media_id: string
+          ranking_position: number | null
+          monthly_search_volume: number | null
+          estimated_traffic: number | null
+          cpc: number | null
+          competition_level: number | null
+          seo_difficulty: number | null
+          landing_url: string | null
+          imported_at: string
+          source_file: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          query_id: string
+          media_id: string
+          ranking_position?: number | null
+          monthly_search_volume?: number | null
+          estimated_traffic?: number | null
+          cpc?: number | null
+          competition_level?: number | null
+          seo_difficulty?: number | null
+          landing_url?: string | null
+          imported_at?: string
+          source_file?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          query_id?: string
+          media_id?: string
+          ranking_position?: number | null
+          monthly_search_volume?: number | null
+          estimated_traffic?: number | null
+          cpc?: number | null
+          competition_level?: number | null
+          seo_difficulty?: number | null
+          landing_url?: string | null
+          imported_at?: string
+          source_file?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -211,3 +341,6 @@ export type MediaMaster = Database['public']['Tables']['media_master']['Row']
 export type AnalysisResult = Database['public']['Tables']['analysis_results']['Row']
 export type PesoDiagnosis = Database['public']['Tables']['peso_diagnoses']['Row']
 export type UsageLog = Database['public']['Tables']['usage_logs']['Row']
+export type AllowedDomain = Database['public']['Tables']['allowed_domains']['Row']
+export type QueryMaster = Database['public']['Tables']['query_master']['Row']
+export type MediaQueryData = Database['public']['Tables']['media_query_data']['Row']

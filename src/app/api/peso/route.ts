@@ -35,18 +35,21 @@ export async function POST(request: Request) {
 
     const typedUserData = userData as User
 
-    // フリープランはPESO診断不可
-    if (typedUserData.plan === 'free') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'PLAN_RESTRICTION',
-            message: 'PESO診断機能を利用するにはライトプラン以上へのアップグレードが必要です。',
+    // トライアル期限切れチェック
+    if (typedUserData.plan === 'trial' && typedUserData.trial_ends_at) {
+      const trialEndsAt = new Date(typedUserData.trial_ends_at)
+      if (trialEndsAt < new Date()) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'TRIAL_EXPIRED',
+              message: 'トライアル期間が終了しました。有料プランへアップグレードしてください。',
+            },
           },
-        },
-        { status: 403 }
-      )
+          { status: 403 }
+        )
+      }
     }
 
     // リクエストボディを取得

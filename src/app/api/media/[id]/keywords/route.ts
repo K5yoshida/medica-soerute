@@ -8,6 +8,7 @@ interface RouteParams {
 interface KeywordStats {
   monthly_search_volume: number | null
   estimated_traffic: number | null
+  intent: string | null
 }
 
 // 媒体別キーワード一覧の取得
@@ -148,16 +149,32 @@ export async function GET(request: Request, { params }: RouteParams) {
     // 統計情報を計算
     const { data: allKeywords } = await supabase
       .from('keywords')
-      .select('monthly_search_volume, estimated_traffic')
+      .select('monthly_search_volume, estimated_traffic, intent')
       .eq('media_id', id)
 
     const typedAllKeywords = allKeywords as KeywordStats[] | null
 
+    // 全体統計
     const stats = {
       total: typedAllKeywords?.length || 0,
       total_monthly_search_volume: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.monthly_search_volume || 0), 0) || 0,
       total_estimated_traffic: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.estimated_traffic || 0), 0) || 0,
     }
+
+    // 意図別統計
+    const intentStats = {
+      A: { count: 0, volume: 0, traffic: 0 },
+      B: { count: 0, volume: 0, traffic: 0 },
+      C: { count: 0, volume: 0, traffic: 0 },
+    }
+
+    typedAllKeywords?.forEach((k) => {
+      if (k.intent === 'A' || k.intent === 'B' || k.intent === 'C') {
+        intentStats[k.intent].count += 1
+        intentStats[k.intent].volume += k.monthly_search_volume || 0
+        intentStats[k.intent].traffic += k.estimated_traffic || 0
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -166,6 +183,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         media_name: media.name,
         keywords: keywords || [],
         stats,
+        intent_stats: intentStats,
       },
       pagination: {
         total: count || 0,

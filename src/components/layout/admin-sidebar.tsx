@@ -4,58 +4,54 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  Home,
-  Grid2X2,
-  Star,
+  LayoutDashboard,
+  Users,
+  Upload,
+  Database,
+  CreditCard,
+  BarChart3,
   FileText,
-  Folder,
-  Clock,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Shield,
+  ArrowLeft,
+  Globe,
 } from 'lucide-react'
 import type { User } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 /**
- * Dashboard Sidebar
+ * Admin Sidebar
  *
- * Design spec: 03_ブランディングとデザインガイド.md - 3.9 サイドバー詳細仕様
- *
- * Structure:
- * - width: 220px (var(--sidebar-width)) / 64px (collapsed)
- * - bg: #18181B (var(--sidebar-bg))
- * - position: fixed
- * - border-right: 1px solid rgba(255,255,255,0.06)
+ * Design spec: 09_画面一覧.md - SC-901〜909
  */
 
-interface DashboardSidebarProps {
+interface AdminSidebarProps {
   user: User
 }
 
-const analysisNavItems = [
-  { title: 'ホーム', href: '/dashboard', icon: Home },
-  { title: '媒体カタログ', href: '/dashboard/catalog', icon: Grid2X2 },
-  { title: '媒体マッチング', href: '/dashboard/matching', icon: Star },
-  { title: 'PESO診断', href: '/dashboard/peso', icon: FileText },
+const mainNavItems = [
+  { title: 'ダッシュボード', href: '/admin', icon: LayoutDashboard },
+  { title: 'ユーザー管理', href: '/admin/users', icon: Users },
+  { title: 'ドメイン管理', href: '/admin/domains', icon: Globe },
+  { title: 'CSVインポート', href: '/admin/import', icon: Upload },
+  { title: '媒体マスター', href: '/admin/media', icon: Database },
 ]
 
-const manageNavItems = [
-  { title: 'フォルダ', href: '/dashboard/folders', icon: Folder },
-  { title: '履歴', href: '/dashboard/history', icon: Clock },
+const analyticsNavItems = [
+  { title: '課金管理', href: '/admin/billing', icon: CreditCard },
+  { title: '利用分析', href: '/admin/analytics', icon: BarChart3 },
+  { title: 'システムログ', href: '/admin/logs', icon: FileText },
 ]
 
-const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
+const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed'
 
-export function DashboardSidebar({ user }: DashboardSidebarProps) {
+export function AdminSidebar({ user }: AdminSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  // クライアントサイドでlocalStorageから状態を復元
   useEffect(() => {
     setMounted(true)
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
@@ -68,8 +64,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
     const newState = !isCollapsed
     setIsCollapsed(newState)
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(newState))
-    // カスタムイベントを発火してレイアウトに通知
-    window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { collapsed: newState } }))
+    window.dispatchEvent(new CustomEvent('admin-sidebar-toggle', { detail: { collapsed: newState } }))
   }
 
   const handleLogout = async () => {
@@ -80,7 +75,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
   }
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') {
+    if (href === '/admin') {
       return pathname === href
     }
     return pathname.startsWith(href)
@@ -88,15 +83,14 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
 
   const sidebarWidth = isCollapsed ? '64px' : '220px'
 
-  // マウント前は初期状態でレンダリング（ハイドレーションエラー防止）
   if (!mounted) {
     return (
       <aside
         className="hidden md:flex flex-col fixed top-0 left-0 h-screen z-50"
         style={{
           width: '220px',
-          background: '#18181B',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
+          background: '#1E1B4B',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
         }}
       />
     )
@@ -107,27 +101,25 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
       className="hidden md:flex flex-col fixed top-0 left-0 h-screen z-50 transition-all duration-300"
       style={{
         width: sidebarWidth,
-        background: '#18181B',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        background: '#1E1B4B',
+        borderRight: '1px solid rgba(255,255,255,0.08)',
       }}
     >
       {/* Header */}
       <div
         style={{
           padding: isCollapsed ? '20px 8px' : '20px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
         {isCollapsed ? (
-          /* 折り畳み時: ロゴとボタンを縦に配置 */
           <div className="flex flex-col items-center gap-3">
-            <Link href="/dashboard" className="no-underline">
-              {/* Logo icon */}
+            <Link href="/admin" className="no-underline">
               <div
                 style={{
                   width: '32px',
                   height: '32px',
-                  background: '#0D9488',
+                  background: '#7C3AED',
                   borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
@@ -137,10 +129,9 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                   fontSize: '14px',
                 }}
               >
-                M
+                A
               </div>
             </Link>
-            {/* Toggle Button */}
             <button
               onClick={toggleCollapse}
               title="サイドバーを展開"
@@ -148,7 +139,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#A1A1AA',
+                color: '#A5B4FC',
                 cursor: 'pointer',
               }}
               onMouseEnter={(e) => {
@@ -157,22 +148,20 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = '#A1A1AA'
+                e.currentTarget.style.color = '#A5B4FC'
               }}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         ) : (
-          /* 展開時: 縦に配置（ロゴ+テキスト、その下にボタン） */
           <div className="flex flex-col gap-3">
-            <Link href="/dashboard" className="flex items-center gap-3 no-underline">
-              {/* Logo icon */}
+            <Link href="/admin" className="flex items-center gap-3 no-underline">
               <div
                 style={{
                   width: '32px',
                   height: '32px',
-                  background: '#0D9488',
+                  background: '#7C3AED',
                   borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
@@ -183,7 +172,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                   flexShrink: 0,
                 }}
               >
-                M
+                A
               </div>
               <div>
                 <div
@@ -195,21 +184,20 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  MEDICA SOERUTE
+                  ADMIN
                 </div>
                 <div
                   style={{
                     fontSize: '11px',
-                    color: '#A1A1AA',
+                    color: '#A5B4FC',
                     marginTop: '1px',
                     fontWeight: 400,
                   }}
                 >
-                  採用メディア分析
+                  管理画面
                 </div>
               </div>
             </Link>
-            {/* Toggle Button */}
             <button
               onClick={toggleCollapse}
               title="サイドバーを畳む"
@@ -217,7 +205,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
               style={{
                 background: 'rgba(255,255,255,0.04)',
                 border: 'none',
-                color: '#A1A1AA',
+                color: '#A5B4FC',
                 cursor: 'pointer',
                 fontSize: '11px',
               }}
@@ -227,7 +215,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                e.currentTarget.style.color = '#A1A1AA'
+                e.currentTarget.style.color = '#A5B4FC'
               }}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -241,49 +229,18 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
       <nav
         style={{
           flex: 1,
-          padding: isCollapsed ? '12px 8px' : '12px 8px',
+          padding: '12px 8px',
           overflowY: 'auto',
         }}
       >
-        {/* 分析セクション */}
+        {/* メインセクション */}
         <div style={{ marginBottom: '20px' }}>
           {!isCollapsed && (
             <div
               style={{
                 fontSize: '11px',
                 fontWeight: 500,
-                color: '#A1A1AA',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                padding: '0 12px',
-                marginBottom: '8px',
-              }}
-            >
-              分析
-            </div>
-          )}
-          {analysisNavItems.map((item) => (
-            <NavLink key={item.href} item={item} isActive={isActive(item.href)} isCollapsed={isCollapsed} />
-          ))}
-        </div>
-
-        {/* Divider */}
-        <div
-          style={{
-            height: '1px',
-            background: 'rgba(255,255,255,0.06)',
-            margin: isCollapsed ? '12px 4px' : '12px 12px',
-          }}
-        />
-
-        {/* 管理セクション */}
-        <div style={{ marginBottom: '20px' }}>
-          {!isCollapsed && (
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 500,
-                color: '#A1A1AA',
+                color: '#A5B4FC',
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em',
                 padding: '0 12px',
@@ -293,51 +250,95 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
               管理
             </div>
           )}
-          {manageNavItems.map((item) => (
+          {mainNavItems.map((item) => (
             <NavLink key={item.href} item={item} isActive={isActive(item.href)} isCollapsed={isCollapsed} />
           ))}
-          {/* Admin専用: 管理画面リンク */}
-          {user.role === 'admin' && (
-            <NavLink
-              item={{ title: '管理画面', href: '/admin', icon: Shield }}
-              isActive={pathname.startsWith('/admin')}
-              isCollapsed={isCollapsed}
-            />
-          )}
         </div>
 
         {/* Divider */}
         <div
           style={{
             height: '1px',
-            background: 'rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.08)',
             margin: isCollapsed ? '12px 4px' : '12px 12px',
           }}
         />
 
-        {/* 設定 */}
-        <NavLink
-          item={{ title: '設定', href: '/dashboard/settings', icon: Settings }}
-          isActive={isActive('/dashboard/settings')}
-          isCollapsed={isCollapsed}
+        {/* 分析セクション */}
+        <div style={{ marginBottom: '20px' }}>
+          {!isCollapsed && (
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: '#A5B4FC',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                padding: '0 12px',
+                marginBottom: '8px',
+              }}
+            >
+              分析
+            </div>
+          )}
+          {analyticsNavItems.map((item) => (
+            <NavLink key={item.href} item={item} isActive={isActive(item.href)} isCollapsed={isCollapsed} />
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div
+          style={{
+            height: '1px',
+            background: 'rgba(255,255,255,0.08)',
+            margin: isCollapsed ? '12px 4px' : '12px 12px',
+          }}
         />
+
+        {/* ダッシュボードに戻る */}
+        <Link
+          href="/dashboard"
+          title={isCollapsed ? 'ダッシュボードに戻る' : undefined}
+          className="flex items-center no-underline transition-all"
+          style={{
+            gap: isCollapsed ? '0' : '12px',
+            padding: isCollapsed ? '8px' : '8px 12px',
+            borderRadius: '6px',
+            color: '#A5B4FC',
+            background: 'transparent',
+            marginBottom: '2px',
+            fontSize: '13px',
+            fontWeight: 400,
+            justifyContent: isCollapsed ? 'center' : 'flex-start',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+            e.currentTarget.style.color = '#FAFAFA'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = '#A5B4FC'
+          }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {!isCollapsed && <span>ダッシュボードに戻る</span>}
+        </Link>
       </nav>
 
       {/* Footer */}
       <div
         style={{
           padding: isCollapsed ? '12px 8px' : '16px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
         }}
       >
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-          {/* Avatar */}
           <div
             style={{
               width: '28px',
               height: '28px',
               borderRadius: '50%',
-              background: '#0D9488',
+              background: '#7C3AED',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -362,11 +363,10 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                 >
                   {user.company_name || user.email?.split('@')[0] || 'ユーザー'}
                 </div>
-                <div style={{ fontSize: '11px', color: '#A1A1AA' }}>
-                  {user.role === 'admin' ? '管理者' : 'コンサルタント'}
+                <div style={{ fontSize: '11px', color: '#A5B4FC' }}>
+                  管理者
                 </div>
               </div>
-              {/* Logout button */}
               <button
                 onClick={handleLogout}
                 title="ログアウト"
@@ -374,7 +374,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#A1A1AA',
+                  color: '#A5B4FC',
                   cursor: 'pointer',
                 }}
                 onMouseEnter={(e) => {
@@ -383,7 +383,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = '#A1A1AA'
+                  e.currentTarget.style.color = '#A5B4FC'
                 }}
               >
                 <LogOut className="h-4 w-4" />
@@ -391,7 +391,6 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
             </>
           )}
         </div>
-        {/* Collapsed logout */}
         {isCollapsed && (
           <button
             onClick={handleLogout}
@@ -400,7 +399,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#A1A1AA',
+              color: '#A5B4FC',
               cursor: 'pointer',
             }}
             onMouseEnter={(e) => {
@@ -409,7 +408,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = '#A1A1AA'
+              e.currentTarget.style.color = '#A5B4FC'
             }}
           >
             <LogOut className="h-4 w-4" />
@@ -420,9 +419,6 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
   )
 }
 
-/**
- * Nav Link Component
- */
 interface NavItem {
   title: string
   href: string
@@ -440,8 +436,8 @@ function NavLink({ item, isActive, isCollapsed }: { item: NavItem; isActive: boo
         gap: isCollapsed ? '0' : '12px',
         padding: isCollapsed ? '8px' : '8px 12px',
         borderRadius: '6px',
-        color: isActive ? '#0D9488' : '#A1A1AA',
-        background: isActive ? 'rgba(13,148,136,0.12)' : 'transparent',
+        color: isActive ? '#A78BFA' : '#A5B4FC',
+        background: isActive ? 'rgba(167,139,250,0.15)' : 'transparent',
         marginBottom: '2px',
         fontSize: '13px',
         fontWeight: isActive ? 500 : 400,
@@ -456,7 +452,7 @@ function NavLink({ item, isActive, isCollapsed }: { item: NavItem; isActive: boo
       onMouseLeave={(e) => {
         if (!isActive) {
           e.currentTarget.style.background = 'transparent'
-          e.currentTarget.style.color = '#A1A1AA'
+          e.currentTarget.style.color = '#A5B4FC'
         }
       }}
     >
