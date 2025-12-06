@@ -10,35 +10,30 @@ import {
   Loader2,
   Download,
   Clock,
-  Eye,
   BarChart3,
+  ChevronRight,
+  ChevronLeft,
+  RefreshCw,
+  X,
+  Play,
+  List,
 } from 'lucide-react'
+import { createBrowserClient } from '@supabase/ssr'
 
 /**
- * SC-903: CSVインポート画面
+ * SC-903: CSVインポート画面（4ステップウィザード版）
  *
  * 機能:
- * - ラッコキーワード、SimilarWebのCSVインポート
- * - CSVプレビュー表示
- * - 意図分類の内訳表示
- * - インポート履歴表示
- * - エラーハンドリング
+ * - Step 1: ファイル選択
+ * - Step 2: 設定（インポートタイプ、媒体選択）
+ * - Step 3: プレビュー確認
+ * - Step 4: 実行・進捗表示
+ * - ジョブ一覧表示（Supabase Realtimeで進捗更新）
  */
 
 type ImportType = 'rakko_keywords' | 'similarweb'
-type ImportStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error'
 type QueryIntent = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
-
-interface ImportHistory {
-  id: string
-  type: ImportType
-  fileName: string
-  totalRows: number
-  successCount: number
-  errorCount: number
-  status: 'completed' | 'failed'
-  createdAt: string
-}
+type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
 
 interface MediaOption {
   id: string
@@ -48,72 +43,30 @@ interface MediaOption {
 interface PreviewRow {
   keyword: string
   searchVolume: number | null
-  intent: QueryIntent
-  intentReason: string
+  cpc: number | null
+  competition: number | null
+  seoDifficulty: number | null
+  searchRank: number | null
+  estimatedTraffic: number | null
+  url: string | null
 }
 
-interface IntentSummary {
-  branded: number
-  transactional: number
-  commercial: number
-  informational: number
-  unknown: number
-}
-
-// 意図分類ロジック（クライアント側プレビュー用）
-const KNOWN_MEDIA_NAMES = [
-  'ジョブメドレー', 'jobmedley', 'job-medley', 'マイナビ', 'リクナビ',
-  'indeed', 'インディード', 'エン転職', 'doda', 'ナース人材バンク',
-]
-
-const JOB_KEYWORDS = [
-  '看護師', 'ナース', '介護', 'ヘルパー', '介護福祉士', 'ケアマネ',
-  '薬剤師', '保育士', '歯科衛生士', '歯科助手', '理学療法士', '作業療法士',
-  '医療事務', '管理栄養士', '放射線技師', '介護士',
-]
-
-const CONDITION_KEYWORDS = [
-  '年収', '給料', '給与', '月給', '時給', '賞与',
-  '年間休日', '休日', '残業', '夜勤',
-]
-
-function classifyIntent(keyword: string): { intent: QueryIntent; reason: string } {
-  const k = keyword.toLowerCase().trim()
-  if (!k) return { intent: 'unknown', reason: '空のキーワード' }
-
-  for (const mediaName of KNOWN_MEDIA_NAMES) {
-    if (k.includes(mediaName.toLowerCase())) {
-      return { intent: 'branded', reason: `媒体名を含む` }
-    }
-  }
-
-  if (/求人|転職|募集|採用|応募|中途/.test(k)) {
-    return { intent: 'transactional', reason: '求人・転職系' }
-  }
-
-  if (/とは$|とは\s|書き方|意味|方法|やり方|平均|相場|違いは/.test(k)) {
-    return { intent: 'informational', reason: '解説・ハウツー系' }
-  }
-
-  if (/\d+日|\d+万|\d+円/.test(k)) {
-    return { intent: 'commercial', reason: '具体数値条件' }
-  }
-
-  if (/比較|ランキング|おすすめ|オススメ|人気|評判|口コミ|vs/.test(k)) {
-    return { intent: 'commercial', reason: '比較・評価系' }
-  }
-
-  const hasJob = JOB_KEYWORDS.some(job => k.includes(job.toLowerCase()))
-  const hasCondition = CONDITION_KEYWORDS.some(cond => k.includes(cond.toLowerCase()))
-
-  if (hasJob && hasCondition) {
-    return { intent: 'commercial', reason: '職種×条件' }
-  }
-  if (hasCondition && !hasJob) {
-    return { intent: 'informational', reason: '条件キーワード' }
-  }
-
-  return { intent: 'unknown', reason: '判定不能' }
+interface ImportJob {
+  id: string
+  status: JobStatus
+  file_name: string
+  import_type: ImportType
+  media_id: string | null
+  total_rows: number | null
+  processed_rows: number
+  success_count: number
+  error_count: number
+  current_step: string | null
+  intent_summary: Record<string, number> | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
 }
 
 const INTENT_LABELS: Record<QueryIntent, string> = {
@@ -132,21 +85,50 @@ const INTENT_COLORS: Record<QueryIntent, string> = {
   unknown: '#A1A1AA',
 }
 
-export default function ImportPage() {
-  const [importType, setImportType] = useState<ImportType>('rakko_keywords')
-  const [file, setFile] = useState<File | null>(null)
-  const [status, setStatus] = useState<ImportStatus>('idle')
-  const [progress, setProgress] = useState(0)
-  const [result, setResult] = useState<{ success: number; error: number; errors?: string[] } | null>(null)
-  const [mediaList, setMediaList] = useState<MediaOption[]>([])
-  const [selectedMediaId, setSelectedMediaId] = useState<string>('')
-  const [history, setHistory] = useState<ImportHistory[]>([])
+const STATUS_LABELS: Record<JobStatus, string> = {
+  pending: '待機中',
+  processing: '処理中',
+  completed: '完了',
+  failed: '失敗',
+  cancelled: 'キャンセル',
+}
 
-  // プレビュー関連
+const STEP_LABELS: Record<string, string> = {
+  parse: 'CSVパース',
+  rule_classification: 'ルール分類',
+  ai_classification: 'AI分類',
+  db_insert: 'データ保存',
+  finalize: '完了処理',
+}
+
+export default function ImportPage() {
+  // Wizard state
+  const [currentStep, setCurrentStep] = useState(1)
+  const [file, setFile] = useState<File | null>(null)
+  const [importType, setImportType] = useState<ImportType>('rakko_keywords')
+  const [selectedMediaId, setSelectedMediaId] = useState<string>('')
+  const [mediaList, setMediaList] = useState<MediaOption[]>([])
+
+  // Preview state
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
-  const [intentSummary, setIntentSummary] = useState<IntentSummary | null>(null)
   const [totalRows, setTotalRows] = useState(0)
-  const [isParsingPreview, setIsParsingPreview] = useState(false)
+  const [_columns, setColumns] = useState<string[]>([])
+  const [isValidating, setIsValidating] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  // Job state
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [jobs, setJobs] = useState<ImportJob[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showJobList, setShowJobList] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Supabase client for realtime
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   // 媒体リストを取得
   useEffect(() => {
@@ -164,133 +146,64 @@ export default function ImportPage() {
     fetchMedia()
   }, [])
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // CSVパース関数
-  const parseCSVLine = (line: string, delimiter: string): string[] => {
-    const result: string[] = []
-    let current = ''
-    let inQuotes = false
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i]
-      if (char === '"' && !inQuotes) {
-        inQuotes = true
-      } else if (char === '"' && inQuotes) {
-        if (line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else if (char === delimiter && !inQuotes) {
-        result.push(current)
-        current = ''
-      } else {
-        current += char
-      }
-    }
-    result.push(current)
-    return result
-  }
-
-  // ファイルからプレビューを生成
-  const generatePreview = useCallback(async (selectedFile: File) => {
-    setIsParsingPreview(true)
-
+  // ジョブ一覧を取得
+  const fetchJobs = useCallback(async () => {
     try {
-      const buffer = await selectedFile.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
-
-      let content: string
-      if (bytes[0] === 0xff && bytes[1] === 0xfe) {
-        const decoder = new TextDecoder('utf-16le')
-        content = decoder.decode(buffer)
-      } else if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-        const decoder = new TextDecoder('utf-8')
-        content = decoder.decode(buffer)
-      } else {
-        content = await selectedFile.text()
+      const res = await fetch('/api/admin/import/jobs?limit=10')
+      const data = await res.json()
+      if (data.success && data.data) {
+        setJobs(data.data.jobs)
       }
-
-      content = content.replace(/^\uFEFF/, '')
-
-      const lines = content.split('\n').filter((line) => line.trim())
-      if (lines.length < 2) {
-        setPreviewRows([])
-        setIntentSummary(null)
-        setTotalRows(0)
-        return
-      }
-
-      const delimiter = lines[0].includes('\t') ? '\t' : ','
-      const headers = lines[0].split(delimiter).map((h) => h.replace(/^["']|["']$/g, '').trim().toLowerCase())
-
-      // カラムマッピング
-      const columnMap: Record<string, string> = {
-        キーワード: 'keyword',
-        月間検索数: 'search_volume',
-        keyword: 'keyword',
-        search_volume: 'search_volume',
-      }
-
-      const keywordIndex = headers.findIndex((h) => columnMap[h] === 'keyword')
-      const searchVolumeIndex = headers.findIndex((h) => columnMap[h] === 'search_volume')
-
-      if (keywordIndex === -1) {
-        setPreviewRows([])
-        setIntentSummary(null)
-        setTotalRows(0)
-        return
-      }
-
-      // 全行をパースして意図分類
-      const allRows: PreviewRow[] = []
-      const summary: IntentSummary = {
-        branded: 0,
-        transactional: 0,
-        commercial: 0,
-        informational: 0,
-        unknown: 0,
-      }
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim()
-        if (!line) continue
-
-        const values = parseCSVLine(line, delimiter)
-        const keyword = values[keywordIndex]?.replace(/^["']|["']$/g, '').trim()
-        if (!keyword) continue
-
-        const { intent, reason } = classifyIntent(keyword)
-        const searchVolume = searchVolumeIndex !== -1
-          ? parseInt(values[searchVolumeIndex]?.replace(/[^0-9.-]/g, '') || '0', 10) || null
-          : null
-
-        allRows.push({ keyword, searchVolume, intent, intentReason: reason })
-        summary[intent]++
-      }
-
-      setPreviewRows(allRows.slice(0, 20)) // 先頭20件をプレビュー
-      setIntentSummary(summary)
-      setTotalRows(allRows.length)
-    } catch (err) {
-      console.error('Preview generation error:', err)
-      setPreviewRows([])
-      setIntentSummary(null)
-      setTotalRows(0)
-    } finally {
-      setIsParsingPreview(false)
+    } catch {
+      console.error('Failed to fetch jobs')
     }
   }, [])
 
+  useEffect(() => {
+    fetchJobs()
+  }, [fetchJobs])
+
+  // Supabase Realtimeで進捗を購読
+  useEffect(() => {
+    const channel = supabase
+      .channel('import_jobs_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'import_jobs',
+        },
+        (payload) => {
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const updatedJob = payload.new as ImportJob
+            setJobs((prev) => {
+              const exists = prev.find((j) => j.id === updatedJob.id)
+              if (exists) {
+                return prev.map((j) => (j.id === updatedJob.id ? updatedJob : j))
+              } else {
+                return [updatedJob, ...prev].slice(0, 10)
+              }
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase])
+
+  // ファイル選択
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
-      setStatus('idle')
-      setResult(null)
-      generatePreview(selectedFile)
+      setValidationError(null)
+      setPreviewRows([])
+      setTotalRows(0)
+      setColumns([])
     }
   }
 
@@ -299,17 +212,54 @@ export default function ImportPage() {
     const droppedFile = e.dataTransfer.files[0]
     if (droppedFile) {
       setFile(droppedFile)
-      setStatus('idle')
-      setResult(null)
-      generatePreview(droppedFile)
+      setValidationError(null)
+      setPreviewRows([])
+      setTotalRows(0)
+      setColumns([])
     }
   }
 
-  const handleImport = async () => {
+  // バリデーションAPI呼び出し
+  const validateFile = async () => {
+    if (!file) return false
+
+    setIsValidating(true)
+    setValidationError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', importType)
+
+      const res = await fetch('/api/admin/import/validate', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+
+      if (data.success && data.data) {
+        setPreviewRows(data.data.previewRows)
+        setTotalRows(data.data.totalRows)
+        setColumns(data.data.columns)
+        return true
+      } else {
+        setValidationError(data.error?.message || 'バリデーションに失敗しました')
+        return false
+      }
+    } catch {
+      setValidationError('通信エラーが発生しました')
+      return false
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  // ジョブ開始
+  const startImport = async () => {
     if (!file) return
 
-    setStatus('uploading')
-    setProgress(0)
+    setIsSubmitting(true)
 
     try {
       const formData = new FormData()
@@ -319,78 +269,97 @@ export default function ImportPage() {
         formData.append('media_id', selectedMediaId)
       }
 
-      // プログレス更新
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return prev
-          }
-          return prev + 10
-        })
-      }, 200)
-
-      const res = await fetch('/api/admin/import', {
+      const res = await fetch('/api/admin/import/start', {
         method: 'POST',
         body: formData,
       })
 
-      clearInterval(progressInterval)
-      setProgress(100)
-      setStatus('processing')
-
       const data = await res.json()
 
-      if (data.success) {
-        setStatus('success')
-        setResult({
-          success: data.data.successCount,
-          error: data.data.errorCount,
-          errors: data.data.errors,
-        })
-        setHistory((prev) => [
-          {
-            id: Date.now().toString(),
-            type: importType,
-            fileName: file.name,
-            totalRows: data.data.successCount + data.data.errorCount,
-            successCount: data.data.successCount,
-            errorCount: data.data.errorCount,
-            status: 'completed',
-            createdAt: new Date().toISOString(),
-          },
-          ...prev,
-        ])
+      if (data.success && data.data) {
+        setCurrentJobId(data.data.jobId)
+        setCurrentStep(4)
+        fetchJobs()
       } else {
-        setStatus('error')
-        setResult({
-          success: 0,
-          error: 1,
-          errors: [data.error?.message || 'インポートに失敗しました'],
-        })
+        setValidationError(data.error?.message || 'ジョブの開始に失敗しました')
       }
     } catch {
-      setStatus('error')
-      setResult({
-        success: 0,
-        error: 1,
-        errors: ['通信エラーが発生しました'],
-      })
+      setValidationError('通信エラーが発生しました')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  const resetForm = () => {
+  // ジョブキャンセル
+  const cancelJob = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/admin/import/jobs/${jobId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel' }),
+      })
+
+      if (res.ok) {
+        fetchJobs()
+      }
+    } catch {
+      console.error('Failed to cancel job')
+    }
+  }
+
+  // ジョブリトライ
+  const retryJob = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/admin/import/jobs/${jobId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'retry' }),
+      })
+
+      if (res.ok) {
+        fetchJobs()
+      }
+    } catch {
+      console.error('Failed to retry job')
+    }
+  }
+
+  // 次のステップへ
+  const nextStep = async () => {
+    if (currentStep === 2) {
+      const isValid = await validateFile()
+      if (!isValid) return
+    }
+    if (currentStep === 3) {
+      await startImport()
+      return
+    }
+    setCurrentStep((prev) => Math.min(prev + 1, 4))
+  }
+
+  // 前のステップへ
+  const prevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1))
+  }
+
+  // リセット
+  const resetWizard = () => {
+    setCurrentStep(1)
     setFile(null)
-    setStatus('idle')
-    setProgress(0)
-    setResult(null)
+    setImportType('rakko_keywords')
+    setSelectedMediaId('')
     setPreviewRows([])
-    setIntentSummary(null)
     setTotalRows(0)
+    setColumns([])
+    setValidationError(null)
+    setCurrentJobId(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
+
+  // 現在のジョブを取得
+  const currentJob = currentJobId ? jobs.find((j) => j.id === currentJobId) : null
 
   return (
     <>
@@ -405,645 +374,984 @@ export default function ImportPage() {
           zIndex: 40,
         }}
       >
-        <h1
-          style={{
-            fontSize: '15px',
-            fontWeight: 600,
-            color: '#18181B',
-            letterSpacing: '-0.01em',
-            margin: 0,
-          }}
-        >
-          CSVインポート
-        </h1>
-        <p
-          style={{
-            fontSize: '13px',
-            color: '#A1A1AA',
-            marginTop: '2px',
-            fontWeight: 400,
-          }}
-        >
-          キーワードデータや流入経路データをインポート
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h1
+              style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: '#18181B',
+                letterSpacing: '-0.01em',
+                margin: 0,
+              }}
+            >
+              CSVインポート
+            </h1>
+            <p
+              style={{
+                fontSize: '13px',
+                color: '#A1A1AA',
+                marginTop: '2px',
+                fontWeight: 400,
+              }}
+            >
+              キーワードデータを非同期でインポート
+            </p>
+          </div>
+          <button
+            onClick={() => setShowJobList(!showJobList)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              background: showJobList ? '#7C3AED' : '#FFFFFF',
+              color: showJobList ? '#FFFFFF' : '#52525B',
+              border: '1px solid #E4E4E7',
+              borderRadius: '6px',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            <List className="h-4 w-4" />
+            ジョブ一覧
+            {jobs.filter((j) => j.status === 'processing').length > 0 && (
+              <span
+                style={{
+                  background: '#EF4444',
+                  color: '#FFFFFF',
+                  borderRadius: '10px',
+                  padding: '2px 6px',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                }}
+              >
+                {jobs.filter((j) => j.status === 'processing').length}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Content */}
       <div style={{ padding: '24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px' }}>
-          {/* Left: Import Form */}
-          <div
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E4E4E7',
-              borderRadius: '8px',
-            }}
-          >
+        <div style={{ display: 'flex', gap: '24px' }}>
+          {/* Wizard */}
+          <div style={{ flex: 1 }}>
+            {/* Step Indicator */}
             <div
               style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid #E4E4E7',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '24px',
               }}
             >
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                新規インポート
-              </span>
-            </div>
-
-            <div style={{ padding: '20px' }}>
-              {/* Import Type Selection */}
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    color: '#52525B',
-                    marginBottom: '8px',
-                  }}
-                >
-                  インポートタイプ
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => setImportType('rakko_keywords')}
+              {[1, 2, 3, 4].map((step) => (
+                <div key={step} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div
                     style={{
-                      flex: 1,
-                      padding: '12px',
-                      border: `1px solid ${importType === 'rakko_keywords' ? '#7C3AED' : '#E4E4E7'}`,
-                      borderRadius: '8px',
-                      background: importType === 'rakko_keywords' ? 'rgba(124,58,237,0.05)' : '#FFFFFF',
-                      cursor: 'pointer',
-                      textAlign: 'left',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background:
+                        currentStep === step
+                          ? '#7C3AED'
+                          : currentStep > step
+                          ? '#10B981'
+                          : '#E4E4E7',
+                      color: currentStep >= step ? '#FFFFFF' : '#A1A1AA',
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: importType === 'rakko_keywords' ? '#7C3AED' : '#18181B',
-                      }}
-                    >
-                      ラッコKW
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#A1A1AA', marginTop: '2px' }}>
-                      キーワード・順位
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setImportType('similarweb')}
+                    {currentStep > step ? <CheckCircle2 className="h-4 w-4" /> : step}
+                  </div>
+                  <span
                     style={{
-                      flex: 1,
-                      padding: '12px',
-                      border: `1px solid ${importType === 'similarweb' ? '#7C3AED' : '#E4E4E7'}`,
-                      borderRadius: '8px',
-                      background: importType === 'similarweb' ? 'rgba(124,58,237,0.05)' : '#FFFFFF',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: importType === 'similarweb' ? '#7C3AED' : '#18181B',
-                      }}
-                    >
-                      SimilarWeb
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#A1A1AA', marginTop: '2px' }}>
-                      トラフィック
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Media Selection (for rakko_keywords) */}
-              {importType === 'rakko_keywords' && (
-                <div style={{ marginBottom: '20px' }}>
-                  <label
-                    style={{
-                      display: 'block',
                       fontSize: '12px',
                       fontWeight: 500,
-                      color: '#52525B',
-                      marginBottom: '8px',
+                      color: currentStep >= step ? '#18181B' : '#A1A1AA',
                     }}
                   >
-                    対象媒体（任意）
-                  </label>
-                  <select
-                    value={selectedMediaId}
-                    onChange={(e) => setSelectedMediaId(e.target.value)}
+                    {step === 1
+                      ? 'ファイル選択'
+                      : step === 2
+                      ? '設定'
+                      : step === 3
+                      ? 'プレビュー'
+                      : '実行'}
+                  </span>
+                  {step < 4 && (
+                    <ChevronRight className="h-4 w-4" style={{ color: '#E4E4E7' }} />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Step Content */}
+            <div
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #E4E4E7',
+                borderRadius: '8px',
+                padding: '24px',
+              }}
+            >
+              {/* Step 1: ファイル選択 */}
+              {currentStep === 1 && (
+                <div>
+                  <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#18181B', marginBottom: '16px' }}>
+                    CSVファイルを選択
+                  </h2>
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
                     style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      border: '1px solid #E4E4E7',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      color: '#18181B',
-                      background: '#FFFFFF',
+                      border: '2px dashed #E4E4E7',
+                      borderRadius: '8px',
+                      padding: '48px',
+                      textAlign: 'center',
                       cursor: 'pointer',
+                      background: file ? '#F5F3FF' : '#FAFAFA',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    <option value="">媒体を選択（省略可）</option>
-                    {mediaList.map((media) => (
-                      <option key={media.id} value={media.id}>
-                        {media.name}
-                      </option>
-                    ))}
-                  </select>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileSelect}
+                      style={{ display: 'none' }}
+                    />
+                    {file ? (
+                      <>
+                        <FileText className="h-12 w-12 mx-auto mb-3" style={{ color: '#7C3AED' }} />
+                        <p style={{ fontSize: '15px', fontWeight: 500, color: '#18181B' }}>{file.name}</p>
+                        <p style={{ fontSize: '13px', color: '#A1A1AA', marginTop: '4px' }}>
+                          {(file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-12 w-12 mx-auto mb-3" style={{ color: '#A1A1AA' }} />
+                        <p style={{ fontSize: '15px', fontWeight: 500, color: '#18181B' }}>
+                          ファイルをドロップまたはクリック
+                        </p>
+                        <p style={{ fontSize: '13px', color: '#A1A1AA', marginTop: '4px' }}>
+                          CSV形式のみ対応（50MB以下）
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* File Drop Zone */}
-              <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  border: '2px dashed #E4E4E7',
-                  borderRadius: '8px',
-                  padding: '24px',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  background: file ? '#F5F3FF' : '#FAFAFA',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
+              {/* Step 2: 設定 */}
+              {currentStep === 2 && (
+                <div>
+                  <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#18181B', marginBottom: '16px' }}>
+                    インポート設定
+                  </h2>
 
-                {file ? (
-                  <>
-                    <FileText className="h-8 w-8 mx-auto mb-2" style={{ color: '#7C3AED' }} />
-                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>{file.name}</p>
-                    <p style={{ fontSize: '11px', color: '#A1A1AA', marginTop: '2px' }}>
-                      {(file.size / 1024).toFixed(1)} KB
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-8 w-8 mx-auto mb-2" style={{ color: '#A1A1AA' }} />
-                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>
-                      ファイルをドロップまたはクリック
-                    </p>
-                    <p style={{ fontSize: '11px', color: '#A1A1AA', marginTop: '2px' }}>
-                      CSV形式のみ対応
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* Progress / Result */}
-              {status !== 'idle' && (
-                <div style={{ marginTop: '16px' }}>
-                  {(status === 'uploading' || status === 'processing') && (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#7C3AED' }} />
-                        <span style={{ fontSize: '12px', color: '#52525B' }}>
-                          {status === 'uploading' ? 'アップロード中...' : '処理中...'}
-                        </span>
-                      </div>
-                      <div
+                  {/* Import Type */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        color: '#52525B',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      インポートタイプ
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setImportType('rakko_keywords')}
                         style={{
-                          height: '4px',
-                          background: '#E4E4E7',
-                          borderRadius: '2px',
-                          overflow: 'hidden',
+                          flex: 1,
+                          padding: '16px',
+                          border: `1px solid ${importType === 'rakko_keywords' ? '#7C3AED' : '#E4E4E7'}`,
+                          borderRadius: '8px',
+                          background: importType === 'rakko_keywords' ? 'rgba(124,58,237,0.05)' : '#FFFFFF',
+                          cursor: 'pointer',
+                          textAlign: 'left',
                         }}
                       >
                         <div
                           style={{
-                            height: '100%',
-                            background: '#7C3AED',
-                            width: `${progress}%`,
-                            transition: 'width 0.2s ease',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            color: importType === 'rakko_keywords' ? '#7C3AED' : '#18181B',
                           }}
-                        />
-                      </div>
+                        >
+                          ラッコキーワード
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
+                          キーワード・順位・検索ボリューム
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setImportType('similarweb')}
+                        style={{
+                          flex: 1,
+                          padding: '16px',
+                          border: `1px solid ${importType === 'similarweb' ? '#7C3AED' : '#E4E4E7'}`,
+                          borderRadius: '8px',
+                          background: importType === 'similarweb' ? 'rgba(124,58,237,0.05)' : '#FFFFFF',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            color: importType === 'similarweb' ? '#7C3AED' : '#18181B',
+                          }}
+                        >
+                          SimilarWeb
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
+                          トラフィックデータ
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Media Selection */}
+                  {importType === 'rakko_keywords' && (
+                    <div>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          color: '#52525B',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        対象媒体（任意）
+                      </label>
+                      <select
+                        value={selectedMediaId}
+                        onChange={(e) => setSelectedMediaId(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          border: '1px solid #E4E4E7',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          color: '#18181B',
+                          background: '#FFFFFF',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <option value="">媒体を選択（省略可）</option>
+                        {mediaList.map((media) => (
+                          <option key={media.id} value={media.id}>
+                            {media.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p style={{ fontSize: '11px', color: '#A1A1AA', marginTop: '6px' }}>
+                        選択すると、該当媒体とキーワードが紐付けられます
+                      </p>
                     </div>
                   )}
+                </div>
+              )}
 
-                  {status === 'success' && result && (
-                    <div
-                      style={{
-                        padding: '12px',
-                        background: '#F0FDF4',
-                        border: '1px solid #BBF7D0',
-                        borderRadius: '8px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <CheckCircle2 className="h-4 w-4" style={{ color: '#22C55E' }} />
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#166534' }}>
-                          {result.success}件成功 {result.error > 0 && `/ ${result.error}件エラー`}
-                        </span>
-                      </div>
+              {/* Step 3: プレビュー */}
+              {currentStep === 3 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
+                      プレビュー確認
+                    </h2>
+                    <span style={{ fontSize: '12px', color: '#A1A1AA' }}>
+                      全{totalRows}件のデータ
+                    </span>
+                  </div>
+
+                  {isValidating ? (
+                    <div style={{ padding: '48px', textAlign: 'center' }}>
+                      <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" style={{ color: '#7C3AED' }} />
+                      <p style={{ fontSize: '14px', color: '#52525B' }}>CSVを検証中...</p>
                     </div>
-                  )}
-
-                  {status === 'error' && result && (
+                  ) : validationError ? (
                     <div
                       style={{
-                        padding: '12px',
+                        padding: '16px',
                         background: '#FEF2F2',
                         border: '1px solid #FECACA',
                         borderRadius: '8px',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#991B1B' }}>
-                          エラー
+                        <XCircle className="h-5 w-5" style={{ color: '#EF4444' }} />
+                        <span style={{ fontSize: '14px', fontWeight: 500, color: '#991B1B' }}>
+                          {validationError}
                         </span>
                       </div>
-                      {result.errors?.slice(0, 3).map((error, i) => (
-                        <p key={i} style={{ fontSize: '11px', color: '#991B1B', marginTop: '4px' }}>
-                          {error}
-                        </p>
-                      ))}
                     </div>
+                  ) : (
+                    <>
+                      {/* Info Card */}
+                      <div
+                        style={{
+                          padding: '12px 16px',
+                          background: '#F5F3FF',
+                          borderRadius: '8px',
+                          marginBottom: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <AlertCircle className="h-4 w-4" style={{ color: '#7C3AED' }} />
+                        <span style={{ fontSize: '12px', color: '#6D28D9' }}>
+                          意図分類はインポート実行時にAIが自動分析します（ルールベース＋Claude AI）
+                        </span>
+                      </div>
+
+                      {/* Preview Table */}
+                      <div
+                        style={{
+                          border: '1px solid #E4E4E7',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          maxHeight: '400px',
+                          overflowY: 'auto',
+                          overflowX: 'auto',
+                        }}
+                      >
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
+                          <thead>
+                            <tr style={{ background: '#F4F4F5', position: 'sticky', top: 0 }}>
+                              <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                キーワード
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                月間検索数
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                CPC
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                競合性
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                SEO難易度
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                検索順位
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                推定流入数
+                              </th>
+                              <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap' }}>
+                                URL
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {previewRows.map((row, i) => (
+                              <tr
+                                key={i}
+                                style={{
+                                  borderBottom: '1px solid #F4F4F5',
+                                  background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                                }}
+                              >
+                                <td style={{ padding: '8px 10px', color: '#18181B', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {row.keyword}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#52525B' }}>
+                                  {row.searchVolume?.toLocaleString() ?? '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#52525B' }}>
+                                  {row.cpc ? `$${row.cpc.toFixed(2)}` : '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#52525B' }}>
+                                  {row.competition ?? '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#52525B' }}>
+                                  {row.seoDifficulty ?? '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#52525B' }}>
+                                  {row.searchRank ?? '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#52525B' }}>
+                                  {row.estimatedTraffic?.toLocaleString() ?? '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', color: '#52525B', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {row.url ? (
+                                    <a href={row.url} target="_blank" rel="noopener noreferrer" style={{ color: '#7C3AED', textDecoration: 'none' }}>
+                                      {row.url}
+                                    </a>
+                                  ) : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p style={{ fontSize: '11px', color: '#A1A1AA', marginTop: '8px' }}>
+                        プレビュー: 先頭50件を表示
+                      </p>
+                    </>
                   )}
                 </div>
               )}
 
-              {/* Actions */}
-              <div style={{ marginTop: '16px' }}>
-                {status === 'success' || status === 'error' ? (
-                  <button
-                    onClick={resetForm}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      background: '#7C3AED',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    新しいインポート
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleImport}
-                    disabled={!file || status === 'uploading' || status === 'processing'}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      padding: '10px',
-                      background: '#7C3AED',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      cursor: !file || status !== 'idle' ? 'not-allowed' : 'pointer',
-                      opacity: !file || status !== 'idle' ? 0.7 : 1,
-                    }}
-                  >
-                    {(status === 'uploading' || status === 'processing') && (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    )}
-                    インポート開始
-                  </button>
-                )}
-              </div>
+              {/* Step 4: 実行 */}
+              {currentStep === 4 && (
+                <div>
+                  <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#18181B', marginBottom: '16px' }}>
+                    インポート実行
+                  </h2>
 
-              {/* Template Download */}
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E4E4E7' }}>
-                <p style={{ fontSize: '11px', color: '#A1A1AA', marginBottom: '8px' }}>
-                  テンプレートをダウンロード
-                </p>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                  {currentJob ? (
+                    <div>
+                      {/* Status Badge */}
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          borderRadius: '16px',
+                          marginBottom: '16px',
+                          background:
+                            currentJob.status === 'completed'
+                              ? '#ECFDF5'
+                              : currentJob.status === 'failed'
+                              ? '#FEF2F2'
+                              : currentJob.status === 'cancelled'
+                              ? '#F4F4F5'
+                              : '#F5F3FF',
+                        }}
+                      >
+                        {currentJob.status === 'processing' && (
+                          <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#7C3AED' }} />
+                        )}
+                        {currentJob.status === 'completed' && (
+                          <CheckCircle2 className="h-4 w-4" style={{ color: '#10B981' }} />
+                        )}
+                        {currentJob.status === 'failed' && (
+                          <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
+                        )}
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color:
+                              currentJob.status === 'completed'
+                                ? '#059669'
+                                : currentJob.status === 'failed'
+                                ? '#DC2626'
+                                : currentJob.status === 'cancelled'
+                                ? '#52525B'
+                                : '#7C3AED',
+                          }}
+                        >
+                          {STATUS_LABELS[currentJob.status]}
+                          {currentJob.current_step && currentJob.status === 'processing' && (
+                            <> - {STEP_LABELS[currentJob.current_step] || currentJob.current_step}</>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Progress */}
+                      {currentJob.status === 'processing' && currentJob.total_rows && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '12px', color: '#52525B' }}>進捗</span>
+                            <span style={{ fontSize: '12px', color: '#52525B' }}>
+                              {currentJob.processed_rows} / {currentJob.total_rows}件
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              height: '8px',
+                              background: '#E4E4E7',
+                              borderRadius: '4px',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                background: '#7C3AED',
+                                width: `${(currentJob.processed_rows / currentJob.total_rows) * 100}%`,
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Result Summary */}
+                      {currentJob.status === 'completed' && (
+                        <>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr',
+                              gap: '12px',
+                              marginBottom: '16px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: '12px',
+                                background: '#F0FDF4',
+                                borderRadius: '8px',
+                              }}
+                            >
+                              <div style={{ fontSize: '24px', fontWeight: 600, color: '#166534' }}>
+                                {currentJob.success_count}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#15803D' }}>成功</div>
+                            </div>
+                            <div
+                              style={{
+                                padding: '12px',
+                                background: currentJob.error_count > 0 ? '#FEF2F2' : '#F4F4F5',
+                                borderRadius: '8px',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '24px',
+                                  fontWeight: 600,
+                                  color: currentJob.error_count > 0 ? '#991B1B' : '#52525B',
+                                }}
+                              >
+                                {currentJob.error_count}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: currentJob.error_count > 0 ? '#B91C1C' : '#71717A',
+                                }}
+                              >
+                                エラー
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Intent Summary */}
+                          {currentJob.intent_summary && (
+                            <div style={{ marginBottom: '16px' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  marginBottom: '12px',
+                                }}
+                              >
+                                <BarChart3 className="h-4 w-4" style={{ color: '#7C3AED' }} />
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+                                  意図分類結果
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {(Object.keys(currentJob.intent_summary!) as QueryIntent[]).map((intent) => (
+                                  <div
+                                    key={intent}
+                                    style={{
+                                      flex: '1 1 100px',
+                                      padding: '10px',
+                                      background: '#FAFAFA',
+                                      borderRadius: '6px',
+                                      borderLeft: `3px solid ${INTENT_COLORS[intent]}`,
+                                    }}
+                                  >
+                                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
+                                      {currentJob.intent_summary![intent]}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#52525B' }}>
+                                      {INTENT_LABELS[intent]}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Error Message */}
+                      {currentJob.status === 'failed' && currentJob.error_message && (
+                        <div
+                          style={{
+                            padding: '12px',
+                            background: '#FEF2F2',
+                            border: '1px solid #FECACA',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                          }}
+                        >
+                          <p style={{ fontSize: '13px', color: '#991B1B' }}>
+                            {currentJob.error_message}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {(currentJob.status === 'completed' ||
+                          currentJob.status === 'failed' ||
+                          currentJob.status === 'cancelled') && (
+                          <button
+                            onClick={resetWizard}
+                            style={{
+                              flex: 1,
+                              padding: '12px',
+                              background: '#7C3AED',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            新しいインポート
+                          </button>
+                        )}
+                        {(currentJob.status === 'failed' || currentJob.status === 'cancelled') && (
+                          <button
+                            onClick={() => retryJob(currentJob.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '12px 16px',
+                              background: '#FFFFFF',
+                              color: '#52525B',
+                              border: '1px solid #E4E4E7',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            リトライ
+                          </button>
+                        )}
+                        {(currentJob.status === 'pending' || currentJob.status === 'processing') && (
+                          <button
+                            onClick={() => cancelJob(currentJob.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '12px 16px',
+                              background: '#FFFFFF',
+                              color: '#EF4444',
+                              border: '1px solid #FECACA',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                            キャンセル
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : isSubmitting ? (
+                    <div style={{ padding: '48px', textAlign: 'center' }}>
+                      <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" style={{ color: '#7C3AED' }} />
+                      <p style={{ fontSize: '14px', color: '#52525B' }}>ジョブを開始中...</p>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Navigation */}
+              {currentStep < 4 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: '24px',
+                    paddingTop: '16px',
+                    borderTop: '1px solid #E4E4E7',
+                  }}
+                >
                   <button
+                    onClick={prevStep}
+                    disabled={currentStep === 1}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '6px 10px',
+                      gap: '6px',
+                      padding: '10px 16px',
                       background: '#FFFFFF',
+                      color: currentStep === 1 ? '#A1A1AA' : '#52525B',
                       border: '1px solid #E4E4E7',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      color: '#52525B',
-                      cursor: 'pointer',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      cursor: currentStep === 1 ? 'not-allowed' : 'pointer',
+                      opacity: currentStep === 1 ? 0.5 : 1,
                     }}
                   >
-                    <Download className="h-3 w-3" />
-                    ラッコKW用
+                    <ChevronLeft className="h-4 w-4" />
+                    戻る
                   </button>
                   <button
+                    onClick={nextStep}
+                    disabled={
+                      (currentStep === 1 && !file) ||
+                      isValidating ||
+                      isSubmitting
+                    }
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '6px 10px',
-                      background: '#FFFFFF',
-                      border: '1px solid #E4E4E7',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      color: '#52525B',
-                      cursor: 'pointer',
+                      gap: '6px',
+                      padding: '10px 16px',
+                      background: '#7C3AED',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor:
+                        (currentStep === 1 && !file) || isValidating || isSubmitting
+                          ? 'not-allowed'
+                          : 'pointer',
+                      opacity:
+                        (currentStep === 1 && !file) || isValidating || isSubmitting ? 0.7 : 1,
                     }}
                   >
-                    <Download className="h-3 w-3" />
-                    SimilarWeb用
+                    {isValidating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        検証中...
+                      </>
+                    ) : isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        開始中...
+                      </>
+                    ) : currentStep === 3 ? (
+                      <>
+                        <Play className="h-4 w-4" />
+                        インポート開始
+                      </>
+                    ) : (
+                      <>
+                        次へ
+                        <ChevronRight className="h-4 w-4" />
+                      </>
+                    )}
                   </button>
                 </div>
+              )}
+            </div>
+
+            {/* Template Download */}
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '16px',
+                background: '#FFFFFF',
+                border: '1px solid #E4E4E7',
+                borderRadius: '8px',
+              }}
+            >
+              <p style={{ fontSize: '12px', color: '#52525B', marginBottom: '8px' }}>
+                テンプレートをダウンロード
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '8px 12px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    color: '#52525B',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Download className="h-3 w-3" />
+                  ラッコKW用
+                </button>
+                <button
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '8px 12px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    color: '#52525B',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Download className="h-3 w-3" />
+                  SimilarWeb用
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Right: Preview & Results */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Intent Summary */}
-            {intentSummary && (
-              <div
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E4E4E7',
-                  borderRadius: '8px',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    borderBottom: '1px solid #E4E4E7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <BarChart3 className="h-4 w-4" style={{ color: '#7C3AED' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                    意図分類サマリ
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#A1A1AA', marginLeft: 'auto' }}>
-                    全{totalRows}件
-                  </span>
-                </div>
-
-                <div style={{ padding: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  {(Object.keys(intentSummary) as QueryIntent[]).map((intent) => (
-                    <div
-                      key={intent}
-                      style={{
-                        flex: '1 1 120px',
-                        padding: '12px',
-                        background: '#FAFAFA',
-                        borderRadius: '8px',
-                        borderLeft: `3px solid ${INTENT_COLORS[intent]}`,
-                      }}
-                    >
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: '#18181B' }}>
-                        {intentSummary[intent]}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#52525B', marginTop: '2px' }}>
-                        {INTENT_LABELS[intent]}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#A1A1AA' }}>
-                        {totalRows > 0 ? ((intentSummary[intent] / totalRows) * 100).toFixed(1) : 0}%
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* CSV Preview */}
+          {/* Job List Sidebar */}
+          {showJobList && (
             <div
               style={{
+                width: '360px',
                 background: '#FFFFFF',
                 border: '1px solid #E4E4E7',
                 borderRadius: '8px',
-                flex: 1,
-                minHeight: '300px',
-                display: 'flex',
-                flexDirection: 'column',
+                height: 'fit-content',
               }}
             >
               <div
                 style={{
-                  padding: '12px 16px',
+                  padding: '16px',
                   borderBottom: '1px solid #E4E4E7',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
+                  justifyContent: 'space-between',
                 }}
               >
-                <Eye className="h-4 w-4" style={{ color: '#7C3AED' }} />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                  プレビュー
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
+                  ジョブ一覧
                 </span>
-                {previewRows.length > 0 && (
-                  <span style={{ fontSize: '12px', color: '#A1A1AA', marginLeft: 'auto' }}>
-                    先頭20件を表示
-                  </span>
-                )}
-              </div>
-
-              <div style={{ flex: 1, overflow: 'auto' }}>
-                {isParsingPreview ? (
-                  <div style={{ padding: '32px', textAlign: 'center', color: '#A1A1AA' }}>
-                    <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                    <p style={{ fontSize: '13px' }}>解析中...</p>
-                  </div>
-                ) : previewRows.length === 0 ? (
-                  <div style={{ padding: '32px', textAlign: 'center', color: '#A1A1AA' }}>
-                    <Eye className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p style={{ fontSize: '13px' }}>ファイルを選択するとプレビューを表示</p>
-                  </div>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                    <thead>
-                      <tr style={{ background: '#F4F4F5' }}>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: '#52525B' }}>
-                          キーワード
-                        </th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: '#52525B', width: '80px' }}>
-                          検索数
-                        </th>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '100px' }}>
-                          意図分類
-                        </th>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '100px' }}>
-                          理由
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.map((row, i) => (
-                        <tr
-                          key={i}
-                          style={{
-                            borderBottom: '1px solid #F4F4F5',
-                            background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
-                          }}
-                        >
-                          <td style={{ padding: '8px 12px', color: '#18181B' }}>
-                            {row.keyword}
-                          </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: '#52525B' }}>
-                            {row.searchVolume?.toLocaleString() ?? '-'}
-                          </td>
-                          <td style={{ padding: '8px 12px' }}>
-                            <span
-                              style={{
-                                display: 'inline-block',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                fontSize: '11px',
-                                fontWeight: 500,
-                                background: `${INTENT_COLORS[row.intent]}15`,
-                                color: INTENT_COLORS[row.intent],
-                              }}
-                            >
-                              {INTENT_LABELS[row.intent]}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px 12px', color: '#A1A1AA', fontSize: '11px' }}>
-                            {row.intentReason}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-
-            {/* Import History (Compact) */}
-            {history.length > 0 && (
-              <div
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E4E4E7',
-                  borderRadius: '8px',
-                }}
-              >
-                <div
+                <button
+                  onClick={fetchJobs}
                   style={{
-                    padding: '12px 16px',
-                    borderBottom: '1px solid #E4E4E7',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    color: '#52525B',
+                    cursor: 'pointer',
                   }}
                 >
-                  <Clock className="h-4 w-4" style={{ color: '#A1A1AA' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                    直近のインポート
-                  </span>
-                </div>
+                  <RefreshCw className="h-3 w-3" />
+                  更新
+                </button>
+              </div>
 
-                <div style={{ padding: '8px' }}>
-                  {history.slice(0, 3).map((item) => (
+              <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                {jobs.length === 0 ? (
+                  <div style={{ padding: '32px', textAlign: 'center', color: '#A1A1AA' }}>
+                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p style={{ fontSize: '13px' }}>ジョブがありません</p>
+                  </div>
+                ) : (
+                  jobs.map((job) => (
                     <div
-                      key={item.id}
+                      key={job.id}
+                      onClick={() => {
+                        setCurrentJobId(job.id)
+                        setCurrentStep(4)
+                      }}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '8px 12px',
+                        padding: '12px 16px',
                         borderBottom: '1px solid #F4F4F5',
+                        cursor: 'pointer',
+                        background: currentJobId === job.id ? '#F5F3FF' : 'transparent',
                       }}
                     >
-                      {item.status === 'completed' ? (
-                        <CheckCircle2 className="h-4 w-4" style={{ color: '#10B981' }} />
-                      ) : (
-                        <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '12px', fontWeight: 500, color: '#18181B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.fileName}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        {job.status === 'processing' && (
+                          <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#7C3AED' }} />
+                        )}
+                        {job.status === 'completed' && (
+                          <CheckCircle2 className="h-4 w-4" style={{ color: '#10B981' }} />
+                        )}
+                        {job.status === 'failed' && (
+                          <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
+                        )}
+                        {job.status === 'cancelled' && (
+                          <X className="h-4 w-4" style={{ color: '#A1A1AA' }} />
+                        )}
+                        {job.status === 'pending' && (
+                          <Clock className="h-4 w-4" style={{ color: '#A1A1AA' }} />
+                        )}
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: '#18181B',
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {job.file_name}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '11px', color: '#A1A1AA' }}>
+                          {STATUS_LABELS[job.status]}
+                          {job.status === 'processing' && job.current_step && (
+                            <> - {STEP_LABELS[job.current_step] || job.current_step}</>
+                          )}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#A1A1AA' }}>
+                          {new Date(job.created_at).toLocaleString('ja-JP', {
+                            month: 'numeric',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      {job.status === 'processing' && job.total_rows && (
+                        <div
+                          style={{
+                            height: '3px',
+                            background: '#E4E4E7',
+                            borderRadius: '2px',
+                            marginTop: '6px',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              background: '#7C3AED',
+                              width: `${(job.processed_rows / job.total_rows) * 100}%`,
+                            }}
+                          />
                         </div>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#A1A1AA' }}>
-                        {item.successCount}件
-                      </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Format Guide */}
-        <div
-          style={{
-            marginTop: '24px',
-            background: '#FFFFFF',
-            border: '1px solid #E4E4E7',
-            borderRadius: '8px',
-          }}
-        >
-          <div
-            style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid #E4E4E7',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <AlertCircle className="h-4 w-4" style={{ color: '#F59E0B' }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-              CSVフォーマット仕様
-            </span>
-          </div>
-
-          <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-            <div>
-              <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#18181B', marginBottom: '8px' }}>
-                ラッコキーワード形式
-              </h4>
-              <div
-                style={{
-                  padding: '10px',
-                  background: '#F4F4F5',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  fontSize: '10px',
-                  color: '#52525B',
-                  overflowX: 'auto',
-                }}
-              >
-                keyword,search_volume,cpc,competition,seo_difficulty,search_rank,estimated_traffic,url
+                  ))
+                )}
               </div>
             </div>
-            <div>
-              <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#18181B', marginBottom: '8px' }}>
-                SimilarWeb形式
-              </h4>
-              <div
-                style={{
-                  padding: '10px',
-                  background: '#F4F4F5',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  fontSize: '10px',
-                  color: '#52525B',
-                  overflowX: 'auto',
-                }}
-              >
-                domain,period,monthly_visits,search_pct,direct_pct,referral_pct,social_pct,display_pct,email_pct
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </>

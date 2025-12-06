@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { classifyQueryIntent } from '@/lib/query-intent'
+import { classifyQueryIntent, classifyWithHybrid, IntentClassification } from '@/lib/query-intent'
 
 /**
  * CSVインポートAPI
@@ -176,7 +176,22 @@ async function importRakkoKeywords(
   }
   const parsedRows: ParsedRow[] = []
 
-  // まず全行をパース
+  // まず全行をパースしてキーワードを抽出
+  const keywordsToClassify: string[] = []
+  interface TempParsedRow {
+    keyword: string
+    normalizedKeyword: string
+    searchVolume: number | null
+    cpc: number | null
+    competition: number | null
+    seoDifficulty: number | null
+    searchRank: number | null
+    traffic: number | null
+    url: string | null
+    lineNum: number
+  }
+  const tempParsedRows: TempParsedRow[] = []
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
@@ -187,20 +202,9 @@ async function importRakkoKeywords(
       if (!keyword) continue
 
       const normalizedKeyword = keyword.toLowerCase().replace(/\s+/g, ' ').trim()
-      const intentResult = classifyQueryIntent(keyword)
+      keywordsToClassify.push(keyword)
 
-      queryBatch.push({
-        keyword,
-        keyword_normalized: normalizedKeyword,
-        intent: intentResult.intent,
-        intent_confidence: intentResult.confidence,
-        intent_reason: intentResult.reason,
-        intent_updated_at: new Date().toISOString(),
-        max_monthly_search_volume: searchVolumeIndex !== -1 ? parseNumber(values[searchVolumeIndex]) : null,
-        max_cpc: cpcIndex !== -1 ? parseFloat(values[cpcIndex]?.replace(/[^0-9.]/g, '') || '0') || null : null,
-      })
-
-      parsedRows.push({
+      tempParsedRows.push({
         keyword,
         normalizedKeyword,
         searchVolume: searchVolumeIndex !== -1 ? parseNumber(values[searchVolumeIndex]) : null,
@@ -218,6 +222,39 @@ async function importRakkoKeywords(
         errors.push(`行${i + 1}: ${err instanceof Error ? err.message : 'パースエラー'}`)
       }
     }
+  }
+
+  // Claude AIを使ったハイブリッド分類（ルールベース + AI）
+  console.log(`意図分類開始: ${keywordsToClassify.length}件のキーワード`)
+  let intentResults: Map<string, IntentClassification>
+  try {
+    intentResults = await classifyWithHybrid(keywordsToClassify)
+    console.log('ハイブリッド分類完了')
+  } catch (classifyError) {
+    console.error('ハイブリッド分類エラー、ルールベースにフォールバック:', classifyError)
+    // フォールバック: ルールベースのみ
+    intentResults = new Map()
+    for (const keyword of keywordsToClassify) {
+      intentResults.set(keyword, classifyQueryIntent(keyword))
+    }
+  }
+
+  // 分類結果を使ってバッチデータを作成
+  for (const row of tempParsedRows) {
+    const intentResult = intentResults.get(row.keyword) || classifyQueryIntent(row.keyword)
+
+    queryBatch.push({
+      keyword: row.keyword,
+      keyword_normalized: row.normalizedKeyword,
+      intent: intentResult.intent,
+      intent_confidence: intentResult.confidence,
+      intent_reason: intentResult.reason,
+      intent_updated_at: new Date().toISOString(),
+      max_monthly_search_volume: row.searchVolume,
+      max_cpc: row.cpc,
+    })
+
+    parsedRows.push(row)
   }
 
   // query_masterにバッチupsert
@@ -284,10 +321,27 @@ async function importRakkoKeywords(
     }
   }
 
+  // 意図分類サマリを集計
+  const intentSummary = {
+    branded: 0,
+    transactional: 0,
+    commercial: 0,
+    informational: 0,
+    unknown: 0,
+  }
+  queryBatch.forEach((q) => {
+    const intent = q.intent as keyof typeof intentSummary
+    if (intent in intentSummary) {
+      intentSummary[intent]++
+    }
+  })
+
   return {
     successCount,
     errorCount,
     errors: errors.length > 0 ? errors : undefined,
+    intentSummary,
+    totalKeywords: queryBatch.length,
   }
 }
 

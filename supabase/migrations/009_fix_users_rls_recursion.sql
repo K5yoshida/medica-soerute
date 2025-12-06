@@ -29,6 +29,9 @@ DROP POLICY IF EXISTS "Users can view own data" ON users;
 DROP POLICY IF EXISTS "Admins can view all users" ON users;
 DROP POLICY IF EXISTS "Users can update own data" ON users;
 DROP POLICY IF EXISTS "Admins can update all users" ON users;
+DROP POLICY IF EXISTS "users_select_policy" ON users;
+DROP POLICY IF EXISTS "users_update_own" ON users;
+DROP POLICY IF EXISTS "users_update_admin" ON users;
 
 -- 新しいポリシー: 自分のデータまたは管理者なら全員のデータを見られる
 CREATE POLICY "users_select_policy" ON users
@@ -50,26 +53,31 @@ CREATE POLICY "users_update_admin" ON users
 
 -- media_master
 DROP POLICY IF EXISTS "Admins can manage media" ON media_master;
+DROP POLICY IF EXISTS "media_master_admin_manage" ON media_master;
 CREATE POLICY "media_master_admin_manage" ON media_master
   FOR ALL USING (public.is_admin());
 
 -- analysis_results
 DROP POLICY IF EXISTS "Admins can view all analysis" ON analysis_results;
+DROP POLICY IF EXISTS "analysis_results_admin_view" ON analysis_results;
 CREATE POLICY "analysis_results_admin_view" ON analysis_results
   FOR SELECT USING (public.is_admin());
 
 -- usage_logs
 DROP POLICY IF EXISTS "Admins can view all logs" ON usage_logs;
+DROP POLICY IF EXISTS "usage_logs_admin_view" ON usage_logs;
 CREATE POLICY "usage_logs_admin_view" ON usage_logs
   FOR SELECT USING (public.is_admin());
 
 -- keywords
 DROP POLICY IF EXISTS "Admins can manage keywords" ON keywords;
+DROP POLICY IF EXISTS "keywords_admin_manage" ON keywords;
 CREATE POLICY "keywords_admin_manage" ON keywords
   FOR ALL USING (public.is_admin());
 
 -- traffic_data
 DROP POLICY IF EXISTS "Admins can manage traffic_data" ON traffic_data;
+DROP POLICY IF EXISTS "traffic_data_admin_manage" ON traffic_data;
 CREATE POLICY "traffic_data_admin_manage" ON traffic_data
   FOR ALL USING (public.is_admin());
 
@@ -77,6 +85,9 @@ CREATE POLICY "traffic_data_admin_manage" ON traffic_data
 DROP POLICY IF EXISTS "media_documents_insert_policy" ON media_documents;
 DROP POLICY IF EXISTS "media_documents_update_policy" ON media_documents;
 DROP POLICY IF EXISTS "media_documents_delete_policy" ON media_documents;
+DROP POLICY IF EXISTS "media_documents_insert_admin" ON media_documents;
+DROP POLICY IF EXISTS "media_documents_update_admin" ON media_documents;
+DROP POLICY IF EXISTS "media_documents_delete_admin" ON media_documents;
 
 CREATE POLICY "media_documents_insert_admin" ON media_documents
   FOR INSERT TO authenticated

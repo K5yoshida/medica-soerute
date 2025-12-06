@@ -11,14 +11,20 @@
 -- 1. ENUM型の作成
 -- ===========================================
 
--- クエリ意図の種類
-CREATE TYPE query_intent AS ENUM (
-  'branded',        -- 指名検索（サービス名・施設名）
-  'transactional',  -- 応募直前（求人・転職意図が明確）
-  'commercial',     -- 比較検討（条件比較、選び方）
-  'informational',  -- 情報収集（知識・ハウツー）
-  'unknown'         -- 未分類（AI判定必要）
-);
+-- クエリ意図の種類（存在しない場合のみ作成）
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'query_intent') THEN
+    CREATE TYPE query_intent AS ENUM (
+      'branded',        -- 指名検索（サービス名・施設名）
+      'transactional',  -- 応募直前（求人・転職意図が明確）
+      'commercial',     -- 比較検討（条件比較、選び方）
+      'informational',  -- 情報収集（知識・ハウツー）
+      'unknown'         -- 未分類（AI判定必要）
+    );
+  END IF;
+END
+$$;
 
 -- ===========================================
 -- 2. query_master テーブル
@@ -98,6 +104,16 @@ CREATE INDEX IF NOT EXISTS idx_media_query_data_traffic ON media_query_data(esti
 
 ALTER TABLE query_master ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media_query_data ENABLE ROW LEVEL SECURITY;
+
+-- 既存のポリシーを削除（冪等性のため）
+DROP POLICY IF EXISTS "query_master_select_all" ON query_master;
+DROP POLICY IF EXISTS "query_master_insert_admin" ON query_master;
+DROP POLICY IF EXISTS "query_master_update_admin" ON query_master;
+DROP POLICY IF EXISTS "query_master_delete_admin" ON query_master;
+DROP POLICY IF EXISTS "media_query_data_select_all" ON media_query_data;
+DROP POLICY IF EXISTS "media_query_data_insert_admin" ON media_query_data;
+DROP POLICY IF EXISTS "media_query_data_update_admin" ON media_query_data;
+DROP POLICY IF EXISTS "media_query_data_delete_admin" ON media_query_data;
 
 -- query_master: 全ユーザーが読み取り可能、adminのみ書き込み可能
 CREATE POLICY "query_master_select_all" ON query_master

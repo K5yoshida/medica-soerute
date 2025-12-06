@@ -219,3 +219,186 @@ export function addMediaName(name: string): void {
 export function getMediaNames(): string[] {
   return [...KNOWN_MEDIA_NAMES]
 }
+
+// ===========================================
+// Claude API を使った高精度分類
+// ===========================================
+
+import Anthropic from '@anthropic-ai/sdk'
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
+
+/**
+ * Claude APIを使ってキーワードの意図を分類する
+ * コスト効率のため、バッチで一括処理（並列実行で高速化）
+ */
+export async function classifyWithClaude(
+  keywords: string[],
+  batchSize: number = 100
+): Promise<Map<string, IntentClassification>> {
+  const results = new Map<string, IntentClassification>()
+
+  // バッチに分割
+  const batches: string[][] = []
+  for (let i = 0; i < keywords.length; i += batchSize) {
+    batches.push(keywords.slice(i, i + batchSize))
+  }
+
+  // 最大3バッチを並列で処理（API制限を考慮）
+  const PARALLEL_LIMIT = 3
+  for (let i = 0; i < batches.length; i += PARALLEL_LIMIT) {
+    const parallelBatches = batches.slice(i, i + PARALLEL_LIMIT)
+    const batchPromises = parallelBatches.map(batch => classifyBatchWithClaude(batch))
+    const batchResultsArray = await Promise.all(batchPromises)
+
+    for (const batchResults of batchResultsArray) {
+      batchResults.forEach((classification, keyword) => {
+        results.set(keyword, classification)
+      })
+    }
+  }
+
+  return results
+}
+
+/**
+ * バッチ単位でClaude APIを呼び出す
+ */
+async function classifyBatchWithClaude(
+  keywords: string[]
+): Promise<Map<string, IntentClassification>> {
+  const results = new Map<string, IntentClassification>()
+
+  if (keywords.length === 0) return results
+
+  const keywordList = keywords.map((k, i) => `${i + 1}. ${k}`).join('\n')
+
+  const systemPrompt = `あなたは医療・介護・福祉業界の求人検索クエリを分析する専門家です。
+
+検索キーワードを以下の4つの意図カテゴリに分類してください：
+
+1. **branded（指名検索）**: 特定のサービス名・媒体名・施設名を直接検索している
+   例: 「ジョブメドレー」「マイナビ看護師」「○○病院」
+
+2. **transactional（応募直前）**: 求人への応募・転職意図が明確
+   例: 「看護師 求人」「介護士 転職」「薬剤師 募集」
+
+3. **commercial（比較検討）**: 転職条件を比較・検討している段階
+   例: 「看護師 年収 平均」「介護福祉士 年間休日120日」「薬剤師 おすすめ転職サイト」
+
+4. **informational（情報収集）**: 一般的な情報・知識・ハウツーを求めている
+   例: 「看護師とは」「介護福祉士 資格」「履歴書 書き方」「有給休暇 平均」
+
+回答は必ず以下のJSON形式で返してください：
+[
+  {"keyword": "キーワード1", "intent": "branded|transactional|commercial|informational", "reason": "分類理由（20文字以内）"},
+  ...
+]`
+
+  const userPrompt = `以下のキーワードを分類してください：
+
+${keywordList}
+
+JSON配列のみを返してください。`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      messages: [
+        { role: 'user', content: userPrompt }
+      ],
+      system: systemPrompt,
+    })
+
+    // レスポンスからテキストを取得
+    const content = response.content[0]
+    if (content.type !== 'text') {
+      throw new Error('Unexpected response type')
+    }
+
+    // JSONをパース
+    const jsonMatch = content.text.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) {
+      throw new Error('JSON not found in response')
+    }
+
+    const classifications = JSON.parse(jsonMatch[0]) as Array<{
+      keyword: string
+      intent: string
+      reason: string
+    }>
+
+    for (const item of classifications) {
+      const intent = item.intent as QueryIntent
+      if (['branded', 'transactional', 'commercial', 'informational'].includes(intent)) {
+        results.set(item.keyword, {
+          intent,
+          confidence: 'high',
+          reason: item.reason,
+        })
+      }
+    }
+
+    // 分類されなかったキーワードにデフォルト値を設定
+    for (const keyword of keywords) {
+      if (!results.has(keyword)) {
+        results.set(keyword, {
+          intent: 'unknown',
+          confidence: 'low',
+          reason: 'AI分類失敗',
+        })
+      }
+    }
+  } catch (error) {
+    console.error('Claude API error:', error)
+    // エラー時はすべてunknownに
+    for (const keyword of keywords) {
+      results.set(keyword, {
+        intent: 'unknown',
+        confidence: 'low',
+        reason: 'API呼び出しエラー',
+      })
+    }
+  }
+
+  return results
+}
+
+/**
+ * ハイブリッド分類：ルールベース → 未分類のみAI分類
+ * コスト効率と精度のバランスを取る
+ */
+export async function classifyWithHybrid(
+  keywords: string[]
+): Promise<Map<string, IntentClassification>> {
+  const results = new Map<string, IntentClassification>()
+  const unknownKeywords: string[] = []
+
+  // まずルールベースで分類
+  for (const keyword of keywords) {
+    const result = classifyQueryIntent(keyword)
+    results.set(keyword, result)
+
+    // unknownのものはAI分類対象に
+    if (result.intent === 'unknown') {
+      unknownKeywords.push(keyword)
+    }
+  }
+
+  // 未分類が多い場合のみAI分類を実行
+  if (unknownKeywords.length > 0) {
+    console.log(`AI分類対象: ${unknownKeywords.length}件`)
+
+    const aiResults = await classifyWithClaude(unknownKeywords)
+
+    // AI結果で上書き
+    aiResults.forEach((classification, keyword) => {
+      results.set(keyword, classification)
+    })
+  }
+
+  return results
+}
