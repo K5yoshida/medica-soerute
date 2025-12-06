@@ -34,6 +34,17 @@ interface ImportJob {
   current_step: string | null
   intent_summary: Record<string, number> | null
   error_message: string | null
+  error_details: {
+    insertErrors?: string[]
+    parseErrors?: string[]
+  } | null
+  classification_stats: {
+    db_existing: number      // DB既存分類を再利用した件数
+    rule_classified: number  // ルールベースで分類した件数
+    ai_classified: number    // AI分類した件数
+    new_records: number      // 新規追加した件数
+    updated_records: number  // 更新した件数
+  } | null
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -91,6 +102,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<JobsRespon
         current_step,
         intent_summary,
         error_message,
+        error_details,
+        classification_stats,
         created_at,
         started_at,
         completed_at

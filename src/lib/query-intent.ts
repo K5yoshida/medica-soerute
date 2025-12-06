@@ -305,7 +305,7 @@ JSON配列のみを返してください。`
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
       messages: [
         { role: 'user', content: userPrompt }
@@ -353,13 +353,15 @@ JSON配列のみを返してください。`
       }
     }
   } catch (error) {
-    console.error('Claude API error:', error)
-    // エラー時はすべてunknownに
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('Claude API error:', errorMessage)
+    console.error('Full error:', error)
+    // エラー時はすべてunknownに（エラー内容を記録）
     for (const keyword of keywords) {
       results.set(keyword, {
         intent: 'unknown',
         confidence: 'low',
-        reason: 'API呼び出しエラー',
+        reason: `AI分類エラー: ${errorMessage.slice(0, 50)}`,
       })
     }
   }

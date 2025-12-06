@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ArrowLeft,
   Globe,
+  Tags,
 } from 'lucide-react'
 import type { User } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -35,6 +36,7 @@ const mainNavItems = [
   { title: 'ユーザー管理', href: '/admin/users', icon: Users },
   { title: 'ドメイン管理', href: '/admin/domains', icon: Globe },
   { title: 'CSVインポート', href: '/admin/import', icon: Upload },
+  { title: 'キーワード管理', href: '/admin/keywords', icon: Tags },
   { title: '媒体マスター', href: '/admin/media', icon: Database },
 ]
 

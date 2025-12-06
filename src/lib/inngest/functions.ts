@@ -12,26 +12,42 @@ import {
 } from '@/lib/query-intent'
 
 /**
- * 進捗更新の間隔（行数）
- * DBへの過度な書き込みを防ぐため500行ごとに更新
+ * バッチ処理のサイズ定数
+ *
+ * Vercel Functionsは60秒タイムアウト制限があるため、
+ * 各step.run()内の処理が60秒以内に収まるよう設計
  */
-const PROGRESS_UPDATE_INTERVAL = 500
+const DB_BATCH_SIZE = 500           // DB挿入: 1バッチあたりの件数
+const DB_LOOKUP_BATCH_SIZE = 1000   // DB検索: 1バッチあたりの件数（INクエリの上限考慮）
+const AI_BATCH_PER_STEP = 50        // AI分類: 1stepあたりの処理件数
+const AI_BATCH_SIZE = 50            // Claude API: 1リクエストあたりの件数
+const PROGRESS_UPDATE_INTERVAL = 500 // 進捗更新間隔
 
 /**
- * バッチ処理のサイズ
+ * パース済み行データの型定義
  */
-const DB_BATCH_SIZE = 500
-const AI_BATCH_SIZE = 100
+interface ParsedRow {
+  keyword: string
+  normalizedKeyword: string
+  searchVolume: number | null
+  cpc: number | null
+  competition: number | null
+  seoDifficulty: number | null
+  searchRank: number | null
+  traffic: number | null
+  url: string | null
+}
 
 /**
  * CSVインポートジョブ
  *
- * 5つのステップで構成:
- * 1. parse: CSVパース
- * 2. rule_classification: ルールベース分類
- * 3. ai_classification: AI分類（unknownのみ）
- * 4. db_insert: DB挿入
- * 5. finalize: 完了処理
+ * 処理フロー:
+ * 1. parse-csv: CSVパース
+ * 2. db-lookup: DBから既存分類を取得（2回目以降のインポートを高速化）
+ * 3. rule-classification: DBにないキーワードをルールベース分類
+ * 4. ai-classification-{N}: それでもunknownなキーワードをAI分類（動的にstep分割）
+ * 5. db-insert: DB挿入
+ * 6. finalize: 完了処理
  */
 export const importCsvJob = inngest.createFunction(
   {
@@ -44,20 +60,25 @@ export const importCsvJob = inngest.createFunction(
   { event: 'import/csv.started' },
   async ({ event, step }) => {
     const { jobId, fileUrl, fileName, importType: _importType, mediaId } = event.data
-    const supabase = createServiceClient()
 
-    // ジョブを processing に更新
-    await supabase
-      .from('import_jobs')
-      .update({
-        status: 'processing',
-        started_at: new Date().toISOString(),
-        current_step: 'parse',
-      })
-      .eq('id', jobId)
+    // ジョブを processing に更新（step.runの外なので専用のclientを作成）
+    await step.run('init-job', async () => {
+      const supabase = createServiceClient()
+      await supabase
+        .from('import_jobs')
+        .update({
+          status: 'processing',
+          started_at: new Date().toISOString(),
+          current_step: 'parse',
+        })
+        .eq('id', jobId)
+    })
 
-    // Step 1: CSVをパース
+    // =========================================
+    // Step 1: CSVパース
+    // =========================================
     const parsedData = await step.run('parse-csv', async () => {
+      const supabase = createServiceClient()
       // キャンセルチェック
       const { data: job } = await supabase
         .from('import_jobs')
@@ -75,7 +96,27 @@ export const importCsvJob = inngest.createFunction(
         throw new Error(`Failed to fetch file: ${response.status}`)
       }
 
-      let content = await response.text()
+      // ArrayBufferで取得してエンコーディングを検出
+      const buffer = await response.arrayBuffer()
+      const bytes = new Uint8Array(buffer)
+
+      let content: string
+
+      // UTF-16LE BOM検出 (0xFF 0xFE)
+      if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+        const decoder = new TextDecoder('utf-16le')
+        content = decoder.decode(buffer)
+      }
+      // UTF-8 BOM検出 (0xEF 0xBB 0xBF)
+      else if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+        const decoder = new TextDecoder('utf-8')
+        content = decoder.decode(buffer)
+      }
+      // デフォルトはUTF-8
+      else {
+        const decoder = new TextDecoder('utf-8')
+        content = decoder.decode(buffer)
+      }
 
       // BOM除去
       content = content.replace(/^\uFEFF/, '')
@@ -143,18 +184,6 @@ export const importCsvJob = inngest.createFunction(
       }
 
       // データ行をパース
-      interface ParsedRow {
-        keyword: string
-        normalizedKeyword: string
-        searchVolume: number | null
-        cpc: number | null
-        competition: number | null
-        seoDifficulty: number | null
-        searchRank: number | null
-        traffic: number | null
-        url: string | null
-      }
-
       const rows: ParsedRow[] = []
       const parseErrors: string[] = []
 
@@ -219,15 +248,162 @@ export const importCsvJob = inngest.createFunction(
         .from('import_jobs')
         .update({
           total_rows: rows.length,
-          current_step: 'rule_classification',
+          current_step: 'db_lookup',
         })
         .eq('id', jobId)
 
       return { rows, parseErrors }
     })
 
-    // Step 2: ルールベース分類
+    // =========================================
+    // Step 2: DBから既存分類を取得
+    // 既にquery_masterに登録済みのキーワードは分類結果を再利用
+    // is_verified=true のキーワードは分類をスキップ（保護）
+    // これにより2回目以降のインポートが大幅に高速化される
+    // =========================================
+    const dbLookupResult = await step.run('db-lookup', async () => {
+      const supabase = createServiceClient()
+      // キャンセルチェック
+      const { data: job } = await supabase
+        .from('import_jobs')
+        .select('status')
+        .eq('id', jobId)
+        .single()
+
+      if (job?.status === 'cancelled') {
+        throw new Error('Job was cancelled')
+      }
+
+      // 正規化キーワードのリストを作成
+      const normalizedKeywords = parsedData.rows.map((r) => r.normalizedKeyword)
+
+      // 既存の分類をDBから取得（バッチ処理）
+      const existingClassifications: Record<string, IntentClassification> = {}
+      const keywordsNeedingClassification: string[] = []
+      const normalizedToOriginal: Record<string, string> = {}
+
+      // 既存レコードの正規化キーワードを記録（新規/更新判定用）
+      const existingNormalizedKeywords = new Set<string>()
+
+      // 検証済みキーワードを記録（上書き防止用）
+      const verifiedNormalizedKeywords = new Set<string>()
+
+      // 正規化キーワード → オリジナルキーワードのマッピング作成
+      for (const row of parsedData.rows) {
+        normalizedToOriginal[row.normalizedKeyword] = row.keyword
+      }
+
+      // バッチでDB検索
+      for (let i = 0; i < normalizedKeywords.length; i += DB_LOOKUP_BATCH_SIZE) {
+        // キャンセルチェック（2バッチごと）
+        if (i > 0 && i % (DB_LOOKUP_BATCH_SIZE * 2) === 0) {
+          const { data: checkJob } = await supabase
+            .from('import_jobs')
+            .select('status')
+            .eq('id', jobId)
+            .single()
+
+          if (checkJob?.status === 'cancelled') {
+            throw new Error('Job was cancelled')
+          }
+        }
+
+        const batch = normalizedKeywords.slice(i, i + DB_LOOKUP_BATCH_SIZE)
+
+        const { data: existingQueries, error } = await supabase
+          .from('query_master')
+          .select('keyword_normalized, intent, intent_confidence, intent_reason, is_verified')
+          .in('keyword_normalized', batch)
+
+        if (error) {
+          console.warn('DB lookup error:', error.message)
+          // エラー時はこのバッチは分類が必要なものとして扱う
+          for (const normalized of batch) {
+            const original = normalizedToOriginal[normalized]
+            if (original) {
+              keywordsNeedingClassification.push(original)
+            }
+          }
+          continue
+        }
+
+        // 取得できたキーワードをマップに追加
+        const foundNormalized = new Set<string>()
+        if (existingQueries) {
+          for (const q of existingQueries) {
+            // 既存レコードとして記録（新規/更新判定用）
+            existingNormalizedKeywords.add(q.keyword_normalized)
+
+            // 検証済みのキーワードは分類をスキップ（保護）
+            if (q.is_verified) {
+              verifiedNormalizedKeywords.add(q.keyword_normalized)
+              const original = normalizedToOriginal[q.keyword_normalized]
+              if (original) {
+                existingClassifications[original] = {
+                  intent: q.intent as IntentClassification['intent'],
+                  confidence: (q.intent_confidence || 'high') as IntentClassification['confidence'],
+                  reason: q.intent_reason || '検証済み（保護）',
+                }
+                foundNormalized.add(q.keyword_normalized)
+              }
+              continue
+            }
+
+            // unknownでない既存分類のみ再利用
+            if (q.intent && q.intent !== 'unknown') {
+              const original = normalizedToOriginal[q.keyword_normalized]
+              if (original) {
+                existingClassifications[original] = {
+                  intent: q.intent as IntentClassification['intent'],
+                  confidence: (q.intent_confidence || 'medium') as IntentClassification['confidence'],
+                  reason: q.intent_reason || 'DB既存分類',
+                }
+                foundNormalized.add(q.keyword_normalized)
+              }
+            }
+          }
+        }
+
+        // DBにないキーワード、またはunknownのキーワードは分類が必要
+        for (const normalized of batch) {
+          if (!foundNormalized.has(normalized)) {
+            const original = normalizedToOriginal[normalized]
+            if (original && !existingClassifications[original]) {
+              keywordsNeedingClassification.push(original)
+            }
+          }
+        }
+      }
+
+      const dbHitCount = Object.keys(existingClassifications).length
+      const verifiedSkippedCount = verifiedNormalizedKeywords.size
+      const needClassificationCount = keywordsNeedingClassification.length
+
+      console.log(`DB検索完了: ${dbHitCount}件がDB一致（うち${verifiedSkippedCount}件が検証済み保護）、${needClassificationCount}件が分類必要`)
+
+      await supabase
+        .from('import_jobs')
+        .update({
+          current_step: 'rule_classification',
+        })
+        .eq('id', jobId)
+
+      return {
+        existingClassifications,
+        keywordsNeedingClassification,
+        dbHitCount,
+        verifiedSkippedCount,
+        existingNormalizedKeywords: Array.from(existingNormalizedKeywords),
+        verifiedNormalizedKeywords: Array.from(verifiedNormalizedKeywords),
+      }
+    })
+
+    // =========================================
+    // Step 3: ルールベース分類
+    // DBにないキーワード、またはunknownだったキーワードのみ処理
+    // =========================================
     const ruleClassified = await step.run('rule-classification', async () => {
+      const supabase = createServiceClient()
       // キャンセルチェック
       const { data: job } = await supabase
         .from('import_jobs')
@@ -242,14 +418,23 @@ export const importCsvJob = inngest.createFunction(
       const results: Map<string, IntentClassification> = new Map()
       const unknownKeywords: string[] = []
 
-      for (const row of parsedData.rows) {
-        const result = classifyQueryIntent(row.keyword)
-        results.set(row.keyword, result)
+      // DB既存分類を先にセット
+      for (const [keyword, classification] of Object.entries(dbLookupResult.existingClassifications)) {
+        results.set(keyword, classification)
+      }
+
+      // 分類が必要なキーワードのみルールベース分類
+      for (const keyword of dbLookupResult.keywordsNeedingClassification) {
+        const result = classifyQueryIntent(keyword)
+        results.set(keyword, result)
 
         if (result.intent === 'unknown') {
-          unknownKeywords.push(row.keyword)
+          unknownKeywords.push(keyword)
         }
       }
+
+      const ruleClassifiedCount = dbLookupResult.keywordsNeedingClassification.length - unknownKeywords.length
+      console.log(`ルールベース分類完了: ${ruleClassifiedCount}件が分類確定、${unknownKeywords.length}件がAI分類必要`)
 
       await supabase
         .from('import_jobs')
@@ -264,8 +449,72 @@ export const importCsvJob = inngest.createFunction(
       }
     })
 
-    // Step 3: AI分類（unknownのみ）
-    const aiClassified = await step.run('ai-classification', async () => {
+    // =========================================
+    // Step 4: AI分類（動的step分割）
+    // unknownキーワードをAI_BATCH_PER_STEP件ずつ別stepで処理
+    // これにより各stepが60秒以内に収まる
+    // =========================================
+    const batchCount = Math.ceil(ruleClassified.unknownKeywords.length / AI_BATCH_PER_STEP)
+    const aiClassificationResults: Record<string, IntentClassification> = {}
+
+    // ルールベース分類の結果をコピー
+    Object.assign(aiClassificationResults, ruleClassified.results)
+
+    // AI分類バッチを順次実行
+    for (let batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+      const batchResult = await step.run(`ai-classification-${batchIndex}`, async () => {
+        const supabase = createServiceClient()
+        // キャンセルチェック
+        const { data: job } = await supabase
+          .from('import_jobs')
+          .select('status')
+          .eq('id', jobId)
+          .single()
+
+        if (job?.status === 'cancelled') {
+          throw new Error('Job was cancelled')
+        }
+
+        const start = batchIndex * AI_BATCH_PER_STEP
+        const end = Math.min(start + AI_BATCH_PER_STEP, ruleClassified.unknownKeywords.length)
+        const keywords = ruleClassified.unknownKeywords.slice(start, end)
+
+        console.log(`AI分類バッチ ${batchIndex + 1}/${batchCount}: ${keywords.length}件 (${start + 1}-${end})`)
+
+        if (keywords.length === 0) {
+          return {}
+        }
+
+        try {
+          const results = await classifyWithClaude(keywords, AI_BATCH_SIZE)
+          console.log(`AI分類バッチ ${batchIndex + 1} 完了: ${results.size}件`)
+          return Object.fromEntries(results)
+        } catch (error) {
+          console.error(`AI分類バッチ ${batchIndex + 1} エラー:`, error)
+          // エラー時はunknownのまま返す
+          const fallbackResults: Record<string, IntentClassification> = {}
+          for (const kw of keywords) {
+            fallbackResults[kw] = {
+              intent: 'unknown',
+              confidence: 'low',
+              reason: 'AI分類エラー',
+            }
+          }
+          return fallbackResults
+        }
+      })
+
+      // バッチ結果をマージ
+      Object.assign(aiClassificationResults, batchResult)
+    }
+
+    // =========================================
+    // Step 5: DB挿入
+    // 検証済みキーワード（is_verified=true）は分類を上書きしない
+    // classification_sourceを設定する
+    // =========================================
+    const insertResult = await step.run('db-insert', async () => {
+      const supabase = createServiceClient()
       // キャンセルチェック
       const { data: job } = await supabase
         .from('import_jobs')
@@ -277,33 +526,7 @@ export const importCsvJob = inngest.createFunction(
         throw new Error('Job was cancelled')
       }
 
-      const results = new Map<string, IntentClassification>(
-        Object.entries(ruleClassified.results).map(([k, v]) => [
-          k,
-          v as IntentClassification,
-        ])
-      )
-
-      if (ruleClassified.unknownKeywords.length > 0) {
-        console.log(
-          `AI分類対象: ${ruleClassified.unknownKeywords.length}件`
-        )
-
-        try {
-          const aiResults = await classifyWithClaude(
-            ruleClassified.unknownKeywords,
-            AI_BATCH_SIZE
-          )
-
-          aiResults.forEach((classification, keyword) => {
-            results.set(keyword, classification)
-          })
-        } catch (error) {
-          console.error('AI分類エラー:', error)
-          // AI分類失敗時はunknownのまま
-        }
-      }
-
+      // current_stepを更新
       await supabase
         .from('import_jobs')
         .update({
@@ -311,39 +534,71 @@ export const importCsvJob = inngest.createFunction(
         })
         .eq('id', jobId)
 
-      return Object.fromEntries(results)
-    })
-
-    // Step 4: DB挿入
-    const insertResult = await step.run('db-insert', async () => {
-      // キャンセルチェック
-      const { data: job } = await supabase
-        .from('import_jobs')
-        .select('status')
-        .eq('id', jobId)
-        .single()
-
-      if (job?.status === 'cancelled') {
-        throw new Error('Job was cancelled')
-      }
-
       let successCount = 0
       let errorCount = 0
       const errors: string[] = []
 
       const classifications = new Map<string, IntentClassification>(
-        Object.entries(aiClassified).map(([k, v]) => [
+        Object.entries(aiClassificationResults).map(([k, v]) => [
           k,
           v as IntentClassification,
         ])
       )
 
+      // 検証済みキーワードのセット（上書き防止）
+      const verifiedSet = new Set(dbLookupResult.verifiedNormalizedKeywords)
+
+      // 分類ソースを判定する関数
+      const getClassificationSource = (keyword: string): string => {
+        // DB既存分類の場合
+        if (dbLookupResult.existingClassifications[keyword]) {
+          const reason = dbLookupResult.existingClassifications[keyword].reason
+          if (reason?.includes('検証済み')) return 'manual'
+          if (reason?.includes('DB既存')) return 'unknown' // 既存はソース不明
+        }
+        // ルールベース分類の場合
+        if (!ruleClassified.unknownKeywords.includes(keyword)) {
+          return 'rule'
+        }
+        // AI分類の場合
+        return 'ai'
+      }
+
       // query_master用のバッチデータを作成
-      const queryBatch = parsedData.rows.map((row) => {
+      // 重複キーワード（同じkeyword_normalized）は後の行を採用（Map上書き）
+      // 検証済みキーワードは分類情報を更新しない
+      const queryMap = new Map<string, {
+        keyword: string
+        keyword_normalized: string
+        intent: string
+        intent_confidence: string
+        intent_reason: string
+        intent_updated_at: string
+        max_monthly_search_volume: number | null
+        max_cpc: number | null
+        classification_source: string
+      }>()
+
+      let duplicateCount = 0
+      let verifiedSkippedCount = 0
+      for (const row of parsedData.rows) {
+        // 検証済みキーワードは分類を上書きしない（数値データのみ更新）
+        if (verifiedSet.has(row.normalizedKeyword)) {
+          verifiedSkippedCount++
+          // 検証済みの場合でも検索ボリューム等の数値は更新する場合がある
+          // ただし、分類情報は上書きしないのでスキップ
+          continue
+        }
+
         const classification =
           classifications.get(row.keyword) || classifyQueryIntent(row.keyword)
 
-        return {
+        // 既に同じkeyword_normalizedがあれば上書き（重複カウント）
+        if (queryMap.has(row.normalizedKeyword)) {
+          duplicateCount++
+        }
+
+        queryMap.set(row.normalizedKeyword, {
           keyword: row.keyword,
           keyword_normalized: row.normalizedKeyword,
           intent: classification.intent,
@@ -352,12 +607,20 @@ export const importCsvJob = inngest.createFunction(
           intent_updated_at: new Date().toISOString(),
           max_monthly_search_volume: row.searchVolume,
           max_cpc: row.cpc,
-        }
-      })
+          classification_source: getClassificationSource(row.keyword),
+        })
+      }
+
+      // 重複排除後の配列
+      const queryBatch = Array.from(queryMap.values())
+
+      if (duplicateCount > 0) {
+        console.log(`重複キーワード${duplicateCount}件を排除: ${parsedData.rows.length}件 → ${queryBatch.length}件`)
+      }
 
       // バッチでupsert
       for (let i = 0; i < queryBatch.length; i += DB_BATCH_SIZE) {
-        // キャンセルチェック
+        // キャンセルチェック（2バッチごと）
         if (i % (DB_BATCH_SIZE * 2) === 0) {
           const { data: checkJob } = await supabase
             .from('import_jobs')
@@ -457,12 +720,16 @@ export const importCsvJob = inngest.createFunction(
         }
       }
 
-      return { successCount, errorCount, errors }
+      return { successCount, errorCount, errors, uniqueCount: queryBatch.length, duplicateCount, verifiedSkippedCount }
     })
 
-    // Step 5: 完了処理
+    // =========================================
+    // Step 6: 完了処理
+    // =========================================
     await step.run('finalize', async () => {
-      // 意図分類サマリを集計
+      const supabase = createServiceClient()
+
+      // 意図分類サマリを集計（重複排除後のデータで集計）
       const intentSummary = {
         branded: 0,
         transactional: 0,
@@ -472,13 +739,20 @@ export const importCsvJob = inngest.createFunction(
       }
 
       const classifications = new Map<string, IntentClassification>(
-        Object.entries(aiClassified).map(([k, v]) => [
+        Object.entries(aiClassificationResults).map(([k, v]) => [
           k,
           v as IntentClassification,
         ])
       )
 
+      // 重複排除してから集計（keyword_normalizedで一意にする）
+      const countedNormalized = new Set<string>()
       for (const row of parsedData.rows) {
+        if (countedNormalized.has(row.normalizedKeyword)) {
+          continue // 既にカウント済みの重複はスキップ
+        }
+        countedNormalized.add(row.normalizedKeyword)
+
         const classification = classifications.get(row.keyword)
         if (classification) {
           const intent = classification.intent as keyof typeof intentSummary
@@ -488,20 +762,35 @@ export const importCsvJob = inngest.createFunction(
         }
       }
 
+      // 分類統計情報
+      const classificationStats = {
+        db_existing: dbLookupResult.dbHitCount,
+        rule_classified: dbLookupResult.keywordsNeedingClassification.length - ruleClassified.unknownKeywords.length,
+        ai_classified: ruleClassified.unknownKeywords.length,
+        verified_skipped: insertResult.verifiedSkippedCount,
+        total_input: parsedData.rows.length,
+        unique_keywords: insertResult.uniqueCount,
+        duplicate_keywords: insertResult.duplicateCount,
+      }
+
       // ジョブを完了状態に更新
       await supabase
         .from('import_jobs')
         .update({
           status: 'completed',
-          processed_rows: parsedData.rows.length,
+          processed_rows: insertResult.uniqueCount, // 重複排除後の件数
           success_count: insertResult.successCount,
           error_count: insertResult.errorCount + parsedData.parseErrors.length,
           intent_summary: intentSummary,
+          classification_stats: classificationStats,
           error_details:
-            insertResult.errors.length > 0 || parsedData.parseErrors.length > 0
+            insertResult.errors.length > 0 || parsedData.parseErrors.length > 0 || insertResult.duplicateCount > 0
               ? {
                   insertErrors: insertResult.errors,
                   parseErrors: parsedData.parseErrors,
+                  duplicateInfo: insertResult.duplicateCount > 0
+                    ? `CSV内に${insertResult.duplicateCount}件の重複キーワードがありました（後の行を採用）`
+                    : undefined,
                 }
               : null,
           current_step: 'finalize',
@@ -512,9 +801,11 @@ export const importCsvJob = inngest.createFunction(
       return {
         success: true,
         totalRows: parsedData.rows.length,
+        uniqueRows: insertResult.uniqueCount,
         successCount: insertResult.successCount,
         errorCount: insertResult.errorCount,
         intentSummary,
+        classificationStats,
       }
     })
   }

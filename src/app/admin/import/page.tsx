@@ -18,7 +18,6 @@ import {
   Play,
   List,
 } from 'lucide-react'
-import { createBrowserClient } from '@supabase/ssr'
 
 /**
  * SC-903: CSVインポート画面（4ステップウィザード版）
@@ -64,6 +63,19 @@ interface ImportJob {
   current_step: string | null
   intent_summary: Record<string, number> | null
   error_message: string | null
+  error_details: {
+    insertErrors?: string[]
+    parseErrors?: string[]
+    duplicateInfo?: string
+  } | null
+  classification_stats: {
+    db_existing: number
+    rule_classified: number
+    ai_classified: number
+    total_input: number
+    unique_keywords: number
+    duplicate_keywords: number
+  } | null
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -95,6 +107,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
 
 const STEP_LABELS: Record<string, string> = {
   parse: 'CSVパース',
+  db_lookup: 'DB検索',
   rule_classification: 'ルール分類',
   ai_classification: 'AI分類',
   db_insert: 'データ保存',
@@ -122,13 +135,16 @@ export default function ImportPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showJobList, setShowJobList] = useState(false)
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Preview state
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewData, setPreviewData] = useState<{
+    items: { keyword: string; intent: string; intent_reason: string; search_volume: number | null }[]
+    total: number
+  } | null>(null)
+  const [previewFilter, setPreviewFilter] = useState<string>('all')
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
 
-  // Supabase client for realtime
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 媒体リストを取得
   useEffect(() => {
@@ -163,37 +179,20 @@ export default function ImportPage() {
     fetchJobs()
   }, [fetchJobs])
 
-  // Supabase Realtimeで進捗を購読
+  // ポーリングで進捗を更新
+  // Supabase RealtimeはRLSの制限でanon keyでは正常に動作しないことがあるため、
+  // 安定性を優先してポーリングをメインにする
   useEffect(() => {
-    const channel = supabase
-      .channel('import_jobs_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'import_jobs',
-        },
-        (payload) => {
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            const updatedJob = payload.new as ImportJob
-            setJobs((prev) => {
-              const exists = prev.find((j) => j.id === updatedJob.id)
-              if (exists) {
-                return prev.map((j) => (j.id === updatedJob.id ? updatedJob : j))
-              } else {
-                return [updatedJob, ...prev].slice(0, 10)
-              }
-            })
-          }
-        }
-      )
-      .subscribe()
+    // 処理中のジョブがある場合は2秒間隔、なければ5秒間隔
+    const hasProcessingJob = jobs.some((j) => j.status === 'processing' || j.status === 'pending')
+    const interval = hasProcessingJob ? 2000 : 5000
+
+    const pollingInterval = setInterval(fetchJobs, interval)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(pollingInterval)
     }
-  }, [supabase])
+  }, [fetchJobs, jobs])
 
   // ファイル選択
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,7 +278,9 @@ export default function ImportPage() {
       if (data.success && data.data) {
         setCurrentJobId(data.data.jobId)
         setCurrentStep(4)
+        // 即座に一度取得し、少し待ってから再度取得（DBに反映されるまでのラグ対策）
         fetchJobs()
+        setTimeout(() => fetchJobs(), 1000)
       } else {
         setValidationError(data.error?.message || 'ジョブの開始に失敗しました')
       }
@@ -360,6 +361,31 @@ export default function ImportPage() {
 
   // 現在のジョブを取得
   const currentJob = currentJobId ? jobs.find((j) => j.id === currentJobId) : null
+
+  // プレビュー取得
+  const fetchPreview = async (jobId: string, intent?: string) => {
+    setIsLoadingPreview(true)
+    try {
+      const filter = intent || previewFilter
+      const url = `/api/admin/import/jobs/${jobId}/preview${filter !== 'all' ? `?intent=${filter}` : ''}`
+      const res = await fetch(url)
+      const data = await res.json()
+      if (data.success && data.data) {
+        setPreviewData(data.data)
+      }
+    } catch {
+      console.error('Failed to fetch preview')
+    } finally {
+      setIsLoadingPreview(false)
+    }
+  }
+
+  // プレビューを開く
+  const openPreview = (jobId: string) => {
+    setShowPreview(true)
+    setPreviewFilter('all')
+    fetchPreview(jobId)
+  }
 
   return (
     <>
@@ -834,8 +860,8 @@ export default function ImportPage() {
                             処理ステップ
                           </div>
                           <div style={{ display: 'flex', gap: '4px' }}>
-                            {(['parse', 'rule_classification', 'ai_classification', 'db_insert', 'finalize'] as const).map((step, index) => {
-                              const stepOrder = ['parse', 'rule_classification', 'ai_classification', 'db_insert', 'finalize']
+                            {(['parse', 'db_lookup', 'rule_classification', 'ai_classification', 'db_insert', 'finalize'] as const).map((step, index) => {
+                              const stepOrder = ['parse', 'db_lookup', 'rule_classification', 'ai_classification', 'db_insert', 'finalize']
                               const currentStepIndex = currentJob.current_step ? stepOrder.indexOf(currentJob.current_step) : -1
                               const thisStepIndex = stepOrder.indexOf(step)
 
@@ -878,7 +904,7 @@ export default function ImportPage() {
                                     {STEP_LABELS[step]}
                                   </span>
                                   {/* Connector line */}
-                                  {index < 4 && (
+                                  {index < 5 && (
                                     <div
                                       style={{
                                         position: 'absolute',
@@ -1064,6 +1090,94 @@ export default function ImportPage() {
                               </div>
                             </div>
                           )}
+
+                          {/* Classification Stats */}
+                          {currentJob.classification_stats && (
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#52525B', marginBottom: '8px' }}>
+                                分類処理の内訳
+                              </div>
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(3, 1fr)',
+                                  gap: '8px',
+                                  fontSize: '11px',
+                                }}
+                              >
+                                <div style={{ padding: '8px', background: '#F5F3FF', borderRadius: '6px' }}>
+                                  <div style={{ fontWeight: 600, color: '#7C3AED' }}>
+                                    {currentJob.classification_stats.db_existing}
+                                  </div>
+                                  <div style={{ color: '#6D28D9' }}>DB既存</div>
+                                </div>
+                                <div style={{ padding: '8px', background: '#ECFDF5', borderRadius: '6px' }}>
+                                  <div style={{ fontWeight: 600, color: '#059669' }}>
+                                    {currentJob.classification_stats.rule_classified}
+                                  </div>
+                                  <div style={{ color: '#047857' }}>ルール分類</div>
+                                </div>
+                                <div style={{ padding: '8px', background: '#FEF3C7', borderRadius: '6px' }}>
+                                  <div style={{ fontWeight: 600, color: '#D97706' }}>
+                                    {currentJob.classification_stats.ai_classified}
+                                  </div>
+                                  <div style={{ color: '#B45309' }}>AI分類</div>
+                                </div>
+                              </div>
+                              {currentJob.classification_stats.duplicate_keywords > 0 && (
+                                <div style={{ marginTop: '8px', fontSize: '11px', color: '#A1A1AA' }}>
+                                  ※ CSV内の重複: {currentJob.classification_stats.duplicate_keywords}件
+                                  （{currentJob.classification_stats.total_input}件 → {currentJob.classification_stats.unique_keywords}件）
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Error Details */}
+                          {currentJob.error_details && (
+                            <div
+                              style={{
+                                padding: '12px',
+                                background: '#FFFBEB',
+                                border: '1px solid #FDE68A',
+                                borderRadius: '8px',
+                                marginBottom: '16px',
+                              }}
+                            >
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#92400E', marginBottom: '8px' }}>
+                                処理詳細
+                              </div>
+                              {currentJob.error_details.duplicateInfo && (
+                                <p style={{ fontSize: '11px', color: '#78350F', marginBottom: '4px' }}>
+                                  {currentJob.error_details.duplicateInfo}
+                                </p>
+                              )}
+                              {currentJob.error_details.insertErrors && currentJob.error_details.insertErrors.length > 0 && (
+                                <div style={{ marginTop: '8px' }}>
+                                  <div style={{ fontSize: '11px', color: '#991B1B', fontWeight: 500 }}>
+                                    挿入エラー:
+                                  </div>
+                                  {currentJob.error_details.insertErrors.slice(0, 3).map((err, i) => (
+                                    <p key={i} style={{ fontSize: '10px', color: '#B91C1C', marginLeft: '8px' }}>
+                                      • {err}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              {currentJob.error_details.parseErrors && currentJob.error_details.parseErrors.length > 0 && (
+                                <div style={{ marginTop: '8px' }}>
+                                  <div style={{ fontSize: '11px', color: '#991B1B', fontWeight: 500 }}>
+                                    パースエラー:
+                                  </div>
+                                  {currentJob.error_details.parseErrors.slice(0, 3).map((err, i) => (
+                                    <p key={i} style={{ fontSize: '10px', color: '#B91C1C', marginLeft: '8px' }}>
+                                      • {err}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
 
@@ -1085,7 +1199,25 @@ export default function ImportPage() {
                       )}
 
                       {/* Actions */}
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {currentJob.status === 'completed' && (
+                          <button
+                            onClick={() => openPreview(currentJob.id)}
+                            style={{
+                              flex: 1,
+                              padding: '12px',
+                              background: '#10B981',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            結果を見る
+                          </button>
+                        )}
                         {(currentJob.status === 'completed' ||
                           currentJob.status === 'failed' ||
                           currentJob.status === 'cancelled') && (
@@ -1155,7 +1287,36 @@ export default function ImportPage() {
                       <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" style={{ color: '#7C3AED' }} />
                       <p style={{ fontSize: '14px', color: '#52525B' }}>ジョブを開始中...</p>
                     </div>
-                  ) : null}
+                  ) : currentJobId ? (
+                    <div style={{ padding: '48px', textAlign: 'center' }}>
+                      <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" style={{ color: '#7C3AED' }} />
+                      <p style={{ fontSize: '14px', color: '#52525B' }}>ジョブ情報を取得中...</p>
+                      <p style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '8px' }}>
+                        ジョブID: {currentJobId.slice(0, 8)}...
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '48px', textAlign: 'center' }}>
+                      <AlertCircle className="h-8 w-8 mx-auto mb-3" style={{ color: '#A1A1AA' }} />
+                      <p style={{ fontSize: '14px', color: '#52525B' }}>ジョブが選択されていません</p>
+                      <button
+                        onClick={resetWizard}
+                        style={{
+                          marginTop: '16px',
+                          padding: '10px 16px',
+                          background: '#7C3AED',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        新しいインポートを開始
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1431,6 +1592,168 @@ export default function ImportPage() {
           )}
         </div>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && currentJob && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              width: '90%',
+              maxWidth: '900px',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #E4E4E7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#18181B', margin: 0 }}>
+                  分類結果プレビュー
+                </h3>
+                <p style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '2px' }}>
+                  {currentJob.file_name} - {previewData?.total || 0}件
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPreview(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  color: '#A1A1AA',
+                  cursor: 'pointer',
+                  padding: '4px',
+                }}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Filter */}
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #F4F4F5' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {['all', 'branded', 'transactional', 'commercial', 'informational', 'unknown'].map((intent) => (
+                  <button
+                    key={intent}
+                    onClick={() => {
+                      setPreviewFilter(intent)
+                      fetchPreview(currentJob.id, intent)
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      background: previewFilter === intent ? '#7C3AED' : '#F4F4F5',
+                      color: previewFilter === intent ? '#FFFFFF' : '#52525B',
+                    }}
+                  >
+                    {intent === 'all' ? '全て' : INTENT_LABELS[intent as QueryIntent]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+              {isLoadingPreview ? (
+                <div style={{ padding: '48px', textAlign: 'center' }}>
+                  <Loader2 className="h-8 w-8 mx-auto animate-spin" style={{ color: '#7C3AED' }} />
+                  <p style={{ fontSize: '14px', color: '#52525B', marginTop: '8px' }}>読み込み中...</p>
+                </div>
+              ) : previewData && previewData.items.length > 0 ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ background: '#F4F4F5', position: 'sticky', top: 0 }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B' }}>
+                        キーワード
+                      </th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '100px' }}>
+                        意図分類
+                      </th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '200px' }}>
+                        分類理由
+                      </th>
+                      <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 500, color: '#52525B', width: '100px' }}>
+                        検索数
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewData.items.map((item, i) => (
+                      <tr
+                        key={i}
+                        style={{
+                          borderBottom: '1px solid #F4F4F5',
+                          background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                        }}
+                      >
+                        <td style={{ padding: '10px 16px', color: '#18181B' }}>
+                          {item.keyword}
+                        </td>
+                        <td style={{ padding: '10px 16px' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '10px',
+                              fontWeight: 500,
+                              background: item.intent === 'unknown' ? '#F4F4F5' : `${INTENT_COLORS[item.intent as QueryIntent]}20`,
+                              color: item.intent === 'unknown' ? '#52525B' : INTENT_COLORS[item.intent as QueryIntent],
+                            }}
+                          >
+                            {INTENT_LABELS[item.intent as QueryIntent] || item.intent}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 16px', color: '#71717A', fontSize: '11px' }}>
+                          {item.intent_reason}
+                        </td>
+                        <td style={{ padding: '10px 16px', textAlign: 'right', color: '#52525B' }}>
+                          {item.search_volume?.toLocaleString() || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: '48px', textAlign: 'center', color: '#A1A1AA' }}>
+                  データがありません
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

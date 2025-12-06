@@ -19,6 +19,8 @@ export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed'
 export type MediaCategory = 'general' | 'nursing' | 'pharmacy' | 'dental' | 'welfare' | 'rehabilitation'
 // クエリ意図: branded=指名検索, transactional=応募直前, commercial=比較検討, informational=情報収集
 export type QueryIntentType = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
+// 分類ソース: rule=ルールベース, ai=Claude AI, manual=管理者手動, unknown=不明
+export type ClassificationSourceType = 'rule' | 'ai' | 'manual' | 'unknown'
 
 // ----- Tables -----
 export interface Database {
@@ -239,6 +241,10 @@ export interface Database {
           intent_updated_at: string | null
           max_monthly_search_volume: number | null
           max_cpc: number | null
+          is_verified: boolean
+          verified_by: string | null
+          verified_at: string | null
+          classification_source: ClassificationSourceType
           created_at: string
           updated_at: string
         }
@@ -252,6 +258,10 @@ export interface Database {
           intent_updated_at?: string | null
           max_monthly_search_volume?: number | null
           max_cpc?: number | null
+          is_verified?: boolean
+          verified_by?: string | null
+          verified_at?: string | null
+          classification_source?: ClassificationSourceType
           created_at?: string
           updated_at?: string
         }
@@ -265,6 +275,10 @@ export interface Database {
           intent_updated_at?: string | null
           max_monthly_search_volume?: number | null
           max_cpc?: number | null
+          is_verified?: boolean
+          verified_by?: string | null
+          verified_at?: string | null
+          classification_source?: ClassificationSourceType
           created_at?: string
           updated_at?: string
         }
