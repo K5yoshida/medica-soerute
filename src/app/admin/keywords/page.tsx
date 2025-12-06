@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  ExternalLink,
 } from 'lucide-react'
 
 // 意図分類のラベルと色
@@ -417,7 +418,18 @@ export default function KeywordsPage() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{keyword.keyword}</div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`https://www.google.com/search?q=${encodeURIComponent(keyword.keyword)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group flex items-center gap-1.5 font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                          title="Googleで検索"
+                        >
+                          <span className="group-hover:underline">{keyword.keyword}</span>
+                          <ExternalLink className="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
+                        </a>
+                      </div>
                       {keyword.intent_reason && (
                         <div className="text-xs text-gray-500 mt-0.5 truncate max-w-[300px]">
                           {keyword.intent_reason}
@@ -512,7 +524,18 @@ export default function KeywordsPage() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">キーワード</label>
-                <div className="text-gray-900 font-medium">{editingKeyword.keyword}</div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://www.google.com/search?q=${encodeURIComponent(editingKeyword.keyword)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-gray-900 font-medium hover:text-blue-600 transition-colors group"
+                  >
+                    <span className="group-hover:underline">{editingKeyword.keyword}</span>
+                    <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
+                  </a>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">クリックでGoogle検索結果を確認</p>
               </div>
 
               <div>
