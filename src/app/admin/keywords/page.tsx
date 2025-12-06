@@ -21,6 +21,7 @@ const INTENT_CONFIG = {
   transactional: { label: '応募直前', color: '#10B981', bg: 'rgba(16, 185, 129, 0.1)' },
   commercial: { label: '比較検討', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.1)' },
   informational: { label: '情報収集', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)' },
+  b2b: { label: '法人向け', color: '#EC4899', bg: 'rgba(236, 72, 153, 0.1)' },
   unknown: { label: '未分類', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.1)' },
 } as const
 

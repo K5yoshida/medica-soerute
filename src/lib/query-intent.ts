@@ -9,9 +9,10 @@
  * - transactional: 応募直前（求人・転職など応募意図が明確）
  * - commercial: 比較検討（条件比較、選び方を調べている）
  * - informational: 情報収集（知識・ハウツー・一般情報）
+ * - b2b: 法人向け（採用担当者・人事向けの情報）
  * - unknown: 判定不能（AI判定が必要）
  */
-export type QueryIntent = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
+export type QueryIntent = 'branded' | 'transactional' | 'commercial' | 'informational' | 'b2b' | 'unknown'
 
 /**
  * 意図分類の結果
@@ -65,13 +66,50 @@ const JOB_KEYWORDS = [
 ]
 
 /**
- * 条件キーワード
+ * 条件キーワード（求職者向け）
  */
 const CONDITION_KEYWORDS = [
   '年収', '給料', '給与', '月給', '時給', '賞与', 'ボーナス',
   '年間休日', '休日', '休み', '有給', '週休',
   '残業', '夜勤', '日勤', 'オンコール',
   '福利厚生', '社会保険', '退職金',
+]
+
+/**
+ * 法人向け（B2B）キーワード
+ * 採用担当者・人事が検索するキーワード
+ */
+const B2B_KEYWORDS = [
+  // 採用コスト・費用関連
+  '採用コスト', '採用費用', '採用単価', '紹介手数料', '紹介料',
+  '求人広告 費用', '求人広告 料金', '採用予算', '採用費',
+  // 法規制・労務関連
+  '最低賃金', '労働基準法', '労基法', '雇用契約', '労働契約',
+  '雇用保険', '労災保険', '社会保険料', '36協定',
+  '配置基準', '人員配置', '人員基準',
+  // 助成金・補助金
+  '助成金', '補助金', 'キャリアアップ助成金', '雇用調整助成金',
+  'トライアル雇用', '特定求職者雇用開発助成金',
+  // 採用・人事戦略
+  '採用計画', '採用戦略', '人材確保', '人材不足', '人手不足',
+  '定着率', '離職率', '採用難', '人材獲得',
+  '採用成功率', '採用効率', 'ダイレクトリクルーティング',
+  // 求人媒体選定（法人視点）
+  '求人媒体 比較', '求人サイト 比較', '人材紹介 比較',
+  '求人媒体 選び方', '採用媒体', '採用チャネル',
+  // 人事・労務管理
+  '人事評価', '給与計算', '勤怠管理', 'シフト管理',
+  '採用管理', 'ATS', '応募者管理',
+]
+
+/**
+ * 法人向け確定キーワード（これが含まれていれば確実にB2B）
+ */
+const B2B_STRONG_KEYWORDS = [
+  '採用コスト', '採用単価', '紹介手数料', '採用予算',
+  '配置基準', '人員配置', '36協定', '助成金', '補助金',
+  '採用計画', '採用戦略', '定着率', '離職率',
+  '採用媒体', '採用チャネル', 'ATS', '応募者管理',
 ]
 
 /**
@@ -86,7 +124,29 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     return { intent: 'unknown', confidence: 'low', reason: '空のキーワード' }
   }
 
-  // 1. 指名検索 - 媒体名を含む
+  // 1. 法人向け（B2B）- 強いキーワードを最優先でチェック
+  for (const b2bKeyword of B2B_STRONG_KEYWORDS) {
+    if (k.includes(b2bKeyword.toLowerCase())) {
+      return {
+        intent: 'b2b',
+        confidence: 'high',
+        reason: `法人向けキーワード「${b2bKeyword}」を含む`,
+      }
+    }
+  }
+
+  // 2. 法人向け（B2B）- 通常のB2Bキーワード
+  for (const b2bKeyword of B2B_KEYWORDS) {
+    if (k.includes(b2bKeyword.toLowerCase())) {
+      return {
+        intent: 'b2b',
+        confidence: 'medium',
+        reason: `採用担当向けキーワード「${b2bKeyword}」を含む`,
+      }
+    }
+  }
+
+  // 3. 指名検索 - 媒体名を含む
   for (const mediaName of KNOWN_MEDIA_NAMES) {
     if (k.includes(mediaName.toLowerCase())) {
       return {
@@ -97,8 +157,11 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 2. 応募直前 - 求人意図が明確
-  if (/求人|転職|募集|採用|応募|中途/.test(k)) {
+  // 4. 応募直前 - 求人意図が明確（求職者視点）
+  // 注: 「採用」は法人視点で使われることも多いが、「求人」「転職」「応募」は求職者視点
+  if (/求人|転職|募集|応募|中途採用/.test(k)) {
+    // 「採用」単体は法人視点の可能性があるので除外し、
+    // 「中途採用」のような求職者視点の場合のみマッチ
     return {
       intent: 'transactional',
       confidence: 'high',
@@ -106,7 +169,7 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 3. 情報収集 - ハウツー/解説/一般知識（優先度高）
+  // 5. 情報収集 - ハウツー/解説/一般知識（優先度高）
   if (/とは$|とは\s|書き方|意味|方法|やり方|平均|相場|違いは/.test(k)) {
     return {
       intent: 'informational',
@@ -115,7 +178,7 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 4. 比較検討 - 具体的数値を含む
+  // 6. 比較検討 - 具体的数値を含む（求職者の条件検討）
   if (/\d+日|\d+万|\d+円/.test(k)) {
     return {
       intent: 'commercial',
@@ -124,8 +187,10 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 5. 比較検討 - 比較系キーワード
+  // 7. 比較検討 - 比較系キーワード（求職者・法人両方あり得る）
   if (/比較|ランキング|おすすめ|オススメ|人気|評判|口コミ|vs/.test(k)) {
+    // 「求人媒体 比較」「採用媒体」などはB2Bで先に判定済みなので
+    // ここに来るのは求職者視点の比較検討
     return {
       intent: 'commercial',
       confidence: 'high',
@@ -133,7 +198,7 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 6. 職種 × 条件 の組み合わせ判定
+  // 8. 職種 × 条件 の組み合わせ判定
   const hasJob = JOB_KEYWORDS.some(job => k.includes(job.toLowerCase()))
   const hasCondition = CONDITION_KEYWORDS.some(cond => k.includes(cond.toLowerCase()))
 
@@ -145,7 +210,7 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 7. 条件キーワード単体 → 情報収集
+  // 9. 条件キーワード単体 → 情報収集
   if (hasCondition && !hasJob) {
     return {
       intent: 'informational',
@@ -154,7 +219,7 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 8. 職種キーワード単体 → 判定不能（求人か情報か不明）
+  // 10. 職種キーワード単体 → 判定不能（求人か情報か不明）
   if (hasJob && !hasCondition) {
     return {
       intent: 'unknown',
@@ -190,6 +255,7 @@ export const INTENT_LABELS: Record<QueryIntent, string> = {
   transactional: '応募直前',
   commercial: '比較検討',
   informational: '情報収集',
+  b2b: '法人向け',
   unknown: '未分類',
 }
 
@@ -201,6 +267,7 @@ export const INTENT_DESCRIPTIONS: Record<QueryIntent, string> = {
   transactional: '求人への応募意欲が高い状態',
   commercial: '転職条件を比較検討している段階',
   informational: '一般的な情報や知識を求めている',
+  b2b: '採用担当者・人事が検索している',
   unknown: 'AI分析が必要',
 }
 
@@ -277,7 +344,7 @@ async function classifyBatchWithClaude(
 
   const systemPrompt = `あなたは医療・介護・福祉業界の求人検索クエリを分析する専門家です。
 
-検索キーワードを以下の4つの意図カテゴリに分類してください：
+検索キーワードを以下の5つの意図カテゴリに分類してください：
 
 1. **branded（指名検索）**: 特定のサービス名・媒体名・施設名を直接検索している
    例: 「ジョブメドレー」「マイナビ看護師」「○○病院」
@@ -291,9 +358,12 @@ async function classifyBatchWithClaude(
 4. **informational（情報収集）**: 一般的な情報・知識・ハウツーを求めている
    例: 「看護師とは」「介護福祉士 資格」「履歴書 書き方」「有給休暇 平均」
 
+5. **b2b（法人向け）**: 採用担当者・人事が検索するキーワード
+   例: 「採用コスト」「最低賃金」「紹介手数料」「助成金」「離職率」「人手不足」「配置基準」
+
 回答は必ず以下のJSON形式で返してください：
 [
-  {"keyword": "キーワード1", "intent": "branded|transactional|commercial|informational", "reason": "分類理由（20文字以内）"},
+  {"keyword": "キーワード1", "intent": "branded|transactional|commercial|informational|b2b", "reason": "分類理由（20文字以内）"},
   ...
 ]`
 
@@ -333,7 +403,7 @@ JSON配列のみを返してください。`
 
     for (const item of classifications) {
       const intent = item.intent as QueryIntent
-      if (['branded', 'transactional', 'commercial', 'informational'].includes(intent)) {
+      if (['branded', 'transactional', 'commercial', 'informational', 'b2b'].includes(intent)) {
         results.set(item.keyword, {
           intent,
           confidence: 'high',
