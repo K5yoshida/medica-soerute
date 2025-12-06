@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * ラッコキーワードCSVをインポート
+ * ラッコキーワードCSVをインポート（バッチ処理版）
  */
 async function importRakkoKeywords(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,74 +157,129 @@ async function importRakkoKeywords(
   let errorCount = 0
   const errors: string[] = []
 
-  // データ行を処理
+  // データ行をパースしてバッチ用配列を作成
+  const BATCH_SIZE = 100
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const queryBatch: any[] = []
+
+  interface ParsedRow {
+    keyword: string
+    normalizedKeyword: string
+    searchVolume: number | null
+    cpc: number | null
+    competition: number | null
+    seoDifficulty: number | null
+    searchRank: number | null
+    traffic: number | null
+    url: string | null
+    lineNum: number
+  }
+  const parsedRows: ParsedRow[] = []
+
+  // まず全行をパース
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
 
     try {
-      // CSVパース（クォート対応）
       const values = parseCSVLine(line, delimiter)
-
       const keyword = values[keywordIndex]?.replace(/^["']|["']$/g, '').trim()
       if (!keyword) continue
 
-      // 意図分類を実行
+      const normalizedKeyword = keyword.toLowerCase().replace(/\s+/g, ' ').trim()
       const intentResult = classifyQueryIntent(keyword)
 
-      // query_masterにUPSERT
-      const normalizedKeyword = keyword.toLowerCase().replace(/\s+/g, ' ').trim()
+      queryBatch.push({
+        keyword,
+        keyword_normalized: normalizedKeyword,
+        intent: intentResult.intent,
+        intent_confidence: intentResult.confidence,
+        intent_reason: intentResult.reason,
+        intent_updated_at: new Date().toISOString(),
+        max_monthly_search_volume: searchVolumeIndex !== -1 ? parseNumber(values[searchVolumeIndex]) : null,
+        max_cpc: cpcIndex !== -1 ? parseFloat(values[cpcIndex]?.replace(/[^0-9.]/g, '') || '0') || null : null,
+      })
 
-      const { data: queryData, error: queryError } = await supabase
-        .from('query_master')
-        .upsert(
-          {
-            keyword,
-            keyword_normalized: normalizedKeyword,
-            intent: intentResult.intent,
-            intent_confidence: intentResult.confidence,
-            intent_reason: intentResult.reason,
-            intent_updated_at: new Date().toISOString(),
-            max_monthly_search_volume: searchVolumeIndex !== -1 ? parseNumber(values[searchVolumeIndex]) : null,
-            max_cpc: cpcIndex !== -1 ? parseFloat(values[cpcIndex]?.replace(/[^0-9.]/g, '') || '0') || null : null,
-          },
-          { onConflict: 'keyword_normalized' }
-        )
-        .select('id')
-        .single()
-
-      if (queryError) {
-        throw new Error(`query_master upsert failed: ${queryError.message}`)
-      }
-
-      // media_idが指定されている場合はmedia_query_dataも作成
-      if (mediaId && queryData) {
-        const { error: mediaQueryError } = await supabase.from('media_query_data').upsert(
-          {
-            query_id: queryData.id,
-            media_id: mediaId,
-            ranking_position: searchRankIndex !== -1 ? parseNumber(values[searchRankIndex]) : null,
-            monthly_search_volume: searchVolumeIndex !== -1 ? parseNumber(values[searchVolumeIndex]) : null,
-            estimated_traffic: trafficIndex !== -1 ? parseNumber(values[trafficIndex]) : null,
-            cpc: cpcIndex !== -1 ? parseFloat(values[cpcIndex]?.replace(/[^0-9.]/g, '') || '0') || null : null,
-            competition_level: competitionIndex !== -1 ? parseNumber(values[competitionIndex]) : null,
-            seo_difficulty: seoDifficultyIndex !== -1 ? parseNumber(values[seoDifficultyIndex]) : null,
-            landing_url: urlIndex !== -1 ? values[urlIndex]?.replace(/^["']|["']$/g, '').trim() || null : null,
-            source_file: fileName,
-          },
-          { onConflict: 'media_id,query_id' }
-        )
-
-        if (mediaQueryError) {
-          console.warn(`media_query_data upsert warning: ${mediaQueryError.message}`)
-        }
-      }
-
-      successCount++
+      parsedRows.push({
+        keyword,
+        normalizedKeyword,
+        searchVolume: searchVolumeIndex !== -1 ? parseNumber(values[searchVolumeIndex]) : null,
+        cpc: cpcIndex !== -1 ? parseFloat(values[cpcIndex]?.replace(/[^0-9.]/g, '') || '0') || null : null,
+        competition: competitionIndex !== -1 ? parseNumber(values[competitionIndex]) : null,
+        seoDifficulty: seoDifficultyIndex !== -1 ? parseNumber(values[seoDifficultyIndex]) : null,
+        searchRank: searchRankIndex !== -1 ? parseNumber(values[searchRankIndex]) : null,
+        traffic: trafficIndex !== -1 ? parseNumber(values[trafficIndex]) : null,
+        url: urlIndex !== -1 ? values[urlIndex]?.replace(/^["']|["']$/g, '').trim() || null : null,
+        lineNum: i + 1,
+      })
     } catch (err) {
       errorCount++
       if (errors.length < 5) {
-        errors.push(`行${i + 1}: ${err instanceof Error ? err.message : '不明なエラー'}`)
+        errors.push(`行${i + 1}: ${err instanceof Error ? err.message : 'パースエラー'}`)
+      }
+    }
+  }
+
+  // query_masterにバッチupsert
+  for (let i = 0; i < queryBatch.length; i += BATCH_SIZE) {
+    const batch = queryBatch.slice(i, i + BATCH_SIZE)
+    const { error: batchError } = await supabase
+      .from('query_master')
+      .upsert(batch, { onConflict: 'keyword_normalized', ignoreDuplicates: false })
+
+    if (batchError) {
+      console.error('Batch upsert error:', batchError)
+      errorCount += batch.length
+      if (errors.length < 5) {
+        errors.push(`バッチ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message}`)
+      }
+    } else {
+      successCount += batch.length
+    }
+  }
+
+  // media_idが指定されている場合はmedia_query_dataも作成
+  if (mediaId && parsedRows.length > 0) {
+    // まずquery_masterからIDを取得
+    const normalizedKeywords = parsedRows.map((r) => r.normalizedKeyword)
+    const { data: queryIds } = await supabase
+      .from('query_master')
+      .select('id, keyword_normalized')
+      .in('keyword_normalized', normalizedKeywords)
+
+    if (queryIds && queryIds.length > 0) {
+      const keywordToId = new Map(queryIds.map((q: { id: string; keyword_normalized: string }) => [q.keyword_normalized, q.id]))
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mediaQueryBatch: any[] = []
+      for (const row of parsedRows) {
+        const queryId = keywordToId.get(row.normalizedKeyword)
+        if (queryId) {
+          mediaQueryBatch.push({
+            query_id: queryId,
+            media_id: mediaId,
+            ranking_position: row.searchRank,
+            monthly_search_volume: row.searchVolume,
+            estimated_traffic: row.traffic,
+            cpc: row.cpc,
+            competition_level: row.competition,
+            seo_difficulty: row.seoDifficulty,
+            landing_url: row.url,
+            source_file: fileName,
+          })
+        }
+      }
+
+      // media_query_dataにバッチupsert
+      for (let i = 0; i < mediaQueryBatch.length; i += BATCH_SIZE) {
+        const batch = mediaQueryBatch.slice(i, i + BATCH_SIZE)
+        const { error: mediaError } = await supabase
+          .from('media_query_data')
+          .upsert(batch, { onConflict: 'media_id,query_id', ignoreDuplicates: false })
+
+        if (mediaError) {
+          console.warn('media_query_data batch error:', mediaError.message)
+        }
       }
     }
   }
