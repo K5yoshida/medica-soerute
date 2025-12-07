@@ -37,12 +37,18 @@ interface LogEntry {
   id: string
   timestamp: string
   level: 'info' | 'warn' | 'error' | 'debug'
-  category: 'auth' | 'api' | 'system' | 'billing' | 'user'
+  category: 'auth' | 'api' | 'system' | 'billing' | 'user' | 'external' | 'job' | 'security'
   message: string
-  userId?: string
-  userName?: string
-  ip?: string
-  userAgent?: string
+  request_id?: string
+  user_id?: string
+  user_email?: string
+  action?: string
+  duration_ms?: number
+  error_code?: string
+  error_name?: string
+  error_message?: string
+  ip_address?: string
+  user_agent?: string
   metadata?: Record<string, unknown>
 }
 
@@ -51,7 +57,26 @@ interface LogStats {
   info: number
   warn: number
   error: number
-  todayTotal: number
+  debug: number
+  today_total: number
+}
+
+interface LogsApiResponse {
+  success: boolean
+  data?: {
+    logs: LogEntry[]
+    stats: LogStats
+    pagination: {
+      current_page: number
+      per_page: number
+      total_pages: number
+      total_count: number
+    }
+  }
+  error?: {
+    code?: string
+    message: string
+  }
 }
 
 export default function AdminLogsPage() {
@@ -74,102 +99,33 @@ export default function AdminLogsPage() {
   const fetchLogs = async () => {
     setLoading(true)
     try {
-      // TODO: 実際のAPIに接続
-      // const res = await fetch(`/api/admin/logs?page=${currentPage}&level=${levelFilter}&category=${categoryFilter}&range=${dateRange}&q=${searchQuery}`)
-      // const data = await res.json()
-
-      // Mock data
-      setStats({
-        total: 12847,
-        info: 10234,
-        warn: 2156,
-        error: 457,
-        todayTotal: 342,
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        level: levelFilter,
+        category: categoryFilter,
+        range: dateRange,
+        q: searchQuery,
       })
 
-      setLogs([
-        {
-          id: 'log_001',
-          timestamp: '2024-01-15T10:35:22Z',
-          level: 'info',
-          category: 'auth',
-          message: 'ユーザーがログインしました',
-          userId: 'usr_123',
-          userName: '山田 太郎',
-          ip: '192.168.1.100',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-          metadata: { method: 'email', sessionId: 'sess_abc123' },
-        },
-        {
-          id: 'log_002',
-          timestamp: '2024-01-15T10:30:15Z',
-          level: 'warn',
-          category: 'api',
-          message: 'APIレート制限に近づいています',
-          userId: 'usr_124',
-          userName: '鈴木 花子',
-          ip: '192.168.1.101',
-          metadata: { endpoint: '/api/matching', remaining: 5, limit: 100 },
-        },
-        {
-          id: 'log_003',
-          timestamp: '2024-01-15T10:25:08Z',
-          level: 'error',
-          category: 'system',
-          message: 'データベース接続エラーが発生しました',
-          metadata: { error: 'Connection timeout', retryCount: 3, duration: '5.2s' },
-        },
-        {
-          id: 'log_004',
-          timestamp: '2024-01-15T10:20:00Z',
-          level: 'info',
-          category: 'billing',
-          message: '新規サブスクリプションが作成されました',
-          userId: 'usr_125',
-          userName: '田中 一郎',
-          metadata: { plan: 'Professional', amount: 19800, stripeId: 'sub_xyz789' },
-        },
-        {
-          id: 'log_005',
-          timestamp: '2024-01-15T10:15:45Z',
-          level: 'info',
-          category: 'user',
-          message: 'ユーザープロフィールが更新されました',
-          userId: 'usr_126',
-          userName: '佐藤 美咲',
-          ip: '192.168.1.102',
-          metadata: { fields: ['displayName', 'company'] },
-        },
-        {
-          id: 'log_006',
-          timestamp: '2024-01-15T10:10:30Z',
-          level: 'warn',
-          category: 'auth',
-          message: 'ログイン試行が失敗しました（パスワード不一致）',
-          ip: '192.168.1.200',
-          metadata: { email: 'unknown@example.com', attempts: 2 },
-        },
-        {
-          id: 'log_007',
-          timestamp: '2024-01-15T10:05:12Z',
-          level: 'error',
-          category: 'api',
-          message: '外部APIへの接続に失敗しました',
-          metadata: { service: 'SimilarWeb', statusCode: 503, duration: '30.1s' },
-        },
-        {
-          id: 'log_008',
-          timestamp: '2024-01-15T10:00:00Z',
-          level: 'info',
-          category: 'system',
-          message: 'スケジュールタスクが正常に完了しました',
-          metadata: { task: 'daily_report', duration: '12.5s', recordsProcessed: 1250 },
-        },
-      ])
+      const res = await fetch(`/api/admin/logs?${params.toString()}`)
+      const data: LogsApiResponse = await res.json()
 
-      setTotalPages(15)
+      if (!data.success || !data.data) {
+        console.error('Failed to fetch logs:', data.error?.message)
+        setLogs([])
+        setStats(null)
+        setTotalPages(0)
+        return
+      }
+
+      setLogs(data.data.logs)
+      setStats(data.data.stats)
+      setTotalPages(data.data.pagination.total_pages)
     } catch (error) {
       console.error('Failed to fetch logs:', error)
+      setLogs([])
+      setStats(null)
+      setTotalPages(0)
     } finally {
       setLoading(false)
     }
@@ -216,14 +172,17 @@ export default function AdminLogsPage() {
   }
 
   const getCategoryLabel = (category: LogEntry['category']) => {
-    const labels = {
+    const labels: Record<LogEntry['category'], string> = {
       auth: '認証',
       api: 'API',
       system: 'システム',
       billing: '課金',
       user: 'ユーザー',
+      external: '外部連携',
+      job: 'ジョブ',
+      security: 'セキュリティ',
     }
-    return labels[category]
+    return labels[category] || category
   }
 
   const getCategoryIcon = (category: LogEntry['category']) => {
@@ -238,6 +197,14 @@ export default function AdminLogsPage() {
         return <FileText style={{ width: 12, height: 12 }} />
       case 'user':
         return <User style={{ width: 12, height: 12 }} />
+      case 'external':
+        return <Globe style={{ width: 12, height: 12 }} />
+      case 'job':
+        return <Clock style={{ width: 12, height: 12 }} />
+      case 'security':
+        return <AlertCircle style={{ width: 12, height: 12 }} />
+      default:
+        return <FileText style={{ width: 12, height: 12 }} />
     }
   }
 
@@ -368,7 +335,7 @@ export default function AdminLogsPage() {
             icon={<Clock style={{ width: 16, height: 16, color: '#0D9488' }} />}
             iconBg="rgba(13, 148, 136, 0.1)"
             label="本日"
-            value={stats?.todayTotal.toLocaleString() || '-'}
+            value={stats?.today_total.toLocaleString() || '-'}
           />
         </div>
 
@@ -463,6 +430,9 @@ export default function AdminLogsPage() {
                 <option value="system">システム</option>
                 <option value="billing">課金</option>
                 <option value="user">ユーザー</option>
+                <option value="external">外部連携</option>
+                <option value="job">ジョブ</option>
+                <option value="security">セキュリティ</option>
               </select>
 
               {/* Date Range */}
@@ -658,7 +628,7 @@ export default function AdminLogsPage() {
                             color: '#71717A',
                           }}
                         >
-                          {log.userName || '-'}
+                          {log.user_email || '-'}
                         </td>
                       </tr>
                     )
@@ -843,17 +813,59 @@ export default function AdminLogsPage() {
               >
                 <DetailItem label="日時" value={formatTimestamp(selectedLog.timestamp)} />
                 <DetailItem label="ログID" value={selectedLog.id} mono />
-                {selectedLog.userName && (
-                  <DetailItem label="ユーザー" value={selectedLog.userName} />
+                {selectedLog.user_email && (
+                  <DetailItem label="ユーザー" value={selectedLog.user_email} />
                 )}
-                {selectedLog.userId && (
-                  <DetailItem label="ユーザーID" value={selectedLog.userId} mono />
+                {selectedLog.user_id && (
+                  <DetailItem label="ユーザーID" value={selectedLog.user_id} mono />
                 )}
-                {selectedLog.ip && <DetailItem label="IPアドレス" value={selectedLog.ip} mono />}
+                {selectedLog.request_id && (
+                  <DetailItem label="リクエストID" value={selectedLog.request_id} mono />
+                )}
+                {selectedLog.action && <DetailItem label="アクション" value={selectedLog.action} />}
+                {selectedLog.error_code && (
+                  <DetailItem label="エラーコード" value={selectedLog.error_code} mono />
+                )}
+                {selectedLog.duration_ms !== undefined && (
+                  <DetailItem label="処理時間" value={`${selectedLog.duration_ms}ms`} />
+                )}
+                {selectedLog.ip_address && (
+                  <DetailItem label="IPアドレス" value={selectedLog.ip_address} mono />
+                )}
               </div>
 
+              {/* Error Details */}
+              {selectedLog.error_message && (
+                <div style={{ marginBottom: '20px' }}>
+                  <label
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#71717A',
+                      display: 'block',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    エラーメッセージ
+                  </label>
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#EF4444',
+                      margin: 0,
+                      fontFamily: 'monospace',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                    }}
+                  >
+                    {selectedLog.error_message}
+                  </p>
+                </div>
+              )}
+
               {/* User Agent */}
-              {selectedLog.userAgent && (
+              {selectedLog.user_agent && (
                 <div style={{ marginBottom: '20px' }}>
                   <label
                     style={{
@@ -878,7 +890,7 @@ export default function AdminLogsPage() {
                       wordBreak: 'break-all',
                     }}
                   >
-                    {selectedLog.userAgent}
+                    {selectedLog.user_agent}
                   </p>
                 </div>
               )}

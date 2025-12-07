@@ -5,6 +5,7 @@
  *
  * アプリケーション全体で一貫したログ出力を提供。
  * Sentryとの連携も含む。
+ * DBへの永続化はバックグラウンドで非同期実行。
  */
 import * as Sentry from '@sentry/nextjs'
 
@@ -12,12 +13,19 @@ import * as Sentry from '@sentry/nextjs'
  * ログレベル定義
  *
  * 設計書: 19.5.1 ログレベル定義
- * - ERROR: システムエラー、外部API障害 → Console + Sentry（即時アラート）
- * - WARN: 利用制限到達、リトライ発生 → Console + Sentry（集計）
- * - INFO: 重要な業務イベント → Console
+ * - ERROR: システムエラー、外部API障害 → Console + Sentry（即時アラート）+ DB保存
+ * - WARN: 利用制限到達、リトライ発生 → Console + Sentry（集計）+ DB保存
+ * - INFO: 重要な業務イベント → Console + DB保存（本番のみ）
  * - DEBUG: 開発用詳細情報 → Console (dev only)
  */
 type LogLevel = 'error' | 'warn' | 'info' | 'debug'
+
+/**
+ * ログカテゴリ定義
+ *
+ * 設計書: 19.5.4 ログカテゴリ
+ */
+type LogCategory = 'auth' | 'api' | 'system' | 'billing' | 'user' | 'external' | 'job' | 'security'
 
 /**
  * ログコンテキスト
@@ -27,6 +35,9 @@ export interface LogContext {
   user_id?: string
   action?: string
   duration_ms?: number
+  category?: LogCategory
+  ip_address?: string
+  user_agent?: string
   [key: string]: unknown
 }
 
@@ -54,6 +65,54 @@ interface StructuredLog {
   metadata: {
     environment: string | undefined
     version: string | undefined
+  }
+}
+
+/**
+ * DB保存用ログデータ
+ */
+interface SystemLogData {
+  level: LogLevel
+  category: LogCategory
+  message: string
+  request_id?: string
+  user_id?: string
+  action?: string
+  duration_ms?: number
+  error_code?: string
+  error_name?: string
+  error_message?: string
+  error_stack?: string
+  ip_address?: string
+  user_agent?: string
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * ログをDBに非同期保存する関数
+ * エラーが発生してもログ出力には影響しない
+ */
+async function persistLog(data: SystemLogData): Promise<void> {
+  // 本番環境でのみDB保存（開発時はコンソールのみ）
+  if (process.env.NODE_ENV !== 'production') {
+    return
+  }
+
+  try {
+    // 内部APIを呼び出してDB保存（非同期・fire-and-forget）
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+    await fetch(`${baseUrl}/api/internal/logs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': process.env.INTERNAL_API_SECRET || '',
+      },
+      body: JSON.stringify(data),
+    }).catch(() => {
+      // DB保存失敗は無視（ログ出力には影響させない）
+    })
+  } catch {
+    // DB保存失敗は無視
   }
 }
 
@@ -86,10 +145,39 @@ class Logger {
   }
 
   /**
+   * DB保存用データを作成
+   */
+  private createLogData(
+    level: LogLevel,
+    message: string,
+    category: LogCategory,
+    context?: LogContext,
+    error?: LogError
+  ): SystemLogData {
+    const { category: _, ip_address, user_agent, ...restContext } = context || {}
+    return {
+      level,
+      category,
+      message,
+      request_id: context?.request_id,
+      user_id: context?.user_id,
+      action: context?.action,
+      duration_ms: context?.duration_ms,
+      error_code: error?.code,
+      error_name: error?.name,
+      error_message: error?.message,
+      error_stack: error?.stack,
+      ip_address,
+      user_agent,
+      metadata: Object.keys(restContext).length > 0 ? restContext : undefined,
+    }
+  }
+
+  /**
    * エラーログ
    *
    * システムエラー、外部API障害時に使用。
-   * Sentryにも送信される。
+   * Sentryにも送信される。DBにも保存される。
    */
   error(message: string, context?: LogContext, error?: Error): void {
     const logError = error
@@ -121,13 +209,17 @@ class Logger {
         },
       })
     }
+
+    // DB保存（非同期・fire-and-forget）
+    const category = context?.category || 'system'
+    void persistLog(this.createLogData('error', message, category, context, logError))
   }
 
   /**
    * 警告ログ
    *
    * 利用制限到達、リトライ発生時に使用。
-   * Sentryにブレッドクラムとして記録。
+   * Sentryにブレッドクラムとして記録。DBにも保存される。
    */
   warn(message: string, context?: LogContext): void {
     const log = this.formatLog('warn', message, context)
@@ -140,16 +232,25 @@ class Logger {
       level: 'warning',
       data: context,
     })
+
+    // DB保存（非同期・fire-and-forget）
+    const category = context?.category || 'system'
+    void persistLog(this.createLogData('warn', message, category, context))
   }
 
   /**
    * 情報ログ
    *
    * 重要な業務イベント時に使用。
+   * 本番環境ではDBにも保存される。
    */
   info(message: string, context?: LogContext): void {
     const log = this.formatLog('info', message, context)
     console.info(JSON.stringify(log))
+
+    // DB保存（非同期・fire-and-forget）- 重要なイベントのみ
+    const category = context?.category || 'system'
+    void persistLog(this.createLogData('info', message, category, context))
   }
 
   /**
