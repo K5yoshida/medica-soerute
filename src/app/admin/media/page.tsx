@@ -549,6 +549,16 @@ export default function MediaPage() {
                             SNS {item.traffic_sources.social_pct}%
                           </span>
                         )}
+                        {item.traffic_sources.display_pct && (
+                          <span style={{ fontSize: '10px', background: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '4px' }}>
+                            広告 {item.traffic_sources.display_pct}%
+                          </span>
+                        )}
+                        {item.traffic_sources.email_pct && (
+                          <span style={{ fontSize: '10px', background: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: '4px' }}>
+                            メール {item.traffic_sources.email_pct}%
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
