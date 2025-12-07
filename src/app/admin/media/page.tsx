@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Calendar,
   BarChart3,
+  Clock,
 } from 'lucide-react'
 
 /**
@@ -489,34 +490,52 @@ export default function MediaPage() {
                   </button>
                 </div>
 
-                {/* メイン情報: 月間訪問・キーワード・直帰率 */}
+                {/* メイン情報: 月間訪問・キーワード・直帰率・PV/訪問・滞在時間 */}
                 <div style={{ padding: '16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
                         <Eye className="h-3 w-3" />
-                        <span style={{ fontSize: '11px' }}>月間訪問</span>
+                        <span style={{ fontSize: '10px' }}>月間訪問</span>
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
                         {formatNumber(item.monthly_visits)}
                       </div>
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
                         <FileText className="h-3 w-3" />
-                        <span style={{ fontSize: '11px' }}>キーワード</span>
+                        <span style={{ fontSize: '10px' }}>キーワード</span>
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
                         {item.keyword_count.toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
                         <TrendingUp className="h-3 w-3" />
-                        <span style={{ fontSize: '11px' }}>直帰率</span>
+                        <span style={{ fontSize: '10px' }}>直帰率</span>
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
                         {item.bounce_rate ? `${item.bounce_rate}%` : '-'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
+                        <FileText className="h-3 w-3" />
+                        <span style={{ fontSize: '10px' }}>PV/訪問</span>
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+                        {item.pages_per_visit ? item.pages_per_visit.toFixed(2) : '-'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
+                        <Clock className="h-3 w-3" />
+                        <span style={{ fontSize: '10px' }}>滞在時間</span>
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+                        {formatDuration(item.avg_visit_duration)}
                       </div>
                     </div>
                   </div>
