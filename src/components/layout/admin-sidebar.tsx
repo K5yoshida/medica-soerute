@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Globe,
   Tags,
+  TrendingUp,
 } from 'lucide-react'
 import type { User } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -38,6 +39,7 @@ const mainNavItems = [
   { title: 'CSVインポート', href: '/admin/import', icon: Upload },
   { title: 'キーワード管理', href: '/admin/keywords', icon: Tags },
   { title: '媒体マスター', href: '/admin/media', icon: Database },
+  { title: 'トレンド分析', href: '/admin/trends', icon: TrendingUp },
 ]
 
 const analyticsNavItems = [
