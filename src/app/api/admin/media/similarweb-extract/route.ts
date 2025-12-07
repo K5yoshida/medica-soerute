@@ -114,6 +114,40 @@ export async function POST(request: NextRequest): Promise<NextResponse<ExtractRe
     if (mediaId) {
       const serviceClient = createServiceClient()
 
+      // 対象媒体のドメインを取得
+      const { data: targetMedia, error: mediaError } = await serviceClient
+        .from('media_master')
+        .select('domain')
+        .eq('id', mediaId)
+        .single()
+
+      if (mediaError || !targetMedia) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_FOUND', message: '対象の媒体が見つかりません' } },
+          { status: 404 }
+        )
+      }
+
+      // ドメイン検証: 抽出したドメインと対象媒体のドメインが一致するか確認
+      if (extracted.domain && targetMedia.domain) {
+        // ドメインを正規化して比較（www.の有無、大文字小文字を無視）
+        const normalizedExtracted = extracted.domain.toLowerCase().replace(/^www\./, '')
+        const normalizedTarget = targetMedia.domain.toLowerCase().replace(/^www\./, '')
+
+        if (normalizedExtracted !== normalizedTarget) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: 'DOMAIN_MISMATCH',
+                message: `画像から読み取ったドメイン「${extracted.domain}」と、対象媒体のドメイン「${targetMedia.domain}」が一致しません。正しい媒体を選択してください。`,
+              },
+            },
+            { status: 400 }
+          )
+        }
+      }
+
       const updateData: Record<string, unknown> = {}
       if (extracted.domain) updateData.domain = extracted.domain
       if (extracted.monthly_visits) updateData.monthly_visits = extracted.monthly_visits
