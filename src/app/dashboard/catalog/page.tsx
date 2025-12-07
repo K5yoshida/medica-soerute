@@ -478,7 +478,7 @@ export default function CatalogPage() {
       </header>
 
       {/* コンテンツエリア */}
-      <div className="p-6" style={{ maxWidth: contentMaxWidth }}>
+      <div className="p-6">
         {/* キーワード検索ボックス */}
         <MediaSearch onSearch={handleRankingSearch} isLoading={isRankingLoading} />
 
@@ -615,7 +615,7 @@ export default function CatalogPage() {
                       overflowX: 'auto',
                     }}
                   >
-                    <table style={{ minWidth: '1100px', borderCollapse: 'collapse' }}>
+                    <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
                         <tr style={{ borderBottom: '1px solid #E4E4E7', height: '41px' }}>
                           <TableHeader label="月間訪問" helpKey="monthly_visits" width={100} onHelpClick={setActiveHelp} />
