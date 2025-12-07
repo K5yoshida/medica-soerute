@@ -1,0 +1,71 @@
+# ===========================================
+# Dependabot Configuration
+# ===========================================
+#
+# 設計書: 23_セキュリティ設計書
+# Gap: GAP-060 Snyk/Dependabot有効化
+#
+# 依存パッケージの脆弱性スキャンと自動更新を設定
+
+version: 2
+
+updates:
+  # npm パッケージの更新
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "keigoyoshida"
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"
+    # セキュリティアップデートは優先的に処理
+    groups:
+      # 開発依存パッケージをグループ化
+      dev-dependencies:
+        patterns:
+          - "@types/*"
+          - "eslint*"
+          - "typescript"
+          - "postcss"
+          - "tailwindcss"
+        update-types:
+          - "minor"
+          - "patch"
+      # UIライブラリをグループ化
+      ui-libraries:
+        patterns:
+          - "@radix-ui/*"
+          - "lucide-react"
+        update-types:
+          - "minor"
+          - "patch"
+      # Supabase関連をグループ化
+      supabase:
+        patterns:
+          - "@supabase/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actionsの更新
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
