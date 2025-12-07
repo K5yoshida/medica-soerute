@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
-  Upload,
   Database,
   CreditCard,
   BarChart3,
@@ -17,7 +16,6 @@ import {
   ArrowLeft,
   Globe,
   Tags,
-  TrendingUp,
 } from 'lucide-react'
 import type { User } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -36,10 +34,8 @@ const mainNavItems = [
   { title: 'ダッシュボード', href: '/admin', icon: LayoutDashboard },
   { title: 'ユーザー管理', href: '/admin/users', icon: Users },
   { title: 'ドメイン管理', href: '/admin/domains', icon: Globe },
-  { title: 'CSVインポート', href: '/admin/import', icon: Upload },
   { title: 'キーワード管理', href: '/admin/keywords', icon: Tags },
   { title: '媒体マスター', href: '/admin/media', icon: Database },
-  { title: 'トレンド分析', href: '/admin/trends', icon: TrendingUp },
 ]
 
 const analyticsNavItems = [

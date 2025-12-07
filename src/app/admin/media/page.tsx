@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Search,
   Plus,
-  MoreHorizontal,
   Globe,
   Eye,
   TrendingUp,
@@ -17,15 +16,17 @@ import {
   Check,
   AlertCircle,
   Calendar,
-  BarChart3,
   Clock,
+  Edit,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 /**
  * SC-904: 媒体マスター管理画面
  *
  * 機能:
- * - 媒体一覧表示
+ * - 媒体一覧表示（テーブル形式）
  * - 新規媒体追加
  * - 媒体編集・削除
  * - SimilarWeb画像からデータ取り込み
@@ -78,6 +79,8 @@ export default function MediaPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showInactive, setShowInactive] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 20
 
   // Add/Edit modal
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -122,6 +125,10 @@ export default function MediaPage() {
   useEffect(() => {
     fetchMedia()
   }, [fetchMedia])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, showInactive])
 
   const openAddModal = () => {
     setEditingMedia(null)
@@ -172,7 +179,8 @@ export default function MediaPage() {
     }
   }
 
-  const handleToggleActive = async (item: Media) => {
+  const handleToggleActive = async (item: Media, e: React.MouseEvent) => {
+    e.stopPropagation()
     try {
       const res = await fetch(`/api/admin/media/${item.id}`, {
         method: 'PATCH',
@@ -189,14 +197,6 @@ export default function MediaPage() {
   }
 
   // SimilarWeb Import handlers
-  const openSimilarWebModal = (item: Media) => {
-    setSelectedMediaForSW(item)
-    setSwImages([])
-    setSwExtractResult(null)
-    setSwError(null)
-    setIsSimilarWebModalOpen(true)
-  }
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files) {
@@ -235,7 +235,6 @@ export default function MediaPage() {
 
       if (data.success) {
         setSwExtractResult(data.data.extracted)
-        // 成功後、リストを更新
         fetchMedia()
       } else {
         setSwError(data.error?.message || '抽出に失敗しました')
@@ -263,15 +262,19 @@ export default function MediaPage() {
   }
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return null
+    if (!dateStr) return '-'
     const date = new Date(dateStr)
-    return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`
+    return `${date.getMonth() + 1}/${date.getDate()}`
   }
 
-  // SimilarWebデータが未取得か判定
   const hasSimilarWebData = (item: Media) => {
     return item.monthly_visits !== null || item.bounce_rate !== null
   }
+
+  // Pagination
+  const totalCount = media.length
+  const totalPages = Math.ceil(totalCount / pageSize)
+  const paginatedMedia = media.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   return (
     <>
@@ -310,25 +313,72 @@ export default function MediaPage() {
               求人媒体の登録・編集・SimilarWebデータ取り込み
             </p>
           </div>
-          <button
-            onClick={openAddModal}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              background: '#7C3AED',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            新規媒体を追加
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <a
+              href="/admin/import"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                background: '#FFFFFF',
+                color: '#6366F1',
+                border: '1px solid #6366F1',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                textDecoration: 'none',
+              }}
+            >
+              <FileText className="h-4 w-4" />
+              CSVインポート
+            </a>
+            <button
+              onClick={() => {
+                setSelectedMediaForSW(null)
+                setSwImages([])
+                setSwExtractResult(null)
+                setSwError(null)
+                setIsSimilarWebModalOpen(true)
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                background: '#FFFFFF',
+                color: '#6366F1',
+                border: '1px solid #6366F1',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              <Upload className="h-4 w-4" />
+              SimilarWeb更新
+            </button>
+            <button
+              onClick={openAddModal}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                background: '#7C3AED',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              新規媒体を追加
+            </button>
+          </div>
         </div>
       </header>
 
@@ -390,280 +440,269 @@ export default function MediaPage() {
             />
             非アクティブを表示
           </label>
+
+          <span style={{ fontSize: '13px', color: '#A1A1AA' }}>
+            {totalCount}件
+          </span>
         </div>
 
-        {/* Media Grid */}
+        {/* Media Table */}
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '16px',
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
+            borderRadius: '8px',
+            overflow: 'hidden',
           }}
         >
-          {loading ? (
-            <div style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center' }}>
-              <Loader2 className="h-6 w-6 animate-spin mx-auto" style={{ color: '#A1A1AA' }} />
-              <p style={{ marginTop: '8px', color: '#A1A1AA', fontSize: '13px' }}>読み込み中...</p>
-            </div>
-          ) : media.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center', color: '#A1A1AA' }}>
-              媒体が見つかりません
-            </div>
-          ) : (
-            media.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E4E4E7',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  opacity: item.is_active ? 1 : 0.6,
-                }}
-              >
-                {/* ヘッダー: 媒体名・ドメイン・編集ボタン */}
-                <div
-                  style={{
-                    padding: '16px',
-                    borderBottom: '1px solid #F4F4F5',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '8px',
-                        background: hasSimilarWebData(item) ? '#EDE9FE' : '#FEF3C7',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: hasSimilarWebData(item) ? '#7C3AED' : '#D97706',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {item.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
-                        {item.name}
-                      </div>
-                      {item.domain ? (
-                        <a
-                          href={`https://${item.domain}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '12px',
-                            color: '#7C3AED',
-                            textDecoration: 'none',
-                          }}
-                        >
-                          <Globe className="h-3 w-3" />
-                          {item.domain}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        <span style={{ fontSize: '12px', color: '#A1A1AA' }}>ドメイン未設定</span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => openEditModal(item)}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
+              <thead>
+                <tr style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
+                  <th
                     style={{
-                      padding: '6px',
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      color: '#A1A1AA',
-                    }}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* メイン情報: 月間訪問・キーワード・直帰率・PV/訪問・滞在時間 */}
-                <div style={{ padding: '16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
-                        <Eye className="h-3 w-3" />
-                        <span style={{ fontSize: '10px' }}>月間訪問</span>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                        {formatNumber(item.monthly_visits)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
-                        <FileText className="h-3 w-3" />
-                        <span style={{ fontSize: '10px' }}>キーワード</span>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                        {item.keyword_count.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
-                        <TrendingUp className="h-3 w-3" />
-                        <span style={{ fontSize: '10px' }}>直帰率</span>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                        {item.bounce_rate ? `${item.bounce_rate}%` : '-'}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
-                        <FileText className="h-3 w-3" />
-                        <span style={{ fontSize: '10px' }}>PV/訪問</span>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                        {item.pages_per_visit ? item.pages_per_visit.toFixed(2) : '-'}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '4px' }}>
-                        <Clock className="h-3 w-3" />
-                        <span style={{ fontSize: '10px' }}>滞在時間</span>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
-                        {formatDuration(item.avg_visit_duration)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* トラフィックソース（データがある場合のみ表示） */}
-                  {item.traffic_sources && (
-                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F4F4F5' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#A1A1AA', marginBottom: '8px' }}>
-                        <BarChart3 className="h-3 w-3" />
-                        <span style={{ fontSize: '11px' }}>トラフィックソース</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {item.traffic_sources.search_pct && (
-                          <span style={{ fontSize: '10px', background: '#DBEAFE', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px' }}>
-                            検索 {item.traffic_sources.search_pct}%
-                          </span>
-                        )}
-                        {item.traffic_sources.direct_pct && (
-                          <span style={{ fontSize: '10px', background: '#E0E7FF', color: '#3730A3', padding: '2px 6px', borderRadius: '4px' }}>
-                            直接 {item.traffic_sources.direct_pct}%
-                          </span>
-                        )}
-                        {item.traffic_sources.referral_pct && (
-                          <span style={{ fontSize: '10px', background: '#FEE2E2', color: '#991B1B', padding: '2px 6px', borderRadius: '4px' }}>
-                            参照 {item.traffic_sources.referral_pct}%
-                          </span>
-                        )}
-                        {item.traffic_sources.social_pct && (
-                          <span style={{ fontSize: '10px', background: '#FCE7F3', color: '#9D174D', padding: '2px 6px', borderRadius: '4px' }}>
-                            SNS {item.traffic_sources.social_pct}%
-                          </span>
-                        )}
-                        {item.traffic_sources.display_pct && (
-                          <span style={{ fontSize: '10px', background: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '4px' }}>
-                            広告 {item.traffic_sources.display_pct}%
-                          </span>
-                        )}
-                        {item.traffic_sources.email_pct && (
-                          <span style={{ fontSize: '10px', background: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: '4px' }}>
-                            メール {item.traffic_sources.email_pct}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 更新日情報 */}
-                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F4F4F5' }}>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#71717A' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Calendar className="h-3 w-3" />
-                        <span>SW:</span>
-                        <span style={{ color: item.data_updated_at ? '#18181B' : '#D97706' }}>
-                          {formatDate(item.data_updated_at) || '未取得'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <FileText className="h-3 w-3" />
-                        <span>CSV:</span>
-                        <span style={{ color: item.last_csv_import_at ? '#18181B' : '#A1A1AA' }}>
-                          {formatDate(item.last_csv_import_at) || '-'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* フッター: SimilarWebボタン・ステータス */}
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    borderTop: '1px solid #F4F4F5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: '#FAFAFA',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        background: item.is_active ? '#D1FAE5' : '#FEE2E2',
-                        color: item.is_active ? '#065F46' : '#991B1B',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {item.is_active ? 'アクティブ' : '非アクティブ'}
-                    </span>
-                    <button
-                      onClick={() => handleToggleActive(item)}
-                      style={{
-                        fontSize: '11px',
-                        color: '#7C3AED',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {item.is_active ? '停止' : '有効化'}
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => openSimilarWebModal(item)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      background: hasSimilarWebData(item) ? '#FFFFFF' : '#6366F1',
-                      color: hasSimilarWebData(item) ? '#6366F1' : '#FFFFFF',
-                      border: hasSimilarWebData(item) ? '1px solid #6366F1' : 'none',
-                      borderRadius: '6px',
+                      textAlign: 'left',
+                      padding: '12px 16px',
                       fontSize: '12px',
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      color: '#52525B',
+                      whiteSpace: 'nowrap',
+                      position: 'sticky',
+                      left: 0,
+                      background: '#FAFAFA',
+                      zIndex: 1,
                     }}
                   >
-                    <Upload className="h-3 w-3" />
-                    {hasSimilarWebData(item) ? 'SW更新' : 'SimilarWeb取込'}
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+                    媒体名
+                  </th>
+                  <HeaderCell label="月間訪問" icon={<Eye className="h-3 w-3" />} />
+                  <HeaderCell label="KW数" icon={<FileText className="h-3 w-3" />} />
+                  <HeaderCell label="直帰率" icon={<TrendingUp className="h-3 w-3" />} />
+                  <HeaderCell label="PV/訪問" />
+                  <HeaderCell label="滞在" icon={<Clock className="h-3 w-3" />} />
+                  <HeaderCell label="SW更新" icon={<Calendar className="h-3 w-3" />} />
+                  <HeaderCell label="CSV更新" icon={<FileText className="h-3 w-3" />} />
+                  <HeaderCell label="ステータス" />
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 500, color: '#52525B' }}>
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={10} style={{ padding: '48px', textAlign: 'center' }}>
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto" style={{ color: '#A1A1AA' }} />
+                      <p style={{ marginTop: '8px', color: '#A1A1AA', fontSize: '13px' }}>読み込み中...</p>
+                    </td>
+                  </tr>
+                ) : paginatedMedia.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ padding: '48px', textAlign: 'center', color: '#A1A1AA' }}>
+                      媒体が見つかりません
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedMedia.map((item, index) => (
+                    <tr
+                      key={item.id}
+                      style={{
+                        borderBottom: index < paginatedMedia.length - 1 ? '1px solid #F4F4F5' : 'none',
+                        opacity: item.is_active ? 1 : 0.6,
+                        transition: 'background 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAFA')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      {/* 媒体名 - 固定列 */}
+                      <td
+                        style={{
+                          padding: '12px 16px',
+                          position: 'sticky',
+                          left: 0,
+                          background: '#FFFFFF',
+                          zIndex: 1,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '6px',
+                              background: hasSimilarWebData(item) ? '#EDE9FE' : '#FEF3C7',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: hasSimilarWebData(item) ? '#7C3AED' : '#D97706',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {item.name.charAt(0)}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                color: '#18181B',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '160px',
+                              }}
+                            >
+                              {item.name}
+                            </div>
+                            {item.domain ? (
+                              <a
+                                href={`https://${item.domain}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '2px',
+                                  fontSize: '11px',
+                                  color: '#7C3AED',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                <Globe className="h-3 w-3" />
+                                <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {item.domain}
+                                </span>
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span style={{ fontSize: '11px', color: '#A1A1AA' }}>ドメイン未設定</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <DataCell value={formatNumber(item.monthly_visits)} bold />
+                      <DataCell value={item.keyword_count.toLocaleString()} />
+                      <DataCell value={item.bounce_rate ? `${item.bounce_rate}%` : '-'} />
+                      <DataCell value={item.pages_per_visit ? item.pages_per_visit.toFixed(2) : '-'} />
+                      <DataCell value={formatDuration(item.avg_visit_duration)} />
+                      <DataCell
+                        value={formatDate(item.data_updated_at)}
+                        color={item.data_updated_at ? '#16A34A' : '#D97706'}
+                      />
+                      <DataCell value={formatDate(item.last_csv_import_at)} />
+                      {/* ステータス */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              background: item.is_active ? '#D1FAE5' : '#FEE2E2',
+                              color: item.is_active ? '#065F46' : '#991B1B',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {item.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </td>
+                      {/* 操作 */}
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(item)
+                            }}
+                            style={{
+                              padding: '6px',
+                              background: '#F4F4F5',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              color: '#52525B',
+                            }}
+                            title="編集"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => handleToggleActive(item, e)}
+                            style={{
+                              padding: '4px 8px',
+                              background: 'transparent',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              color: '#7C3AED',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {item.is_active ? '停止' : '有効化'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div
+            style={{
+              marginTop: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span style={{ fontSize: '13px', color: '#A1A1AA' }}>
+              {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} / {totalCount}件
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  opacity: currentPage === 1 ? 0.5 : 1,
+                }}
+              >
+                <ChevronLeft style={{ width: 16, height: 16, color: '#52525B' }} />
+              </button>
+              <span style={{ fontSize: '13px', color: '#52525B', padding: '0 8px' }}>
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  opacity: currentPage === totalPages ? 0.5 : 1,
+                }}
+              >
+                <ChevronRight style={{ width: 16, height: 16, color: '#52525B' }} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -841,7 +880,7 @@ export default function MediaPage() {
       )}
 
       {/* SimilarWeb Import Modal */}
-      {isSimilarWebModalOpen && selectedMediaForSW && (
+      {isSimilarWebModalOpen && (
         <div
           onClick={() => setIsSimilarWebModalOpen(false)}
           style={{
@@ -880,9 +919,11 @@ export default function MediaPage() {
                 <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: 0 }}>
                   SimilarWebデータ取り込み
                 </h2>
-                <p style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
-                  {selectedMediaForSW.name}
-                </p>
+                {selectedMediaForSW && (
+                  <p style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
+                    {selectedMediaForSW.name}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setIsSimilarWebModalOpen(false)}
@@ -900,6 +941,36 @@ export default function MediaPage() {
 
             {/* Modal Body */}
             <div style={{ padding: '24px' }}>
+              {/* Media Selection */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#52525B', marginBottom: '8px' }}>
+                  対象媒体 <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <select
+                  value={selectedMediaForSW?.id || ''}
+                  onChange={(e) => {
+                    const selected = media.find(m => m.id === e.target.value)
+                    setSelectedMediaForSW(selected || null)
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    background: '#FFFFFF',
+                  }}
+                >
+                  <option value="">媒体を選択してください</option>
+                  {media.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.domain ? `(${m.domain})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Image Upload Area */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#52525B', marginBottom: '8px' }}>
@@ -1131,7 +1202,7 @@ export default function MediaPage() {
               {!swExtractResult && (
                 <button
                   onClick={handleExtractSimilarWeb}
-                  disabled={swImages.length === 0 || swExtractLoading}
+                  disabled={!selectedMediaForSW || swImages.length === 0 || swExtractLoading}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1142,8 +1213,8 @@ export default function MediaPage() {
                     borderRadius: '6px',
                     fontSize: '13px',
                     color: '#FFFFFF',
-                    cursor: swImages.length === 0 || swExtractLoading ? 'not-allowed' : 'pointer',
-                    opacity: swImages.length === 0 || swExtractLoading ? 0.7 : 1,
+                    cursor: !selectedMediaForSW || swImages.length === 0 || swExtractLoading ? 'not-allowed' : 'pointer',
+                    opacity: !selectedMediaForSW || swImages.length === 0 || swExtractLoading ? 0.7 : 1,
                   }}
                 >
                   {swExtractLoading ? (
@@ -1164,5 +1235,65 @@ export default function MediaPage() {
         </div>
       )}
     </>
+  )
+}
+
+// ヘッダーセルコンポーネント
+function HeaderCell({
+  label,
+  icon,
+}: {
+  label: string
+  icon?: React.ReactNode
+}) {
+  return (
+    <th
+      style={{
+        textAlign: 'center',
+        padding: '12px 8px',
+        fontSize: '12px',
+        fontWeight: 500,
+        color: '#52525B',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+        }}
+      >
+        {icon && <span style={{ color: '#A1A1AA' }}>{icon}</span>}
+        <span>{label}</span>
+      </div>
+    </th>
+  )
+}
+
+// データセルコンポーネント
+function DataCell({
+  value,
+  bold,
+  color,
+}: {
+  value: string
+  bold?: boolean
+  color?: string
+}) {
+  return (
+    <td
+      style={{
+        padding: '12px 8px',
+        textAlign: 'center',
+        fontSize: '13px',
+        fontWeight: bold ? 600 : 400,
+        color: color || '#52525B',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {value}
+    </td>
   )
 }

@@ -12,9 +12,11 @@ import {
   X,
   List,
   ExternalLink,
+  BarChart2,
 } from 'lucide-react'
 import { MediaSearch } from '@/components/catalog/media-search'
 import { RankingResults } from '@/components/catalog/ranking-results'
+import { ComparisonModal } from '@/components/catalog/comparison-modal'
 
 interface TrafficData {
   search_pct: number | null
@@ -248,6 +250,10 @@ export default function CatalogPage() {
   const [rankingResults, setRankingResults] = useState<RankingResult[]>([])
   const [isRankingLoading, setIsRankingLoading] = useState(false)
 
+  // 比較機能用の状態
+  const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set())
+  const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false)
+
   // 媒体一覧を取得
   const fetchMedia = useCallback(async () => {
     setIsLoading(true)
@@ -317,6 +323,32 @@ export default function CatalogPage() {
     setRankingKeywords([])
     setRankingResults([])
   }, [])
+
+  // 媒体選択のトグル
+  const toggleMediaSelection = useCallback((mediaId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedMediaIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(mediaId)) {
+        newSet.delete(mediaId)
+      } else {
+        if (newSet.size < 5) {
+          newSet.add(mediaId)
+        }
+      }
+      return newSet
+    })
+  }, [])
+
+  // 選択をクリア
+  const clearSelection = useCallback(() => {
+    setSelectedMediaIds(new Set())
+  }, [])
+
+  // 選択中の媒体データを取得
+  const getSelectedMedia = useCallback(() => {
+    return mediaList.filter((m) => selectedMediaIds.has(m.id))
+  }, [mediaList, selectedMediaIds])
 
   const totalPages = Math.ceil(totalCount / pageSize)
   const hasRankingResults = rankingKeywords.length > 0
@@ -492,6 +524,19 @@ export default function CatalogPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
                     <thead>
                       <tr style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
+                        {/* チェックボックス列 */}
+                        <th
+                          style={{
+                            width: '48px',
+                            padding: '12px 8px',
+                            position: 'sticky',
+                            left: 0,
+                            background: '#FAFAFA',
+                            zIndex: 2,
+                          }}
+                        >
+                          <span style={{ fontSize: '11px', color: '#A1A1AA' }}>比較</span>
+                        </th>
                         <th
                           style={{
                             textAlign: 'left',
@@ -501,7 +546,7 @@ export default function CatalogPage() {
                             color: '#52525B',
                             whiteSpace: 'nowrap',
                             position: 'sticky',
-                            left: 0,
+                            left: 48,
                             background: '#FAFAFA',
                             zIndex: 1,
                           }}
@@ -532,17 +577,51 @@ export default function CatalogPage() {
                             borderBottom: index < mediaList.length - 1 ? '1px solid #F4F4F5' : 'none',
                             cursor: 'pointer',
                             transition: 'background 0.1s ease',
+                            background: selectedMediaIds.has(media.id) ? '#F0FDFA' : 'transparent',
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAFA')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          onMouseEnter={(e) => {
+                            if (!selectedMediaIds.has(media.id)) {
+                              e.currentTarget.style.background = '#FAFAFA'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!selectedMediaIds.has(media.id)) {
+                              e.currentTarget.style.background = 'transparent'
+                            }
+                          }}
                         >
+                          {/* チェックボックス */}
+                          <td
+                            style={{
+                              padding: '12px 8px',
+                              position: 'sticky',
+                              left: 0,
+                              background: selectedMediaIds.has(media.id) ? '#F0FDFA' : '#FFFFFF',
+                              zIndex: 2,
+                              textAlign: 'center',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedMediaIds.has(media.id)}
+                              onChange={() => {}}
+                              onClick={(e) => toggleMediaSelection(media.id, e)}
+                              disabled={!selectedMediaIds.has(media.id) && selectedMediaIds.size >= 5}
+                              style={{
+                                width: 16,
+                                height: 16,
+                                cursor: !selectedMediaIds.has(media.id) && selectedMediaIds.size >= 5 ? 'not-allowed' : 'pointer',
+                                accentColor: '#0D9488',
+                              }}
+                            />
+                          </td>
                           {/* 媒体名 - 固定列 */}
                           <td
                             style={{
                               padding: '12px 16px',
                               position: 'sticky',
-                              left: 0,
-                              background: '#FFFFFF',
+                              left: 48,
+                              background: selectedMediaIds.has(media.id) ? '#F0FDFA' : '#FFFFFF',
                               zIndex: 1,
                             }}
                           >
@@ -704,6 +783,75 @@ export default function CatalogPage() {
           )}
         </div>
       </div>
+
+      {/* フローティング比較バー */}
+      {selectedMediaIds.size > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#18181B',
+            borderRadius: '12px',
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+            zIndex: 50,
+          }}
+        >
+          <span style={{ fontSize: '13px', color: '#FFFFFF', fontWeight: 500 }}>
+            {selectedMediaIds.size}媒体選択中
+            <span style={{ color: '#A1A1AA', fontWeight: 400, marginLeft: '4px' }}>
+              （最大5）
+            </span>
+          </span>
+
+          <div style={{ width: '1px', height: '20px', background: '#3F3F46' }} />
+
+          <button
+            onClick={() => setIsComparisonModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              background: '#0D9488',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            <BarChart2 style={{ width: 16, height: 16 }} />
+            比較する
+          </button>
+
+          <button
+            onClick={clearSelection}
+            style={{
+              padding: '8px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              borderRadius: '6px',
+            }}
+          >
+            <X style={{ width: 18, height: 18, color: '#A1A1AA' }} />
+          </button>
+        </div>
+      )}
+
+      {/* 比較モーダル */}
+      <ComparisonModal
+        isOpen={isComparisonModalOpen}
+        onClose={() => setIsComparisonModalOpen(false)}
+        selectedMedia={getSelectedMedia()}
+      />
     </>
   )
 }
