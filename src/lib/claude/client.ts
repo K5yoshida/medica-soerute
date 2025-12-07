@@ -170,6 +170,118 @@ ${JSON.stringify(diagnosisData, null, 2)}`
   return JSON.parse(jsonMatch[0])
 }
 
+// ----- SimilarWeb画像からのデータ抽出 -----
+export interface SimilarWebData {
+  domain?: string
+  monthly_visits?: number
+  bounce_rate?: number
+  pages_per_visit?: number
+  avg_visit_duration?: number // 秒単位
+  traffic_sources?: {
+    direct?: number
+    referral?: number
+    search?: number
+    social?: number
+    mail?: number
+    display?: number
+  }
+  geography?: Array<{
+    country: string
+    percentage: number
+  }>
+  confidence?: 'high' | 'medium' | 'low'
+  raw_text?: string
+}
+
+export async function extractSimilarWebData(
+  images: Array<{ base64: string; mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' }>
+): Promise<SimilarWebData> {
+  const systemPrompt = `あなたはSimilarWebのスクリーンショット画像からデータを抽出する専門家です。
+画像から以下の情報を正確に読み取ってJSON形式で返してください。
+
+抽出対象:
+1. ドメイン名 (domain)
+2. 月間訪問数 (monthly_visits) - 数値のみ。"10.5M"なら10500000、"1.2K"なら1200に変換
+3. 直帰率 (bounce_rate) - パーセント値（小数）。"45.5%"なら45.5
+4. 平均ページ閲覧数 (pages_per_visit) - 小数
+5. 平均滞在時間 (avg_visit_duration) - 秒数に変換。"00:02:30"なら150秒
+6. トラフィックソース (traffic_sources) - 各チャネルのパーセント値
+   - direct: 直接流入
+   - referral: 参照流入
+   - search: 検索流入（オーガニック+有料）
+   - social: ソーシャル
+   - mail: メール
+   - display: ディスプレイ広告
+7. 地域分布 (geography) - 上位の国と割合
+
+読み取れなかった項目はnullとしてください。
+複数画像がある場合、すべての画像から情報を統合してください。
+
+回答は必ず以下のJSON形式のみで返してください（説明文不要）:
+{
+  "domain": "example.com",
+  "monthly_visits": 10500000,
+  "bounce_rate": 45.5,
+  "pages_per_visit": 3.2,
+  "avg_visit_duration": 150,
+  "traffic_sources": {
+    "direct": 25.5,
+    "referral": 10.2,
+    "search": 45.0,
+    "social": 12.3,
+    "mail": 2.0,
+    "display": 5.0
+  },
+  "geography": [
+    {"country": "Japan", "percentage": 85.5},
+    {"country": "United States", "percentage": 5.2}
+  ],
+  "confidence": "high",
+  "raw_text": "画像から読み取った生テキスト（デバッグ用）"
+}`
+
+  // 複数画像をコンテンツとして構築
+  const imageContents = images.map((img) => ({
+    type: 'image' as const,
+    source: {
+      type: 'base64' as const,
+      media_type: img.mediaType,
+      data: img.base64,
+    },
+  }))
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          ...imageContents,
+          {
+            type: 'text' as const,
+            text: 'これらのSimilarWebスクリーンショットからデータを抽出してください。',
+          },
+        ],
+      },
+    ],
+    system: systemPrompt,
+  })
+
+  const content = response.content[0]
+  if (content.type !== 'text') {
+    throw new Error('Unexpected response type')
+  }
+
+  // JSONをパース
+  const jsonMatch = content.text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) {
+    throw new Error('Failed to parse response JSON')
+  }
+
+  return JSON.parse(jsonMatch[0])
+}
+
 // ----- 施策レコメンド -----
 export async function getRecommendations(context: {
   analysisResults?: unknown[]

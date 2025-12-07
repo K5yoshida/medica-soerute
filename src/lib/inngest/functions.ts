@@ -7,8 +7,10 @@ import { inngest } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import {
   classifyQueryIntent,
+  classifyQueryType,
   classifyWithClaude,
   IntentClassification,
+  QueryType,
 } from '@/lib/query-intent'
 
 /**
@@ -574,6 +576,7 @@ export const importCsvJob = inngest.createFunction(
         intent_confidence: string
         intent_reason: string
         intent_updated_at: string
+        query_type: QueryType  // SEOクエリタイプ（独立分類）
         max_monthly_search_volume: number | null
         max_cpc: number | null
         classification_source: string
@@ -605,6 +608,7 @@ export const importCsvJob = inngest.createFunction(
           intent_confidence: classification.confidence,
           intent_reason: classification.reason,
           intent_updated_at: new Date().toISOString(),
+          query_type: classifyQueryType(row.keyword),  // 独立してSEOクエリタイプを分類
           max_monthly_search_volume: row.searchVolume,
           max_cpc: row.cpc,
           classification_source: getClassificationSource(row.keyword),

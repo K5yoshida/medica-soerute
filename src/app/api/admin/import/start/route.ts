@@ -74,9 +74,18 @@ export async function POST(request: NextRequest): Promise<NextResponse<StartResp
     }
 
     // インポートタイプのバリデーション
-    if (!['rakko_keywords', 'similarweb'].includes(importType)) {
+    // 注: similarwebはCSVインポートから削除（媒体マスター側で管理）
+    if (importType !== 'rakko_keywords') {
       return NextResponse.json(
-        { success: false, error: { message: '不明なインポートタイプです' } },
+        { success: false, error: { message: 'ラッコキーワードCSVのみインポート可能です' } },
+        { status: 400 }
+      )
+    }
+
+    // 媒体選択は必須（キーワードと媒体の紐付けが必要）
+    if (!mediaId) {
+      return NextResponse.json(
+        { success: false, error: { message: '対象媒体の選択は必須です' } },
         { status: 400 }
       )
     }

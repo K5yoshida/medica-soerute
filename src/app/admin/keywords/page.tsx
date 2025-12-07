@@ -25,6 +25,14 @@ const INTENT_CONFIG = {
   unknown: { label: '未分類', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.1)' },
 } as const
 
+// クエリタイプ（Do/Know/Go/Buy）のラベルと色
+const QUERY_TYPE_CONFIG = {
+  Do: { label: 'Do', color: '#10B981', bg: 'rgba(16, 185, 129, 0.1)' },
+  Know: { label: 'Know', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)' },
+  Go: { label: 'Go', color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.1)' },
+  Buy: { label: 'Buy', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.1)' },
+} as const
+
 // 分類ソースのラベル
 const SOURCE_CONFIG = {
   rule: { label: 'ルール', color: '#10B981' },
@@ -34,6 +42,7 @@ const SOURCE_CONFIG = {
 } as const
 
 type QueryIntent = keyof typeof INTENT_CONFIG
+type QueryType = keyof typeof QUERY_TYPE_CONFIG
 type ClassificationSource = keyof typeof SOURCE_CONFIG
 
 interface Keyword {
@@ -43,6 +52,7 @@ interface Keyword {
   intent: QueryIntent
   intent_confidence: string | null
   intent_reason: string | null
+  query_type: QueryType | null
   max_monthly_search_volume: number | null
   max_cpc: number | null
   is_verified: boolean
@@ -381,6 +391,9 @@ export default function KeywordsPage() {
                   意図分類
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  タイプ
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   ソース
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -397,13 +410,13 @@ export default function KeywordsPage() {
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
+                  <td colSpan={8} className="px-4 py-12 text-center">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600" />
                   </td>
                 </tr>
               ) : keywords.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     キーワードが見つかりません
                   </td>
                 </tr>
@@ -447,6 +460,21 @@ export default function KeywordsPage() {
                       >
                         {INTENT_CONFIG[keyword.intent]?.label || keyword.intent}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {keyword.query_type && QUERY_TYPE_CONFIG[keyword.query_type] ? (
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                          style={{
+                            color: QUERY_TYPE_CONFIG[keyword.query_type].color,
+                            background: QUERY_TYPE_CONFIG[keyword.query_type].bg,
+                          }}
+                        >
+                          {QUERY_TYPE_CONFIG[keyword.query_type].label}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span

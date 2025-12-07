@@ -327,7 +327,12 @@ export default function ImportPage() {
 
   // 次のステップへ
   const nextStep = async () => {
+    // Step 2: 媒体選択の必須チェック
     if (currentStep === 2) {
+      if (importType === 'rakko_keywords' && !selectedMediaId) {
+        setValidationError('対象媒体の選択は必須です')
+        return
+      }
       const isValid = await validateFile()
       if (!isValid) return
     }
@@ -651,7 +656,7 @@ export default function ImportPage() {
                     </div>
                   </div>
 
-                  {/* Media Selection */}
+                  {/* Media Selection - 必須 */}
                   {importType === 'rakko_keywords' && (
                     <div>
                       <label
@@ -663,7 +668,7 @@ export default function ImportPage() {
                           marginBottom: '8px',
                         }}
                       >
-                        対象媒体（任意）
+                        対象媒体 <span style={{ color: '#EF4444' }}>*</span>
                       </label>
                       <select
                         value={selectedMediaId}
@@ -671,7 +676,7 @@ export default function ImportPage() {
                         style={{
                           width: '100%',
                           padding: '12px',
-                          border: '1px solid #E4E4E7',
+                          border: selectedMediaId ? '1px solid #E4E4E7' : '1px solid #FCA5A5',
                           borderRadius: '6px',
                           fontSize: '14px',
                           color: '#18181B',
@@ -679,15 +684,17 @@ export default function ImportPage() {
                           cursor: 'pointer',
                         }}
                       >
-                        <option value="">媒体を選択（省略可）</option>
+                        <option value="">媒体を選択してください</option>
                         {mediaList.map((media) => (
                           <option key={media.id} value={media.id}>
                             {media.name}
                           </option>
                         ))}
                       </select>
-                      <p style={{ fontSize: '11px', color: '#A1A1AA', marginTop: '6px' }}>
-                        選択すると、該当媒体とキーワードが紐付けられます
+                      <p style={{ fontSize: '11px', color: selectedMediaId ? '#A1A1AA' : '#EF4444', marginTop: '6px' }}>
+                        {selectedMediaId
+                          ? 'このCSVのキーワードは選択した媒体に紐付けられます'
+                          : '媒体の選択は必須です。媒体カタログに表示するために必要です'}
                       </p>
                     </div>
                   )}

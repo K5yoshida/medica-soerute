@@ -15,12 +15,22 @@
 export type QueryIntent = 'branded' | 'transactional' | 'commercial' | 'informational' | 'b2b' | 'unknown'
 
 /**
+ * SEO標準のクエリタイプ（Do/Know/Go/Buy）
+ * - Do: 行動したい（応募、登録など）
+ * - Know: 知りたい（情報収集）
+ * - Go: 特定サイトへ行きたい（指名検索）
+ * - Buy: 購入/比較検討したい
+ */
+export type QueryType = 'Do' | 'Know' | 'Go' | 'Buy'
+
+/**
  * 意図分類の結果
  */
 export interface IntentClassification {
   intent: QueryIntent
   confidence: 'high' | 'medium' | 'low'
   reason: string
+  queryType?: QueryType
 }
 
 /**
@@ -269,6 +279,153 @@ export const INTENT_DESCRIPTIONS: Record<QueryIntent, string> = {
   informational: '一般的な情報や知識を求めている',
   b2b: '採用担当者・人事が検索している',
   unknown: 'AI分析が必要',
+}
+
+/**
+ * クエリタイプのラベル（日本語表示用）
+ */
+export const QUERY_TYPE_LABELS: Record<QueryType, string> = {
+  Do: 'Do',
+  Know: 'Know',
+  Go: 'Go',
+  Buy: 'Buy',
+}
+
+/**
+ * クエリタイプの説明
+ */
+export const QUERY_TYPE_DESCRIPTIONS: Record<QueryType, string> = {
+  Do: '行動したい（応募・登録）',
+  Know: '知りたい（情報収集）',
+  Go: '特定サイトへ行きたい',
+  Buy: '購入/比較検討したい',
+}
+
+/**
+ * SEOクエリタイプを独立して分類する（intentとは別軸）
+ *
+ * Do: 行動系（登録、応募、申し込みなど）
+ * Know: 情報系（〜とは、年収、資格、方法など）
+ * Go: 指名系（特定サイト・施設名）
+ * Buy: 比較選定系（おすすめ、ランキング、比較など）
+ */
+export function classifyQueryType(keyword: string): QueryType {
+  const k = keyword.toLowerCase().trim()
+
+  if (!k) {
+    return 'Know' // デフォルト
+  }
+
+  // ===========================================
+  // Go: 特定サイト・施設・サービスに行きたい
+  // ===========================================
+
+  // 媒体名・サービス名を含む場合
+  for (const mediaName of KNOWN_MEDIA_NAMES) {
+    if (k.includes(mediaName.toLowerCase())) {
+      return 'Go'
+    }
+  }
+
+  // 施設名パターン（〜病院、〜クリニック、〜薬局など）
+  if (/病院|クリニック|薬局|施設|センター|ホーム|園$/.test(k)) {
+    // ただし「病院 求人」などは除外（情報収集的）
+    if (!/求人|転職|募集|年収|給料/.test(k)) {
+      return 'Go'
+    }
+  }
+
+  // ログイン、マイページなど明確な移動意図
+  if (/ログイン|マイページ|会員登録|公式/.test(k)) {
+    return 'Go'
+  }
+
+  // ===========================================
+  // Do: 行動したい（応募、登録、申し込みなど）
+  // ===========================================
+
+  // 行動系キーワード
+  if (/応募|登録|申し込み|申込|エントリー|面接|履歴書|職務経歴書/.test(k)) {
+    return 'Do'
+  }
+
+  // 「〜したい」パターン
+  if (/したい|しよう|始める|なりたい|なる方法/.test(k)) {
+    return 'Do'
+  }
+
+  // ===========================================
+  // Buy: 比較選定したい（おすすめ、ランキングなど）
+  // ===========================================
+
+  // 比較・選定キーワード
+  if (/おすすめ|オススメ|ランキング|比較|vs|選び方|選ぶ|人気|評判|口コミ|レビュー/.test(k)) {
+    return 'Buy'
+  }
+
+  // 「どこがいい」「どれがいい」パターン
+  if (/どこがいい|どれがいい|どっちが|ベスト|トップ/.test(k)) {
+    return 'Buy'
+  }
+
+  // ===========================================
+  // Know: 情報を知りたい（デフォルト）
+  // ===========================================
+
+  // 明確な情報収集キーワード
+  if (/とは|とは$|意味|方法|やり方|仕方|違い|メリット|デメリット/.test(k)) {
+    return 'Know'
+  }
+
+  // 疑問系
+  if (/\?|？|なぜ|なに|どう|いくら|何歳|何年/.test(k)) {
+    return 'Know'
+  }
+
+  // 年収、給料、条件などの情報系
+  if (/年収|給料|給与|月給|時給|平均|相場|資格|条件|休日|残業|夜勤/.test(k)) {
+    return 'Know'
+  }
+
+  // 求人・転職だけでは行動に直結しない（情報収集段階）
+  if (/求人|転職|募集|採用/.test(k)) {
+    // 「求人 おすすめ」はBuyで先にマッチ済み
+    // 「求人」単体や「看護師 求人」は情報収集
+    return 'Know'
+  }
+
+  // デフォルトはKnow（情報収集）
+  return 'Know'
+}
+
+/**
+ * バッチ処理用：複数キーワードのクエリタイプを一括分類
+ */
+export function classifyQueryTypes(keywords: string[]): Map<string, QueryType> {
+  const results = new Map<string, QueryType>()
+  for (const keyword of keywords) {
+    results.set(keyword, classifyQueryType(keyword))
+  }
+  return results
+}
+
+/**
+ * @deprecated intentからqueryTypeを導出（非推奨：独立分類を使用すること）
+ */
+export function getQueryTypeFromIntent(intent: QueryIntent): QueryType | null {
+  switch (intent) {
+    case 'branded':
+      return 'Go'
+    case 'transactional':
+      return 'Do'
+    case 'commercial':
+      return 'Buy'
+    case 'informational':
+    case 'b2b':
+      return 'Know'
+    case 'unknown':
+      return null
+  }
 }
 
 /**
