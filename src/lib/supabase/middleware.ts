@@ -5,6 +5,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
+import { checkApiRateLimit } from '@/lib/rate-limiter-edge'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -51,11 +52,24 @@ export async function updateSession(request: NextRequest) {
     console.error('Error getting user:', error)
   }
 
+  const pathname = request.nextUrl.pathname
+
+  // レート制限チェック（APIエンドポイントのみ）
+  // 設計書: 23_セキュリティ設計書 - 23.6.2 Rate Limiting
+  if (pathname.startsWith('/api/')) {
+    const rateLimitResponse = await checkApiRateLimit(
+      request,
+      pathname,
+      user?.id
+    )
+    if (rateLimitResponse) {
+      return rateLimitResponse
+    }
+  }
+
   // 認証が必要なルートの保護
   const protectedRoutes = ['/dashboard']
   const authRoutes = ['/auth/login', '/auth/signup', '/auth/password']
-
-  const pathname = request.nextUrl.pathname
 
   // 認証コールバックはスキップ
   if (pathname.startsWith('/api/auth/callback')) {

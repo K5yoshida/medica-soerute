@@ -3,21 +3,34 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import {
-  BookOpen,
-  Target,
+  ArrowRight,
+  Search,
   BarChart3,
   CheckCircle2,
-  ArrowRight,
-  TrendingUp,
-  Users,
-  Shield,
-  Zap,
   ChevronDown,
   Menu,
-  X
+  X,
+  Database,
+  Brain,
+  Target,
+  Layers,
+  FileSearch,
 } from 'lucide-react'
 
-// デザインシステムカラー（03_ブランディングとデザインガイドより）
+/**
+ * MEDICA SOERUTE Landing Page
+ *
+ * 本質: 求人媒体の選定を「勘と経験」から「データと戦略」へ変えるSaaS
+ *
+ * ターゲット:
+ * - 採用コンサルタント（提案の説得力を上げたい）
+ * - 中規模以上の採用担当者（媒体選びで失敗したくない）
+ *
+ * 差別化:
+ * - SimilarWeb + キーワードデータ + Claude AIの3層融合
+ * - 4つのフレームワークで採用戦略を可視化（PESO/ファネル/コンバージョン/ジャーニー）
+ */
+
 const colors = {
   primary: '#0D9488',
   primaryLight: '#F0FDFA',
@@ -26,816 +39,1547 @@ const colors = {
   surface: '#FFFFFF',
   text: '#18181B',
   textSecondary: '#52525B',
-  textMuted: '#A1A1AA',
+  textMuted: '#71717A',
   border: '#E4E4E7',
-  success: '#22C55E',
-  accent: '#8B5CF6',
+  borderLight: '#F4F4F5',
 }
 
-const features = [
-  {
-    icon: BookOpen,
-    title: '媒体カタログ',
-    description: '医療・介護業界の主要求人媒体を網羅。SEOキーワード、流入データ、競合分析を一元管理。',
-    details: ['30+媒体のデータ収録', 'キーワード検索・フィルター', '流入経路の可視化'],
-  },
-  {
-    icon: Target,
-    title: '媒体マッチング',
-    description: '求人条件を入力するだけで、AIが最適な媒体を分析・スコアリング。',
-    details: ['AI搭載の媒体提案', 'マッチ度スコア表示', '予算に応じた最適化'],
-  },
-  {
-    icon: BarChart3,
-    title: 'PESO診断',
-    description: 'Paid・Earned・Shared・Ownedの4軸で採用活動を診断し、改善点を明確化。',
-    details: ['4軸の詳細診断', '業界平均との比較', '具体的なアクション提案'],
-  },
-]
+// =====================================
+// ヒーローセクション
+// =====================================
 
-const benefits = [
-  {
-    icon: TrendingUp,
-    title: 'データドリブンな意思決定',
-    description: '感覚や経験だけに頼らず、実データに基づいた媒体選定が可能に。',
-  },
-  {
-    icon: Users,
-    title: '採用コストの最適化',
-    description: '無駄な媒体費用を削減し、効果の高い媒体に予算を集中。',
-  },
-  {
-    icon: Shield,
-    title: '医療・介護業界特化',
-    description: '業界特有のキーワードや求職者動向を深く理解したデータ分析。',
-  },
-  {
-    icon: Zap,
-    title: '即座に分析結果を取得',
-    description: 'AIによる高速分析で、待ち時間なく戦略立案が可能。',
-  },
-]
+function HeroSection() {
+  return (
+    <section
+      style={{
+        paddingTop: '120px',
+        paddingBottom: '80px',
+        background: `linear-gradient(180deg, #0D948808 0%, ${colors.background} 100%)`,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* 背景装飾 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '10%',
+          right: '-10%',
+          width: '600px',
+          height: '600px',
+          background: 'radial-gradient(circle, rgba(13,148,136,0.06) 0%, transparent 70%)',
+          borderRadius: '50%',
+          pointerEvents: 'none',
+        }}
+      />
 
-const plans = [
-  {
-    name: 'Starter',
-    price: '9,800',
-    description: '個人・小規模事業所向け',
-    features: [
-      '媒体マッチング 10回/月',
-      'PESO診断 無制限',
-      '基本レポート出力',
-      'メールサポート',
-    ],
-    cta: '14日間無料で試す',
-    popular: false,
-  },
-  {
-    name: 'Professional',
-    price: '19,800',
-    description: '中規模法人向け',
-    features: [
-      '媒体マッチング 50回/月',
-      'PESO診断 無制限',
-      '詳細レポート出力',
-      'CSVエクスポート',
-      '優先サポート',
-      'チーム共有機能',
-    ],
-    cta: '14日間無料で試す',
-    popular: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'お問い合わせ',
-    description: '大規模法人・複数拠点向け',
-    features: [
-      '媒体マッチング 無制限',
-      'PESO診断 無制限',
-      '詳細レポート出力',
-      'CSVエクスポート',
-      '専任サポート',
-      'API連携',
-      'カスタムレポート',
-      'SLA保証',
-    ],
-    cta: 'お問い合わせ',
-    popular: false,
-  },
-]
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', position: 'relative' }}>
+        {/* 2カラムレイアウト */}
+        <div className="hero-grid">
+          {/* 左側：テキストコンテンツ */}
+          <div className="hero-content">
+            {/* サブタイトル */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                background: colors.surface,
+                border: `1px solid ${colors.border}`,
+                borderRadius: '100px',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: colors.textSecondary,
+                marginBottom: '24px',
+              }}
+            >
+              <Database size={14} style={{ color: colors.primary }} />
+              求人媒体の分析プラットフォーム
+            </div>
 
-const stats = [
-  { value: '30+', label: '収録媒体数' },
-  { value: '10,000+', label: '分析キーワード' },
-  { value: '95%', label: '顧客満足度' },
-  { value: '40%', label: '平均コスト削減' },
-]
+            {/* メインコピー */}
+            <h1
+              className="hero-title"
+              style={{
+                fontWeight: 800,
+                color: colors.text,
+                lineHeight: 1.15,
+                marginBottom: '24px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              採用媒体、<br />
+              <span style={{ color: colors.primary }}>どれ選んでも同じ</span>
+              <br />
+              だと思っていませんか？
+            </h1>
 
-const faqs = [
-  {
-    question: '無料トライアルの期間中に課金されますか？',
-    answer: 'いいえ、14日間の無料トライアル期間中は一切課金されません。期間終了前にキャンセルすれば、費用は発生しません。',
-  },
-  {
-    question: 'どのような媒体のデータが見られますか？',
-    answer: '医療・介護業界の主要求人媒体を網羅しています。マイナビ、リクナビ、Indeed、各種専門媒体など30以上の媒体データを収録しています。',
-  },
-  {
-    question: 'データはどのくらいの頻度で更新されますか？',
-    answer: 'キーワードデータは月次で更新され、流入データは週次で更新されます。常に最新の市場動向を把握できます。',
-  },
-  {
-    question: '導入にあたってサポートはありますか？',
-    answer: 'はい、プランに応じたサポートを提供しています。Professional以上のプランでは優先サポート、Enterpriseでは専任担当者が対応します。',
-  },
-]
+            {/* サブコピー */}
+            <p
+              className="hero-subtitle"
+              style={{
+                color: colors.textSecondary,
+                lineHeight: 1.8,
+                marginBottom: '32px',
+              }}
+            >
+              Indeed、ジョブメドレー、マイナビ...
+              <br />
+              「なんとなく」で媒体を選んでいませんか？
+              <br />
+              <strong style={{ color: colors.text }}>
+                トラフィックデータ × AIで、最適な媒体が5分でわかります。
+              </strong>
+            </p>
 
-export default function HomePage() {
+            {/* CTA */}
+            <div className="hero-cta">
+              <Link
+                href="/auth/signup"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '16px 32px',
+                  background: colors.primary,
+                  color: '#FFFFFF',
+                  textDecoration: 'none',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 20px rgba(13, 148, 136, 0.3)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                14日間無料で試す
+                <ArrowRight size={18} />
+              </Link>
+              <a
+                href="#how-it-works"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '16px 24px',
+                  background: 'transparent',
+                  color: colors.text,
+                  textDecoration: 'none',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: 500,
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                仕組みを見る
+              </a>
+            </div>
+
+            {/* 補足 */}
+            <p style={{ fontSize: '13px', color: colors.textMuted, marginTop: '16px' }}>
+              クレジットカード不要 • いつでもキャンセル可能
+            </p>
+          </div>
+
+          {/* 右側：ダッシュボードプレビュー */}
+          <div className="hero-preview">
+            <DashboardMockup />
+          </div>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .hero-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 48px;
+        }
+        .hero-content {
+          max-width: 100%;
+        }
+        .hero-title {
+          font-size: 32px;
+        }
+        .hero-subtitle {
+          font-size: 16px;
+          max-width: 100%;
+        }
+        .hero-cta {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .hero-preview {
+          display: none;
+        }
+
+        @media (min-width: 768px) {
+          .hero-title {
+            font-size: 40px;
+          }
+          .hero-subtitle {
+            font-size: 17px;
+          }
+          .hero-preview {
+            display: block;
+          }
+        }
+
+        @media (min-width: 1024px) {
+          .hero-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: center;
+          }
+          .hero-content {
+            max-width: 560px;
+          }
+          .hero-title {
+            font-size: 48px;
+          }
+          .hero-subtitle {
+            font-size: 18px;
+            max-width: 480px;
+          }
+          .hero-preview {
+            display: block;
+          }
+        }
+      `}</style>
+    </section>
+  )
+}
+
+// ダッシュボードのモックアップ表示
+function DashboardMockup() {
+  return (
+    <div
+      style={{
+        background: colors.surface,
+        borderRadius: '16px',
+        boxShadow: '0 25px 80px rgba(0,0,0,0.12)',
+        border: `1px solid ${colors.border}`,
+        overflow: 'hidden',
+      }}
+    >
+      {/* ブラウザバー */}
+      <div
+        style={{
+          padding: '12px 16px',
+          background: colors.borderLight,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FF5F57' }} />
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FFBD2E' }} />
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#28CA41' }} />
+        </div>
+        <div
+          style={{
+            flex: 1,
+            marginLeft: '16px',
+            padding: '6px 12px',
+            background: colors.surface,
+            borderRadius: '6px',
+            fontSize: '12px',
+            color: colors.textMuted,
+          }}
+        >
+          app.medica-soerute.jp/dashboard/catalog
+        </div>
+      </div>
+
+      {/* コンテンツ */}
+      <div style={{ padding: '24px' }}>
+        {/* ヘッダー */}
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: colors.text, marginBottom: '4px' }}>
+            媒体カタログ
+          </div>
+          <div style={{ fontSize: '13px', color: colors.textMuted }}>
+            30媒体のデータを一覧で比較
+          </div>
+        </div>
+
+        {/* テーブルモック */}
+        <div
+          style={{
+            background: colors.borderLight,
+            borderRadius: '8px',
+            overflow: 'hidden',
+          }}
+        >
+          {/* ヘッダー行 */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '140px repeat(4, 1fr)',
+              gap: '12px',
+              padding: '12px 16px',
+              background: colors.surface,
+              borderBottom: `1px solid ${colors.border}`,
+              fontSize: '11px',
+              fontWeight: 600,
+              color: colors.textMuted,
+            }}
+          >
+            <div>媒体名</div>
+            <div style={{ textAlign: 'right' }}>月間訪問</div>
+            <div style={{ textAlign: 'right' }}>検索流入</div>
+            <div style={{ textAlign: 'right' }}>直帰率</div>
+            <div style={{ textAlign: 'right' }}>クエリ数</div>
+          </div>
+
+          {/* データ行 */}
+          {[
+            { name: 'Indeed', visits: '8.2M', search: '32%', bounce: '42%', queries: '2,340' },
+            { name: 'ジョブメドレー', visits: '3.1M', search: '45%', bounce: '38%', queries: '1,890' },
+            { name: 'マイナビ看護', visits: '1.8M', search: '51%', bounce: '35%', queries: '1,420' },
+          ].map((row, i) => (
+            <div
+              key={row.name}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '140px repeat(4, 1fr)',
+                gap: '12px',
+                padding: '14px 16px',
+                background: colors.surface,
+                borderBottom: i < 2 ? `1px solid ${colors.borderLight}` : 'none',
+                fontSize: '13px',
+              }}
+            >
+              <div style={{ fontWeight: 600, color: colors.text }}>{row.name}</div>
+              <div style={{ textAlign: 'right', color: colors.text }}>{row.visits}</div>
+              <div style={{ textAlign: 'right', color: colors.primary, fontWeight: 500 }}>{row.search}</div>
+              <div style={{ textAlign: 'right', color: colors.textSecondary }}>{row.bounce}</div>
+              <div style={{ textAlign: 'right', color: colors.textSecondary }}>{row.queries}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =====================================
+// 問題提起セクション（Before状態）
+// =====================================
+
+function ProblemSection() {
+  const problems = [
+    {
+      title: '媒体営業のトークを鵜呑みにしていませんか？',
+      description: '「うちが一番効果出ます」どの媒体も同じことを言う。でも客観データを見たことがない。',
+    },
+    {
+      title: '提案の根拠、説明できますか？',
+      description: '「なぜこの媒体を推奨するのか」を聞かれて、経験と勘以外の答えを持っていますか。',
+    },
+    {
+      title: '採用予算、本当に最適に使えていますか？',
+      description: '効果の出ない媒体に予算を使い続けていないか。年間で見ると大きな無駄になっている可能性も。',
+    },
+  ]
+
+  return (
+    <section style={{ padding: '100px 0', background: colors.surface }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            The Problem
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, lineHeight: 1.3 }}>
+            採用媒体選びは、まだ「勘と経験」に頼っていませんか？
+          </h2>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {problems.map((problem, index) => (
+            <div
+              key={index}
+              style={{
+                display: 'flex',
+                gap: '20px',
+                padding: '28px',
+                background: colors.background,
+                borderRadius: '12px',
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  background: `${colors.primary}15`,
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: colors.primary,
+                }}
+              >
+                {index + 1}
+              </div>
+              <div>
+                <h3 style={{ fontSize: '17px', fontWeight: 700, color: colors.text, marginBottom: '8px' }}>
+                  {problem.title}
+                </h3>
+                <p style={{ fontSize: '15px', color: colors.textSecondary, lineHeight: 1.7, margin: 0 }}>
+                  {problem.description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// ソリューションセクション
+// =====================================
+
+function SolutionSection() {
+  return (
+    <section
+      id="how-it-works"
+      style={{
+        padding: '100px 0',
+        background: `linear-gradient(180deg, ${colors.background} 0%, #0D948808 100%)`,
+      }}
+    >
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            The Solution
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
+            データで武装する。5分で最適解を出す。
+          </h2>
+          <p style={{ fontSize: '16px', color: colors.textSecondary, maxWidth: '600px', margin: '0 auto' }}>
+            トラフィックデータ、検索キーワード分析、そしてAIを組み合わせた
+            業界唯一の媒体分析プラットフォーム
+          </p>
+        </div>
+
+        {/* 3つのデータソース */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '24px',
+            marginBottom: '64px',
+          }}
+        >
+          {[
+            {
+              icon: Database,
+              label: 'トラフィック',
+              title: 'アクセス分析',
+              description: '月間訪問数、直帰率、滞在時間、流入経路を媒体横断で比較',
+              color: '#3B82F6',
+            },
+            {
+              icon: Search,
+              label: 'キーワード',
+              title: 'SEO分析',
+              description: '各媒体がどの検索キーワードで上位表示されているかを可視化',
+              color: '#8B5CF6',
+            },
+            {
+              icon: Brain,
+              label: 'AI',
+              title: 'インテリジェント分析',
+              description: '条件を入力するだけで最適な媒体を自動マッチング・スコアリング',
+              color: '#0D9488',
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              style={{
+                background: colors.surface,
+                borderRadius: '16px',
+                padding: '32px',
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '6px 12px',
+                  background: `${item.color}10`,
+                  borderRadius: '100px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: item.color,
+                  marginBottom: '20px',
+                }}
+              >
+                <item.icon size={14} />
+                {item.label}
+              </div>
+              <h3 style={{ fontSize: '20px', fontWeight: 700, color: colors.text, marginBottom: '12px' }}>
+                {item.title}
+              </h3>
+              <p style={{ fontSize: '15px', color: colors.textSecondary, lineHeight: 1.7, margin: 0 }}>
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* 融合の図解 */}
+        <div
+          style={{
+            background: colors.surface,
+            borderRadius: '16px',
+            padding: '40px',
+            border: `1px solid ${colors.border}`,
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '24px' }}>
+            3つのデータソースを融合
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '16px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ padding: '12px 20px', background: '#3B82F610', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#3B82F6' }}>
+              トラフィック
+            </div>
+            <span style={{ fontSize: '20px', color: colors.textMuted }}>+</span>
+            <div style={{ padding: '12px 20px', background: '#8B5CF610', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#8B5CF6' }}>
+              キーワード
+            </div>
+            <span style={{ fontSize: '20px', color: colors.textMuted }}>+</span>
+            <div style={{ padding: '12px 20px', background: '#0D948810', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#0D9488' }}>
+              AI分析
+            </div>
+            <span style={{ fontSize: '20px', color: colors.textMuted }}>=</span>
+            <div
+              style={{
+                padding: '12px 24px',
+                background: colors.primary,
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 700,
+                color: '#FFFFFF',
+              }}
+            >
+              最適な媒体がわかる
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// 機能紹介セクション
+// =====================================
+
+function FeaturesSection() {
+  const features = [
+    {
+      icon: FileSearch,
+      title: '媒体カタログ',
+      description: '30以上の求人媒体のスペックを一元管理。月間訪問数、直帰率、流入経路、SEOキーワードを横断比較。',
+      benefits: ['媒体スペックを1画面で把握', 'キーワードで媒体を検索', '流入経路の可視化'],
+    },
+    {
+      icon: Target,
+      title: '媒体マッチング',
+      description: '「川崎市麻生区 × 訪問介護 × 正社員」のような具体条件を入力するだけ。AIが最適な媒体をスコアリング。',
+      benefits: ['条件入力だけで媒体提案', 'マッチスコアで説得力UP', '提案準備が30分→5分に'],
+    },
+    {
+      icon: Layers,
+      title: 'PESO診断',
+      description: '今やっている採用施策を入力するだけで、Paid/Earned/Shared/Ownedの4軸で戦略を可視化・スコアリング。',
+      benefits: ['採用戦略の現状を数値化', '弱点と改善点を明確化', '4つの切り口で多角分析'],
+    },
+    {
+      icon: BarChart3,
+      title: '媒体比較',
+      description: '複数媒体を選んで、トラフィック推移、キーワード重複、流入経路を並べて比較。提案資料がすぐ作れる。',
+      benefits: ['最大5媒体を同時比較', 'トレンド推移をグラフ化', 'キーワード比較表を自動生成'],
+    },
+  ]
+
+  return (
+    <section id="features" style={{ padding: '100px 0', background: colors.surface }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Features
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
+            4つの分析エンジン
+          </h2>
+        </div>
+
+        <div className="features-grid">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              style={{
+                background: colors.background,
+                borderRadius: '16px',
+                padding: '32px',
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  background: `${colors.primary}10`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '20px',
+                }}
+              >
+                <feature.icon size={26} style={{ color: colors.primary }} />
+              </div>
+              <h3 style={{ fontSize: '20px', fontWeight: 700, color: colors.text, marginBottom: '12px' }}>
+                {feature.title}
+              </h3>
+              <p style={{ fontSize: '15px', color: colors.textSecondary, lineHeight: 1.7, marginBottom: '20px' }}>
+                {feature.description}
+              </p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {feature.benefits.map((benefit) => (
+                  <li
+                    key={benefit}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      fontSize: '14px',
+                      color: colors.text,
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <CheckCircle2 size={16} style={{ color: colors.primary, flexShrink: 0 }} />
+                    {benefit}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// Before/After セクション
+// =====================================
+
+function BeforeAfterSection() {
+  return (
+    <section style={{ padding: '100px 0', background: colors.background }}>
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Results
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text }}>
+            導入前後でこう変わる
+          </h2>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' }}>
+          {/* Before */}
+          <div
+            style={{
+              background: '#F4F4F5',
+              borderRadius: '16px',
+              padding: '32px',
+              border: '1px solid #E4E4E7',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-block',
+                padding: '6px 12px',
+                background: '#71717A',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                marginBottom: '24px',
+              }}
+            >
+              BEFORE
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {[
+                '媒体選びは「経験と勘」頼み',
+                '提案準備に30分以上かかる',
+                '「なぜこの媒体？」に定量的に答えられない',
+                '媒体営業のトークを鵜呑み',
+                '採用予算の無駄遣いが見えない',
+              ].map((item) => (
+                <li
+                  key={item}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px',
+                    fontSize: '15px',
+                    color: colors.textSecondary,
+                    marginBottom: '16px',
+                  }}
+                >
+                  <X size={18} style={{ color: '#A1A1AA', flexShrink: 0, marginTop: '2px' }} />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* After */}
+          <div
+            style={{
+              background: colors.primaryLight,
+              borderRadius: '16px',
+              padding: '32px',
+              border: `1px solid ${colors.primary}30`,
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-block',
+                padding: '6px 12px',
+                background: colors.primary,
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                marginBottom: '24px',
+              }}
+            >
+              AFTER
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {[
+                'データに基づいた媒体選定',
+                '提案準備が5分で完了',
+                'スコアとグラフで説得力のある提案',
+                '客観データで媒体を比較評価',
+                '予算配分の最適化が可能に',
+              ].map((item) => (
+                <li
+                  key={item}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px',
+                    fontSize: '15px',
+                    color: colors.primaryDark,
+                    marginBottom: '16px',
+                  }}
+                >
+                  <CheckCircle2 size={18} style={{ color: colors.primary, flexShrink: 0, marginTop: '2px' }} />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* 数字のインパクト */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '24px',
+            marginTop: '48px',
+          }}
+        >
+          {[
+            { value: '30分 → 5分', label: '提案準備時間' },
+            { value: '30+', label: '収録媒体数' },
+            { value: '4軸', label: '戦略分析フレームワーク' },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              style={{
+                background: colors.surface,
+                borderRadius: '12px',
+                padding: '24px',
+                textAlign: 'center',
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <div style={{ fontSize: '28px', fontWeight: 800, color: colors.primary, marginBottom: '8px' }}>
+                {stat.value}
+              </div>
+              <div style={{ fontSize: '14px', color: colors.textSecondary }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// ターゲットセクション
+// =====================================
+
+function TargetSection() {
+  const targets = [
+    {
+      title: '採用コンサルタント',
+      description: 'クライアントへの提案に説得力を持たせたい。データで裏付けされた媒体提案で信頼を獲得。',
+      useCases: ['媒体提案の根拠づけ', 'クライアントへのレポート作成', '競合媒体の比較分析'],
+    },
+    {
+      title: '採用担当者',
+      description: '「どの媒体が自社に合うのか」を客観的に判断したい。無駄な媒体費を減らしたい。',
+      useCases: ['最適媒体の選定', '採用予算の最適配分', '採用戦略の見直し'],
+    },
+  ]
+
+  return (
+    <section style={{ padding: '100px 0', background: colors.surface }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Who is this for
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text }}>
+            こんな方に使われています
+          </h2>
+        </div>
+
+        <div className="target-grid">
+          {targets.map((target) => (
+            <div
+              key={target.title}
+              style={{
+                background: colors.background,
+                borderRadius: '16px',
+                padding: '32px',
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <h3 style={{ fontSize: '20px', fontWeight: 700, color: colors.text, marginBottom: '12px' }}>
+                {target.title}
+              </h3>
+              <p style={{ fontSize: '15px', color: colors.textSecondary, lineHeight: 1.7, marginBottom: '20px' }}>
+                {target.description}
+              </p>
+              <div>
+                <p style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '12px' }}>
+                  主な活用シーン
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {target.useCases.map((useCase) => (
+                    <span
+                      key={useCase}
+                      style={{
+                        padding: '6px 12px',
+                        background: `${colors.primary}10`,
+                        color: colors.primary,
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {useCase}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// 料金セクション
+// =====================================
+
+function PricingSection() {
+  const plans = [
+    {
+      name: 'Free Trial',
+      price: '0',
+      description: '14日間無料でお試し',
+      features: [
+        '媒体カタログ閲覧',
+        '媒体マッチング 無制限',
+        'PESO診断 無制限',
+        '分析履歴50件まで保存',
+        'CSVエクスポート',
+      ],
+      popular: false,
+      cta: '無料で始める',
+      isFree: true,
+    },
+    {
+      name: 'Starter',
+      price: '9,800',
+      description: '個人・小規模事業所向け',
+      features: [
+        '媒体カタログ閲覧',
+        '媒体マッチング 月20回',
+        'PESO診断 月10回',
+        '分析履歴50件まで保存',
+        'CSVエクスポート',
+        'メールサポート',
+      ],
+      popular: false,
+      cta: '14日間無料で試す',
+      isFree: false,
+    },
+    {
+      name: 'Professional',
+      price: '19,800',
+      description: '中規模法人・コンサル向け',
+      features: [
+        '媒体カタログ閲覧',
+        '媒体マッチング 無制限',
+        'PESO診断 無制限',
+        '分析履歴 無制限',
+        'CSV・PDFエクスポート',
+        'チームメンバー5名まで',
+        '優先サポート',
+      ],
+      popular: true,
+      cta: '14日間無料で試す',
+      isFree: false,
+    },
+    {
+      name: 'Enterprise',
+      price: '要相談',
+      description: '大規模法人・複数拠点',
+      features: [
+        'Professionalの全機能',
+        'チームメンバー無制限',
+        'API連携',
+        '専任サポート',
+        'カスタムレポート',
+        'SLA保証',
+      ],
+      popular: false,
+      cta: 'お問い合わせ',
+      isFree: false,
+    },
+  ]
+
+  return (
+    <section id="pricing" style={{ padding: '100px 0', background: colors.background }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Pricing
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
+            シンプルな料金体系
+          </h2>
+          <p style={{ fontSize: '16px', color: colors.textSecondary }}>
+            14日間無料トライアル • クレジットカード不要
+          </p>
+        </div>
+
+        <div className="pricing-grid">
+          {plans.map((plan) => (
+            <div
+              key={plan.name}
+              style={{
+                background: colors.surface,
+                borderRadius: '16px',
+                padding: '28px',
+                border: plan.popular ? `2px solid ${colors.primary}` : `1px solid ${colors.border}`,
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {plan.popular && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    padding: '6px 16px',
+                    background: colors.primary,
+                    color: '#FFFFFF',
+                    borderRadius: '100px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  おすすめ
+                </div>
+              )}
+
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: colors.text, marginBottom: '6px' }}>
+                  {plan.name}
+                </h3>
+                <p style={{ fontSize: '13px', color: colors.textSecondary, marginBottom: '14px' }}>
+                  {plan.description}
+                </p>
+                {plan.price === '要相談' ? (
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: colors.text }}>{plan.price}</div>
+                ) : plan.isFree ? (
+                  <div>
+                    <span style={{ fontSize: '32px', fontWeight: 800, color: colors.primary }}>¥0</span>
+                    <span style={{ fontSize: '13px', color: colors.textSecondary }}>/14日間</span>
+                  </div>
+                ) : (
+                  <div>
+                    <span style={{ fontSize: '32px', fontWeight: 800, color: colors.text }}>¥{plan.price}</span>
+                    <span style={{ fontSize: '13px', color: colors.textSecondary }}>/月</span>
+                  </div>
+                )}
+              </div>
+
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', flex: 1 }}>
+                {plan.features.map((feature) => (
+                  <li
+                    key={feature}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      fontSize: '13px',
+                      color: colors.text,
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <CheckCircle2 size={16} style={{ color: colors.primary, flexShrink: 0, marginTop: '1px' }} />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href="/auth/signup"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '12px',
+                  background: plan.popular ? colors.primary : plan.isFree ? colors.primary : 'transparent',
+                  color: plan.popular ? '#FFFFFF' : plan.isFree ? '#FFFFFF' : colors.primary,
+                  textDecoration: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                  border: plan.popular || plan.isFree ? 'none' : `2px solid ${colors.primary}`,
+                  boxSizing: 'border-box',
+                }}
+              >
+                {plan.cta}
+              </Link>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .pricing-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        @media (min-width: 640px) {
+          .pricing-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (min-width: 1024px) {
+          .pricing-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+          }
+        }
+      `}</style>
+    </section>
+  )
+}
+
+// =====================================
+// FAQ セクション
+// =====================================
+
+function FAQSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
+
+  const faqs = [
+    {
+      question: 'どのような媒体のデータが見られますか？',
+      answer: 'Indeed、ジョブメドレー、マイナビ、リクナビ、各種専門媒体など30以上の求人媒体データを収録しています。主に医療・介護業界で使われる媒体を網羅しています。',
+    },
+    {
+      question: 'データはどこから取得していますか？',
+      answer: 'トラフィックデータは業界標準のWeb分析ツールから、検索キーワードデータはSEO分析ツールから取得しています。月次で更新され、常に最新のデータを提供しています。',
+    },
+    {
+      question: '無料トライアル中に課金されますか？',
+      answer: 'いいえ、14日間の無料トライアル期間中は一切課金されません。クレジットカードの登録も不要です。期間終了後、有料プランに移行するかどうかを選択できます。',
+    },
+    {
+      question: '導入サポートはありますか？',
+      answer: 'Professional以上のプランでは優先サポートを提供しています。Enterpriseプランでは専任担当者がつき、導入支援から運用まで伴走します。',
+    },
+    {
+      question: '途中でプラン変更はできますか？',
+      answer: 'はい、いつでもプランのアップグレード・ダウングレードが可能です。変更は次の請求サイクルから適用されます。',
+    },
+  ]
+
+  return (
+    <section id="faq" style={{ padding: '100px 0', background: colors.surface }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: colors.primary,
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            FAQ
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text }}>
+            よくある質問
+          </h2>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {faqs.map((faq, index) => (
+            <div
+              key={index}
+              style={{
+                background: colors.background,
+                borderRadius: '12px',
+                overflow: 'hidden',
+              }}
+            >
+              <button
+                onClick={() => setOpenIndex(openIndex === index ? null : index)}
+                style={{
+                  width: '100%',
+                  padding: '20px 24px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: '15px', fontWeight: 600, color: colors.text }}>{faq.question}</span>
+                <ChevronDown
+                  size={20}
+                  style={{
+                    color: colors.textSecondary,
+                    transform: openIndex === index ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s',
+                    flexShrink: 0,
+                    marginLeft: '16px',
+                  }}
+                />
+              </button>
+              {openIndex === index && (
+                <div style={{ padding: '0 24px 20px', fontSize: '14px', color: colors.textSecondary, lineHeight: 1.7 }}>
+                  {faq.answer}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// CTA セクション
+// =====================================
+
+function CTASection() {
+  return (
+    <section
+      style={{
+        padding: '100px 0',
+        background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`,
+      }}
+    >
+      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 24px', textAlign: 'center' }}>
+        <h2 style={{ fontSize: '32px', fontWeight: 700, color: '#FFFFFF', marginBottom: '16px' }}>
+          媒体選びを、データで武装しませんか？
+        </h2>
+        <p style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '40px', lineHeight: 1.7 }}>
+          14日間の無料トライアルで、データドリブンな媒体選定を体験してください。
+          <br />
+          クレジットカード不要・いつでもキャンセル可能
+        </p>
+        <Link
+          href="/auth/signup"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '18px 36px',
+            background: '#FFFFFF',
+            color: colors.primary,
+            textDecoration: 'none',
+            borderRadius: '12px',
+            fontSize: '16px',
+            fontWeight: 600,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+          }}
+        >
+          無料で試す
+          <ArrowRight size={18} />
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+// =====================================
+// ヘッダー
+// =====================================
+
+function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 10)
-    }
+    const handleScroll = () => setScrolled(window.scrollY > 10)
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.background }}>
-      {/* Header */}
-      <header
+    <header
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        background: scrolled ? 'rgba(255, 255, 255, 0.95)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(8px)' : 'none',
+        borderBottom: scrolled ? `1px solid ${colors.border}` : 'none',
+        transition: 'all 0.3s ease',
+      }}
+    >
+      <div
         style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 50,
-          background: scrolled ? 'rgba(255, 255, 255, 0.95)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(8px)' : 'none',
-          borderBottom: scrolled ? `1px solid ${colors.border}` : 'none',
-          transition: 'all 0.3s ease',
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}
       >
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: colors.primary }}>
+            MEDICA SOERUTE
+          </span>
+        </Link>
+
+        {/* Desktop Nav */}
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }} className="desktop-nav">
+          <a href="#how-it-works" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
+            仕組み
+          </a>
+          <a href="#features" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
+            機能
+          </a>
+          <a href="#pricing" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
+            料金
+          </a>
+          <a href="#faq" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
+            FAQ
+          </a>
+        </nav>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} className="desktop-nav">
+          <Link
+            href="/auth/login"
+            style={{ padding: '8px 16px', color: colors.text, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}
+          >
+            ログイン
+          </Link>
+          <Link
+            href="/auth/signup"
+            style={{
+              padding: '10px 20px',
+              background: colors.primary,
+              color: '#FFFFFF',
+              textDecoration: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: 600,
+            }}
+          >
+            無料で試す
+          </Link>
+        </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{ display: 'none', background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
+          className="mobile-menu-btn"
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
         <div
           style={{
-            maxWidth: '1200px',
-            margin: '0 auto',
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            background: colors.surface,
+            borderBottom: `1px solid ${colors.border}`,
             padding: '16px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
           }}
         >
-          <Link href="/" style={{ textDecoration: 'none' }}>
-            <span
-              style={{
-                fontSize: '20px',
-                fontWeight: 700,
-                color: colors.primary,
-              }}
-            >
-              MEDICA SOERUTE
-            </span>
-          </Link>
-
-          {/* Desktop Navigation */}
-          <nav
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '32px',
-            }}
-            className="desktop-nav"
-          >
-            <a href="#features" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
-              機能紹介
-            </a>
-            <a href="#benefits" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
-              メリット
-            </a>
-            <a href="#pricing" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
-              料金
-            </a>
-            <a href="#faq" style={{ color: colors.textSecondary, textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
-              FAQ
-            </a>
-          </nav>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} className="desktop-nav">
-            <Link
-              href="/auth/login"
-              style={{
-                padding: '8px 16px',
-                color: colors.text,
-                textDecoration: 'none',
-                fontSize: '14px',
-                fontWeight: 500,
-              }}
-            >
-              ログイン
-            </Link>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <a href="#how-it-works" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>仕組み</a>
+            <a href="#features" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>機能</a>
+            <a href="#pricing" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>料金</a>
+            <a href="#faq" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>FAQ</a>
+            <hr style={{ border: 'none', borderTop: `1px solid ${colors.border}`, margin: '8px 0' }} />
+            <Link href="/auth/login" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>ログイン</Link>
             <Link
               href="/auth/signup"
               style={{
-                padding: '10px 20px',
+                padding: '12px',
                 background: colors.primary,
                 color: '#FFFFFF',
                 textDecoration: 'none',
                 borderRadius: '8px',
-                fontSize: '14px',
+                fontSize: '16px',
                 fontWeight: 600,
-                transition: 'background 0.2s',
+                textAlign: 'center',
               }}
             >
               無料で試す
             </Link>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={{
-              display: 'none',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '8px',
-            }}
-            className="mobile-menu-btn"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          </nav>
         </div>
+      )}
 
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              right: 0,
-              background: colors.surface,
-              borderBottom: `1px solid ${colors.border}`,
-              padding: '16px 24px',
-            }}
-            className="mobile-menu"
-          >
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <a href="#features" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>機能紹介</a>
-              <a href="#benefits" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>メリット</a>
-              <a href="#pricing" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>料金</a>
-              <a href="#faq" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>FAQ</a>
-              <hr style={{ border: 'none', borderTop: `1px solid ${colors.border}`, margin: '8px 0' }} />
-              <Link href="/auth/login" style={{ color: colors.text, textDecoration: 'none', fontSize: '16px' }}>ログイン</Link>
-              <Link
-                href="/auth/signup"
-                style={{
-                  padding: '12px',
-                  background: colors.primary,
-                  color: '#FFFFFF',
-                  textDecoration: 'none',
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  textAlign: 'center',
-                }}
-              >
-                無料で試す
-              </Link>
-            </nav>
-          </div>
-        )}
-      </header>
-
-      {/* Hero Section */}
-      <section
-        style={{
-          paddingTop: '120px',
-          paddingBottom: '80px',
-          background: `linear-gradient(180deg, ${colors.primary}08 0%, ${colors.background} 100%)`,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: '1200px',
-            margin: '0 auto',
-            padding: '0 24px',
-            textAlign: 'center',
-          }}
-        >
-          <div
-            style={{
-              display: 'inline-block',
-              padding: '6px 16px',
-              background: `${colors.primary}15`,
-              color: colors.primary,
-              borderRadius: '100px',
-              fontSize: '13px',
-              fontWeight: 600,
-              marginBottom: '24px',
-            }}
-          >
-            医療・介護業界特化の採用支援ツール
-          </div>
-
-          <h1
-            style={{
-              fontSize: 'clamp(32px, 5vw, 56px)',
-              fontWeight: 800,
-              color: colors.text,
-              lineHeight: 1.2,
-              marginBottom: '24px',
-            }}
-          >
-            媒体選びを、
-            <br />
-            <span style={{ color: colors.primary }}>データで武装する</span>
-          </h1>
-
-          <p
-            style={{
-              fontSize: '18px',
-              color: colors.textSecondary,
-              lineHeight: 1.7,
-              maxWidth: '640px',
-              margin: '0 auto 40px',
-            }}
-          >
-            求人媒体のSEOキーワードデータを分析し、
-            <br className="desktop-only" />
-            最適な採用戦略を導き出します。
-          </p>
-
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link
-              href="/auth/signup"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '14px 28px',
-                background: colors.primary,
-                color: '#FFFFFF',
-                textDecoration: 'none',
-                borderRadius: '10px',
-                fontSize: '16px',
-                fontWeight: 600,
-                boxShadow: '0 4px 14px rgba(13, 148, 136, 0.3)',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-              }}
-            >
-              無料で試す
-              <ArrowRight size={18} />
-            </Link>
-            <a
-              href="#features"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '14px 28px',
-                background: colors.surface,
-                color: colors.text,
-                textDecoration: 'none',
-                borderRadius: '10px',
-                fontSize: '16px',
-                fontWeight: 600,
-                border: `1px solid ${colors.border}`,
-                transition: 'background 0.2s',
-              }}
-            >
-              詳しく見る
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section style={{ padding: '48px 0', background: colors.surface, borderBottom: `1px solid ${colors.border}` }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: '32px',
-              textAlign: 'center',
-            }}
-          >
-            {stats.map((stat) => (
-              <div key={stat.label}>
-                <div style={{ fontSize: '36px', fontWeight: 800, color: colors.primary, marginBottom: '8px' }}>
-                  {stat.value}
-                </div>
-                <div style={{ fontSize: '14px', color: colors.textSecondary }}>{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" style={{ padding: '80px 0', background: colors.background }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-            <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
-              主な機能
-            </h2>
-            <p style={{ fontSize: '16px', color: colors.textSecondary }}>
-              データに基づいた採用媒体戦略を実現する3つの機能
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '24px',
-            }}
-          >
-            {features.map((feature) => (
-              <div
-                key={feature.title}
-                style={{
-                  background: colors.surface,
-                  borderRadius: '16px',
-                  padding: '32px',
-                  border: `1px solid ${colors.border}`,
-                  transition: 'box-shadow 0.3s, transform 0.3s',
-                }}
-              >
-                <div
-                  style={{
-                    width: '56px',
-                    height: '56px',
-                    background: `${colors.primary}10`,
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '20px',
-                  }}
-                >
-                  <feature.icon size={28} style={{ color: colors.primary }} />
-                </div>
-                <h3 style={{ fontSize: '20px', fontWeight: 700, color: colors.text, marginBottom: '12px' }}>
-                  {feature.title}
-                </h3>
-                <p style={{ fontSize: '15px', color: colors.textSecondary, lineHeight: 1.7, marginBottom: '20px' }}>
-                  {feature.description}
-                </p>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {feature.details.map((detail) => (
-                    <li
-                      key={detail}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontSize: '14px',
-                        color: colors.text,
-                        marginBottom: '8px',
-                      }}
-                    >
-                      <CheckCircle2 size={16} style={{ color: colors.success }} />
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section id="benefits" style={{ padding: '80px 0', background: colors.surface }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-            <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
-              導入メリット
-            </h2>
-            <p style={{ fontSize: '16px', color: colors.textSecondary }}>
-              MEDICA SOERUTEで実現できること
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '24px',
-            }}
-          >
-            {benefits.map((benefit) => (
-              <div
-                key={benefit.title}
-                style={{
-                  display: 'flex',
-                  gap: '16px',
-                  padding: '24px',
-                  background: colors.background,
-                  borderRadius: '12px',
-                }}
-              >
-                <div
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    background: `${colors.primary}10`,
-                    borderRadius: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <benefit.icon size={24} style={{ color: colors.primary }} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: colors.text, marginBottom: '8px' }}>
-                    {benefit.title}
-                  </h3>
-                  <p style={{ fontSize: '14px', color: colors.textSecondary, lineHeight: 1.6, margin: 0 }}>
-                    {benefit.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" style={{ padding: '80px 0', background: colors.background }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-            <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
-              料金プラン
-            </h2>
-            <p style={{ fontSize: '16px', color: colors.textSecondary }}>
-              14日間の無料トライアル付き・クレジットカード不要
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '24px',
-              maxWidth: '1000px',
-              margin: '0 auto',
-            }}
-          >
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                style={{
-                  background: colors.surface,
-                  borderRadius: '16px',
-                  padding: '32px',
-                  border: plan.popular ? `2px solid ${colors.primary}` : `1px solid ${colors.border}`,
-                  position: 'relative',
-                  boxShadow: plan.popular ? '0 8px 30px rgba(13, 148, 136, 0.15)' : 'none',
-                }}
-              >
-                {plan.popular && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '-12px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      padding: '6px 16px',
-                      background: colors.primary,
-                      color: '#FFFFFF',
-                      borderRadius: '100px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                    }}
-                  >
-                    おすすめ
-                  </div>
-                )}
-
-                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: 700, color: colors.text, marginBottom: '8px' }}>
-                    {plan.name}
-                  </h3>
-                  <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '16px' }}>
-                    {plan.description}
-                  </p>
-                  <div>
-                    {plan.price === 'お問い合わせ' ? (
-                      <span style={{ fontSize: '24px', fontWeight: 700, color: colors.text }}>{plan.price}</span>
-                    ) : (
-                      <>
-                        <span style={{ fontSize: '36px', fontWeight: 800, color: colors.text }}>¥{plan.price}</span>
-                        <span style={{ fontSize: '14px', color: colors.textSecondary }}>/月</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0' }}>
-                  {plan.features.map((feature) => (
-                    <li
-                      key={feature}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '10px',
-                        fontSize: '14px',
-                        color: colors.text,
-                        marginBottom: '12px',
-                      }}
-                    >
-                      <CheckCircle2 size={18} style={{ color: colors.success, flexShrink: 0, marginTop: '2px' }} />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  href="/auth/signup"
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '14px',
-                    background: plan.popular ? colors.primary : 'transparent',
-                    color: plan.popular ? '#FFFFFF' : colors.primary,
-                    textDecoration: 'none',
-                    borderRadius: '10px',
-                    fontSize: '15px',
-                    fontWeight: 600,
-                    textAlign: 'center',
-                    border: plan.popular ? 'none' : `2px solid ${colors.primary}`,
-                    transition: 'background 0.2s',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section id="faq" style={{ padding: '80px 0', background: colors.surface }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-            <h2 style={{ fontSize: '32px', fontWeight: 700, color: colors.text, marginBottom: '16px' }}>
-              よくある質問
-            </h2>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {faqs.map((faq, index) => (
-              <div
-                key={index}
-                style={{
-                  background: colors.background,
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                }}
-              >
-                <button
-                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                  style={{
-                    width: '100%',
-                    padding: '20px 24px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ fontSize: '15px', fontWeight: 600, color: colors.text }}>{faq.question}</span>
-                  <ChevronDown
-                    size={20}
-                    style={{
-                      color: colors.textSecondary,
-                      transform: openFaq === index ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s',
-                    }}
-                  />
-                </button>
-                {openFaq === index && (
-                  <div style={{ padding: '0 24px 20px', fontSize: '14px', color: colors.textSecondary, lineHeight: 1.7 }}>
-                    {faq.answer}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section
-        style={{
-          padding: '80px 0',
-          background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`,
-        }}
-      >
-        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 24px', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '32px', fontWeight: 700, color: '#FFFFFF', marginBottom: '16px' }}>
-            今すぐ始めましょう
-          </h2>
-          <p style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '32px' }}>
-            14日間の無料トライアルで、データドリブンな採用媒体選びを体験してください。
-            <br />
-            クレジットカード不要・いつでもキャンセル可能
-          </p>
-          <Link
-            href="/auth/signup"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '16px 32px',
-              background: '#FFFFFF',
-              color: colors.primary,
-              textDecoration: 'none',
-              borderRadius: '10px',
-              fontSize: '16px',
-              fontWeight: 600,
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.2)',
-            }}
-          >
-            無料で試す
-            <ArrowRight size={18} />
-          </Link>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer style={{ padding: '48px 0', background: colors.text }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-              alignItems: 'center',
-              textAlign: 'center',
-            }}
-          >
-            <span style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF' }}>MEDICA SOERUTE</span>
-            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
-                利用規約
-              </Link>
-              <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
-                プライバシーポリシー
-              </Link>
-              <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
-                特定商取引法に基づく表記
-              </Link>
-              <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
-                お問い合わせ
-              </Link>
-            </div>
-            <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>
-              © 2024 MEDICA SOERUTE. All rights reserved.
-            </div>
-          </div>
-        </div>
-      </footer>
-
-      {/* Global Styles for Responsive */}
       <style jsx global>{`
         @media (min-width: 768px) {
-          .desktop-nav {
-            display: flex !important;
-          }
-          .mobile-menu-btn {
-            display: none !important;
-          }
-          .desktop-only {
-            display: block;
-          }
+          .desktop-nav { display: flex !important; }
+          .mobile-menu-btn { display: none !important; }
         }
         @media (max-width: 767px) {
-          .desktop-nav {
-            display: none !important;
+          .desktop-nav { display: none !important; }
+          .mobile-menu-btn { display: block !important; }
+        }
+      `}</style>
+    </header>
+  )
+}
+
+// =====================================
+// フッター
+// =====================================
+
+function Footer() {
+  return (
+    <footer style={{ padding: '48px 0', background: colors.text }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center', textAlign: 'center' }}>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF' }}>MEDICA SOERUTE</span>
+          <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)', maxWidth: '400px', lineHeight: 1.6 }}>
+            採用媒体の分析プラットフォーム。
+            データで武装し、最適な媒体選定を。
+          </p>
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
+              利用規約
+            </Link>
+            <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
+              プライバシーポリシー
+            </Link>
+            <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
+              特定商取引法に基づく表記
+            </Link>
+            <Link href="#" style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', fontSize: '14px' }}>
+              お問い合わせ
+            </Link>
+          </div>
+          <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>
+            © 2024 MEDICA SOERUTE. All rights reserved.
+          </div>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+// =====================================
+// メインページ
+// =====================================
+
+export default function HomePage() {
+  return (
+    <>
+      <style jsx global>{`
+        /* フィーチャーグリッド */
+        .features-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        @media (min-width: 640px) {
+          .features-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
           }
-          .mobile-menu-btn {
-            display: block !important;
+        }
+
+        /* ターゲットグリッド */
+        .target-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        @media (min-width: 768px) {
+          .target-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
           }
-          .desktop-only {
-            display: none;
+        }
+
+        /* セクションのパディング調整 */
+        section {
+          padding-left: 16px !important;
+          padding-right: 16px !important;
+        }
+        @media (min-width: 640px) {
+          section {
+            padding-left: 24px !important;
+            padding-right: 24px !important;
+          }
+        }
+
+        /* モバイルCTAボタン */
+        @media (max-width: 480px) {
+          .hero-cta a {
+            width: 100%;
+            justify-content: center;
           }
         }
       `}</style>
-    </div>
+      <div style={{ minHeight: '100vh', background: colors.background }}>
+        <Header />
+        <main>
+          <HeroSection />
+          <ProblemSection />
+          <SolutionSection />
+          <FeaturesSection />
+          <BeforeAfterSection />
+          <TargetSection />
+          <PricingSection />
+          <FAQSection />
+          <CTASection />
+        </main>
+        <Footer />
+      </div>
+    </>
   )
 }

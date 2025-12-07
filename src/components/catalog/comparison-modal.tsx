@@ -162,8 +162,8 @@ export function ComparisonModal({ isOpen, onClose, selectedMedia }: ComparisonMo
         }
       }
 
-      // キーワードデータ取得
-      const keywordsRes = await fetch(`/api/admin/trends/keywords?media_ids=${mediaIds}&limit=20`)
+      // キーワードデータ取得（全件取得のため大きなlimitを設定）
+      const keywordsRes = await fetch(`/api/admin/trends/keywords?media_ids=${mediaIds}&limit=1000`)
       const keywordsData = await keywordsRes.json()
 
       if (keywordsData.success && keywordsData.data) {
@@ -818,6 +818,8 @@ function TrendTable({
 // キーワード比較タブ
 // =====================================
 
+const KEYWORDS_PER_PAGE = 30
+
 function KeywordsComparison({
   media,
   keywordData,
@@ -825,10 +827,33 @@ function KeywordsComparison({
   media: MediaMaster[]
   keywordData: Record<string, KeywordData[]>
 }) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+
   // 全キーワードを抽出（重複排除）
   const allKeywords = Array.from(
     new Set(Object.values(keywordData).flat().map((k) => k.keyword))
-  ).slice(0, 20)
+  )
+
+  // 検索フィルター（スペース区切りでAND検索：部分一致）
+  const filteredKeywords = searchQuery
+    ? allKeywords.filter((kw) => {
+        const kwLower = kw.toLowerCase()
+        const searchTerms = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
+        return searchTerms.every((term) => kwLower.includes(term))
+      })
+    : allKeywords
+
+  // ページネーション
+  const totalPages = Math.ceil(filteredKeywords.length / KEYWORDS_PER_PAGE)
+  const startIndex = (currentPage - 1) * KEYWORDS_PER_PAGE
+  const paginatedKeywords = filteredKeywords.slice(startIndex, startIndex + KEYWORDS_PER_PAGE)
+
+  // 検索時はページをリセット
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+    setCurrentPage(1)
+  }
 
   if (allKeywords.length === 0) {
     return (
@@ -847,17 +872,58 @@ function KeywordsComparison({
         overflow: 'hidden',
       }}
     >
+      {/* ヘッダー with 検索 */}
       <div
         style={{
           padding: '12px 16px',
           background: '#FAFAFA',
           borderBottom: '1px solid #E4E4E7',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          flexWrap: 'wrap',
         }}
       >
-        <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: 0 }}>
-          キーワード順位比較（上位20件）
-        </h3>
+        <div>
+          <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: 0 }}>
+            キーワード順位比較
+          </h3>
+          <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0 0' }}>
+            全{allKeywords.length}件{searchQuery && ` → ${filteredKeywords.length}件にフィルター中`}
+          </p>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <Search
+            style={{
+              position: 'absolute',
+              left: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 16,
+              height: 16,
+              color: '#A1A1AA',
+            }}
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="キーワードを検索..."
+            style={{
+              width: '240px',
+              padding: '8px 12px 8px 36px',
+              fontSize: '13px',
+              border: '1px solid #E4E4E7',
+              borderRadius: '6px',
+              outline: 'none',
+              background: '#FFFFFF',
+            }}
+          />
+        </div>
       </div>
+
+      {/* テーブル */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
           <thead>
@@ -894,60 +960,153 @@ function KeywordsComparison({
             </tr>
           </thead>
           <tbody>
-            {allKeywords.map((keyword) => (
-              <tr key={keyword} style={{ borderBottom: '1px solid #F4F4F5' }}>
-                <td style={{ padding: '12px 16px' }}>
-                  <span style={{ fontSize: '13px', color: '#18181B' }}>{keyword}</span>
+            {paginatedKeywords.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={media.length + 1}
+                  style={{ padding: '24px', textAlign: 'center', color: '#A1A1AA', fontSize: '13px' }}
+                >
+                  「{searchQuery}」に一致するキーワードが見つかりません
                 </td>
-                {media.map((m) => {
-                  const keywords = keywordData[m.id] || []
-                  const kw = keywords.find((k) => k.keyword === keyword)
-                  const rank = kw?.rank
-
-                  return (
-                    <td key={m.id} style={{ textAlign: 'center', padding: '12px 16px' }}>
-                      {rank ? (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            background:
-                              rank <= 3
-                                ? '#DCFCE7'
-                                : rank <= 10
-                                ? '#DBEAFE'
-                                : rank <= 20
-                                ? '#FEF9C3'
-                                : '#F4F4F5',
-                            color:
-                              rank <= 3
-                                ? '#166534'
-                                : rank <= 10
-                                ? '#1E40AF'
-                                : rank <= 20
-                                ? '#854D0E'
-                                : '#52525B',
-                          }}
-                        >
-                          {rank}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: '13px', color: '#A1A1AA' }}>-</span>
-                      )}
-                    </td>
-                  )
-                })}
               </tr>
-            ))}
+            ) : (
+              paginatedKeywords.map((keyword) => (
+                <tr key={keyword} style={{ borderBottom: '1px solid #F4F4F5' }}>
+                  <td style={{ padding: '12px 16px' }}>
+                    <span style={{ fontSize: '13px', color: '#18181B' }}>{keyword}</span>
+                  </td>
+                  {media.map((m) => {
+                    const keywords = keywordData[m.id] || []
+                    const kw = keywords.find((k) => k.keyword === keyword)
+                    const rank = kw?.rank
+
+                    return (
+                      <td key={m.id} style={{ textAlign: 'center', padding: '12px 16px' }}>
+                        {rank ? (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              background:
+                                rank <= 3
+                                  ? '#DCFCE7'
+                                  : rank <= 10
+                                  ? '#DBEAFE'
+                                  : rank <= 20
+                                  ? '#FEF9C3'
+                                  : '#F4F4F5',
+                              color:
+                                rank <= 3
+                                  ? '#166534'
+                                  : rank <= 10
+                                  ? '#1E40AF'
+                                  : rank <= 20
+                                  ? '#854D0E'
+                                  : '#52525B',
+                            }}
+                          >
+                            {rank}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '13px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* ページネーション */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '16px',
+            borderTop: '1px solid #E4E4E7',
+            background: '#FAFAFA',
+          }}
+        >
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              border: '1px solid #E4E4E7',
+              borderRadius: '4px',
+              background: currentPage === 1 ? '#F4F4F5' : '#FFFFFF',
+              color: currentPage === 1 ? '#A1A1AA' : '#52525B',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            前へ
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number
+              if (totalPages <= 5) {
+                pageNum = i + 1
+              } else if (currentPage <= 3) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i
+              } else {
+                pageNum = currentPage - 2 + i
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    fontSize: '13px',
+                    fontWeight: currentPage === pageNum ? 600 : 400,
+                    border: currentPage === pageNum ? '1px solid #0D9488' : '1px solid #E4E4E7',
+                    borderRadius: '4px',
+                    background: currentPage === pageNum ? '#0D9488' : '#FFFFFF',
+                    color: currentPage === pageNum ? '#FFFFFF' : '#52525B',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+          </div>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              border: '1px solid #E4E4E7',
+              borderRadius: '4px',
+              background: currentPage === totalPages ? '#F4F4F5' : '#FFFFFF',
+              color: currentPage === totalPages ? '#A1A1AA' : '#52525B',
+              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+            }}
+          >
+            次へ
+          </button>
+          <span style={{ fontSize: '12px', color: '#71717A', marginLeft: '8px' }}>
+            {startIndex + 1}-{Math.min(startIndex + KEYWORDS_PER_PAGE, filteredKeywords.length)} / {filteredKeywords.length}件
+          </span>
+        </div>
+      )}
     </div>
   )
 }
