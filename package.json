@@ -45,7 +45,7 @@
     "inngest": "^3.47.0",
     "jspdf": "^3.0.4",
     "lucide-react": "^0.555.0",
-    "next": "14.2.33",
+    "next": "16.0.7",
     "papaparse": "^5.5.3",
     "react": "^18",
     "react-dom": "^18",
