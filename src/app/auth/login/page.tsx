@@ -71,6 +71,15 @@ function LoginForm() {
         return
       }
 
+      // セッション登録（同時ログイン制御）
+      // 既存セッションは自動で無効化される
+      try {
+        await fetch('/api/auth/session', { method: 'POST' })
+      } catch {
+        // セッション登録失敗は無視（ログイン自体は成功させる）
+        console.warn('Session registration failed, continuing with login')
+      }
+
       router.push(redirectTo)
       router.refresh()
     } catch {

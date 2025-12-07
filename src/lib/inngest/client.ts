@@ -27,6 +27,30 @@ type ImportJobEvents = {
 }
 
 /**
+ * トライアル通知のイベントスキーマ
+ * 設計書: GAP-009 トライアル期間終了通知スケジュール
+ */
+type TrialNotificationEvents = {
+  'trial/check.scheduled': {
+    data: Record<string, never>
+  }
+  'trial/notification.send': {
+    data: {
+      userId: string
+      email: string
+      userName?: string
+      daysRemaining: number
+      trialEndsAt: string
+    }
+  }
+}
+
+/**
+ * 統合イベント型
+ */
+type AllEvents = ImportJobEvents & TrialNotificationEvents
+
+/**
  * Inngestクライアント
  *
  * 環境変数:
@@ -35,5 +59,5 @@ type ImportJobEvents = {
  */
 export const inngest = new Inngest({
   id: 'medica-soerute',
-  schemas: new EventSchemas().fromRecord<ImportJobEvents>(),
+  schemas: new EventSchemas().fromRecord<AllEvents>(),
 })

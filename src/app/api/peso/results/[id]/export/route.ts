@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { User, PlanType } from '@/types'
+import { logAuditEvent, extractClientInfo } from '@/lib/audit'
 
 // プラン別のエクスポート制限
 const EXPORT_PERMISSIONS: Record<PlanType, { csv: boolean; pdf: boolean }> = {
@@ -129,6 +130,18 @@ export async function GET(
       // CSV生成
       const csvContent = generatePesoCSV(result)
       const filename = `peso_diagnosis_${diagnosisId.substring(0, 8)}_${new Date().toISOString().split('T')[0]}.csv`
+
+      // 監査ログ記録
+      const clientInfo = extractClientInfo(request)
+      await logAuditEvent({
+        action: 'data.exported',
+        userId: user.id,
+        targetResourceType: 'peso_diagnosis',
+        targetResourceId: diagnosisId,
+        details: { format: 'csv' },
+        ...clientInfo,
+        success: true,
+      })
 
       return new NextResponse(csvContent, {
         headers: {

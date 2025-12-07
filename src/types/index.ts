@@ -59,13 +59,32 @@ export interface PesoScores {
   owned: number // 0-100
 }
 
+// GAP-016: PESO診断用企業情報
+export interface CompanyInfo {
+  company_name: string
+  industry: string
+  employee_size: string
+  prefecture: string
+}
+
+// PESO診断用コンテンツ深度
+export type PhotoDepthLevel = 'none' | 'free' | 'original' | 'edited' | 'ab_test'
+export type TextDepthLevel = 'basic' | 'detailed' | 'interview' | 'competitive' | 'ab_test'
+
+export interface ContentDepth {
+  photo: PhotoDepthLevel | string | null // Lv.0-4: none, free, original, edited, ab_test
+  text: TextDepthLevel | string | null // Lv.0-4: basic, detailed, interview, competitive, ab_test
+}
+
 export interface PesoDiagnosisData {
+  companyInfo?: CompanyInfo // GAP-016: STEP0企業情報
   currentActivities: {
     paid: string[]
     earned: string[]
     shared: string[]
     owned: string[]
   }
+  contentDepth?: ContentDepth // コンテンツ深度評価
   budget?: {
     total: number
     breakdown?: Record<string, number>

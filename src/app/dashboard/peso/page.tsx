@@ -201,10 +201,18 @@ export default function PESOPage() {
 
   // Survey modal state
   const [isSurveyOpen, setIsSurveyOpen] = useState(false)
-  const [surveyStep, setSurveyStep] = useState(1)
+  const [surveyStep, setSurveyStep] = useState(0) // STEP 0から開始（企業情報）
   const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set())
   const [photoDepth, setPhotoDepth] = useState<string | null>(null)
   const [textDepth, setTextDepth] = useState<string | null>(null)
+
+  // STEP 0: 企業情報（GAP-016）
+  const [companyInfo, setCompanyInfo] = useState({
+    companyName: '',
+    industry: '',
+    employeeSize: '',
+    prefecture: '',
+  })
 
   const toggleTag = (categoryKey: string, tagId: string) => {
     setPesoData((prev) =>
@@ -223,10 +231,11 @@ export default function PESOPage() {
 
   // Survey modal handlers
   const openSurvey = () => {
-    setSurveyStep(1)
+    setSurveyStep(0) // STEP 0から開始
     setSelectedActivities(new Set())
     setPhotoDepth(null)
     setTextDepth(null)
+    setCompanyInfo({ companyName: '', industry: '', employeeSize: '', prefecture: '' })
     setIsSurveyOpen(true)
   }
 
@@ -253,7 +262,7 @@ export default function PESOPage() {
   }
 
   const handleSurveyBack = () => {
-    if (surveyStep > 1) {
+    if (surveyStep > 0) {
       setSurveyStep(surveyStep - 1)
     }
   }
@@ -282,6 +291,13 @@ export default function PESOPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // STEP 0: 企業情報（GAP-016）
+          companyInfo: {
+            company_name: companyInfo.companyName,
+            industry: companyInfo.industry,
+            employee_size: companyInfo.employeeSize,
+            prefecture: companyInfo.prefecture,
+          },
           currentActivities: { paid, earned, shared, owned },
           contentDepth: { photo: photoDepth, text: textDepth },
         }),
@@ -378,7 +394,7 @@ export default function PESOPage() {
   }, [resultId])
 
   const getProgressPercent = () => {
-    return (surveyStep / 3) * 100
+    return ((surveyStep + 1) / 4) * 100 // 4ステップ (0,1,2,3)
   }
 
   const handleAnalyze = async () => {
@@ -938,12 +954,249 @@ export default function PESOPage() {
                 />
               </div>
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#A1A1AA' }}>
-                STEP {surveyStep} / 3
+                STEP {surveyStep} / 3（{surveyStep === 0 ? '企業情報' : surveyStep === 1 ? 'やっていること' : surveyStep === 2 ? '詳細' : '求人コンテンツ'}）
               </div>
             </div>
 
             {/* Modal Body */}
             <div style={{ padding: '24px', overflow: 'auto', flex: 1 }}>
+              {/* STEP 0: 企業情報（GAP-016） */}
+              {surveyStep === 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '24px' }}>
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '6px',
+                        background: '#0D9488',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      0
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0' }}>
+                        企業情報
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#A1A1AA', margin: 0 }}>
+                        診断精度向上のため、貴社の基本情報を教えてください（任意）
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* 企業名 */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '6px' }}>
+                        企業名
+                      </label>
+                      <input
+                        type="text"
+                        value={companyInfo.companyName}
+                        onChange={(e) => setCompanyInfo({ ...companyInfo, companyName: e.target.value })}
+                        placeholder="例：株式会社〇〇"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: '1px solid #E4E4E7',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+
+                    {/* 業界 */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '6px' }}>
+                        業種・業界
+                      </label>
+                      <select
+                        value={companyInfo.industry}
+                        onChange={(e) => setCompanyInfo({ ...companyInfo, industry: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: '1px solid #E4E4E7',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          background: '#FFFFFF',
+                        }}
+                      >
+                        <option value="">選択してください</option>
+                        <optgroup label="IT・通信">
+                          <option value="it_software">ソフトウェア・SaaS</option>
+                          <option value="it_web">Web・インターネット</option>
+                          <option value="it_telecom">通信・ネットワーク</option>
+                        </optgroup>
+                        <optgroup label="製造・メーカー">
+                          <option value="manufacturing_electronics">電機・精密機器</option>
+                          <option value="manufacturing_automotive">自動車・輸送機器</option>
+                          <option value="manufacturing_chemical">化学・素材</option>
+                          <option value="manufacturing_food">食品・飲料</option>
+                          <option value="manufacturing_other">その他製造</option>
+                        </optgroup>
+                        <optgroup label="小売・流通">
+                          <option value="retail">小売・販売</option>
+                          <option value="ecommerce">EC・通販</option>
+                          <option value="logistics">物流・倉庫</option>
+                        </optgroup>
+                        <optgroup label="サービス">
+                          <option value="consulting">コンサルティング</option>
+                          <option value="advertising">広告・マーケティング</option>
+                          <option value="hr_service">人材サービス</option>
+                          <option value="hospitality">ホテル・旅行</option>
+                          <option value="restaurant">飲食</option>
+                          <option value="education">教育・スクール</option>
+                        </optgroup>
+                        <optgroup label="金融・不動産">
+                          <option value="finance">金融・保険</option>
+                          <option value="real_estate">不動産</option>
+                        </optgroup>
+                        <optgroup label="医療・福祉">
+                          <option value="hospital">病院・クリニック</option>
+                          <option value="nursing">介護・福祉</option>
+                          <option value="pharmacy">薬局</option>
+                        </optgroup>
+                        <optgroup label="建設・インフラ">
+                          <option value="construction">建設・土木</option>
+                          <option value="infrastructure">電力・ガス・水道</option>
+                        </optgroup>
+                        <optgroup label="その他">
+                          <option value="government">官公庁・自治体</option>
+                          <option value="npo">NPO・団体</option>
+                          <option value="other">その他</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {/* 従業員規模 */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '6px' }}>
+                        従業員規模
+                      </label>
+                      <select
+                        value={companyInfo.employeeSize}
+                        onChange={(e) => setCompanyInfo({ ...companyInfo, employeeSize: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: '1px solid #E4E4E7',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          background: '#FFFFFF',
+                        }}
+                      >
+                        <option value="">選択してください</option>
+                        <option value="1-10">1〜10名</option>
+                        <option value="11-50">11〜50名</option>
+                        <option value="51-100">51〜100名</option>
+                        <option value="101-300">101〜300名</option>
+                        <option value="301-500">301〜500名</option>
+                        <option value="501-1000">501〜1000名</option>
+                        <option value="1001+">1001名以上</option>
+                      </select>
+                    </div>
+
+                    {/* 所在地 */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '6px' }}>
+                        所在地（都道府県）
+                      </label>
+                      <select
+                        value={companyInfo.prefecture}
+                        onChange={(e) => setCompanyInfo({ ...companyInfo, prefecture: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: '1px solid #E4E4E7',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          background: '#FFFFFF',
+                        }}
+                      >
+                        <option value="">選択してください</option>
+                        <option value="hokkaido">北海道</option>
+                        <option value="aomori">青森県</option>
+                        <option value="iwate">岩手県</option>
+                        <option value="miyagi">宮城県</option>
+                        <option value="akita">秋田県</option>
+                        <option value="yamagata">山形県</option>
+                        <option value="fukushima">福島県</option>
+                        <option value="ibaraki">茨城県</option>
+                        <option value="tochigi">栃木県</option>
+                        <option value="gunma">群馬県</option>
+                        <option value="saitama">埼玉県</option>
+                        <option value="chiba">千葉県</option>
+                        <option value="tokyo">東京都</option>
+                        <option value="kanagawa">神奈川県</option>
+                        <option value="niigata">新潟県</option>
+                        <option value="toyama">富山県</option>
+                        <option value="ishikawa">石川県</option>
+                        <option value="fukui">福井県</option>
+                        <option value="yamanashi">山梨県</option>
+                        <option value="nagano">長野県</option>
+                        <option value="gifu">岐阜県</option>
+                        <option value="shizuoka">静岡県</option>
+                        <option value="aichi">愛知県</option>
+                        <option value="mie">三重県</option>
+                        <option value="shiga">滋賀県</option>
+                        <option value="kyoto">京都府</option>
+                        <option value="osaka">大阪府</option>
+                        <option value="hyogo">兵庫県</option>
+                        <option value="nara">奈良県</option>
+                        <option value="wakayama">和歌山県</option>
+                        <option value="tottori">鳥取県</option>
+                        <option value="shimane">島根県</option>
+                        <option value="okayama">岡山県</option>
+                        <option value="hiroshima">広島県</option>
+                        <option value="yamaguchi">山口県</option>
+                        <option value="tokushima">徳島県</option>
+                        <option value="kagawa">香川県</option>
+                        <option value="ehime">愛媛県</option>
+                        <option value="kochi">高知県</option>
+                        <option value="fukuoka">福岡県</option>
+                        <option value="saga">佐賀県</option>
+                        <option value="nagasaki">長崎県</option>
+                        <option value="kumamoto">熊本県</option>
+                        <option value="oita">大分県</option>
+                        <option value="miyazaki">宮崎県</option>
+                        <option value="kagoshima">鹿児島県</option>
+                        <option value="okinawa">沖縄県</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: '24px',
+                      padding: '12px 16px',
+                      background: '#F0FDF4',
+                      border: '1px solid #BBF7D0',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      color: '#166534',
+                    }}
+                  >
+                    💡 企業情報を入力すると、業界・規模に最適化された診断結果を提供できます
+                  </div>
+                </div>
+              )}
+
               {/* STEP 1: やっていること */}
               {surveyStep === 1 && (
                 <div>

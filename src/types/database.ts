@@ -21,6 +21,12 @@ export type MediaCategory = 'general' | 'nursing' | 'pharmacy' | 'dental' | 'wel
 export type QueryIntentType = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
 // 分類ソース: rule=ルールベース, ai=Claude AI, manual=管理者手動, unknown=不明
 export type ClassificationSourceType = 'rule' | 'ai' | 'manual' | 'unknown'
+// PESOカテゴリ: GAP-021
+export type PesoCategory = 'paid' | 'earned' | 'shared' | 'owned'
+// 実装難易度
+export type ImplementationDifficulty = 'easy' | 'medium' | 'hard'
+// 期待インパクト
+export type ExpectedImpact = 'low' | 'medium' | 'high'
 
 // ----- Tables -----
 export interface Database {
@@ -342,6 +348,57 @@ export interface Database {
           updated_at?: string
         }
       }
+      // GAP-021: PESO施策マスターテーブル
+      tactics_master: {
+        Row: {
+          id: string
+          category: PesoCategory
+          name: string
+          name_en: string | null
+          description: string | null
+          sort_order: number
+          evaluation_criteria: Json
+          recommended_for: Json
+          implementation_difficulty: ImplementationDifficulty | null
+          estimated_cost_range: string | null
+          expected_impact: ExpectedImpact | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          category: PesoCategory
+          name: string
+          name_en?: string | null
+          description?: string | null
+          sort_order?: number
+          evaluation_criteria?: Json
+          recommended_for?: Json
+          implementation_difficulty?: ImplementationDifficulty | null
+          estimated_cost_range?: string | null
+          expected_impact?: ExpectedImpact | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          category?: PesoCategory
+          name?: string
+          name_en?: string | null
+          description?: string | null
+          sort_order?: number
+          evaluation_criteria?: Json
+          recommended_for?: Json
+          implementation_difficulty?: ImplementationDifficulty | null
+          estimated_cost_range?: string | null
+          expected_impact?: ExpectedImpact | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -367,3 +424,4 @@ export type UsageLog = Database['public']['Tables']['usage_logs']['Row']
 export type AllowedDomain = Database['public']['Tables']['allowed_domains']['Row']
 export type QueryMaster = Database['public']['Tables']['query_master']['Row']
 export type MediaQueryData = Database['public']['Tables']['media_query_data']['Row']
+export type TacticsMaster = Database['public']['Tables']['tactics_master']['Row']

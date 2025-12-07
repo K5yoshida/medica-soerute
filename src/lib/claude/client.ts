@@ -3,7 +3,7 @@
 // ===========================================
 
 import Anthropic from '@anthropic-ai/sdk'
-import type { JobRequirements, MatchedMedia, AnalysisDetail, MediaMaster } from '@/types'
+import type { JobRequirements, MatchedMedia, AnalysisDetail, MediaMaster, PesoDiagnosisData } from '@/types'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -97,19 +97,7 @@ ${JSON.stringify(mediaList.map(m => ({
 }
 
 // ----- PESO診断分析 -----
-export async function analyzePeso(diagnosisData: {
-  currentActivities: {
-    paid: string[]
-    earned: string[]
-    shared: string[]
-    owned: string[]
-  }
-  budget?: {
-    total: number
-    breakdown?: Record<string, number>
-  }
-  goals?: string[]
-}): Promise<{
+export async function analyzePeso(diagnosisData: PesoDiagnosisData): Promise<{
   scores: {
     paid: number
     earned: number
@@ -128,6 +116,11 @@ PESO とは：
 - Shared（共有メディア）: SNS、コミュニティ等
 - Owned（自社メディア）: 採用サイト、ブログ等
 
+分析時の考慮事項：
+- 企業情報（業界、規模、所在地）に応じた適切な施策を提案
+- コンテンツ深度（写真・テキストの充実度）を評価に反映
+- 業界特性に合わせた具体的なアドバイスを提供
+
 回答は必ず以下のJSON形式で返してください：
 {
   "scores": {
@@ -140,10 +133,65 @@ PESO とは：
   "recommendations": ["改善提案1", "改善提案2", "改善提案3"]
 }`
 
-  const userPrompt = `以下の採用活動状況をPESOフレームワークで分析してください。
+  // ユーザープロンプトを構築
+  const promptParts: string[] = ['以下の採用活動状況をPESOフレームワークで分析してください。']
 
-【現在の活動状況】
-${JSON.stringify(diagnosisData, null, 2)}`
+  // GAP-016: 企業情報を含める
+  if (diagnosisData.companyInfo) {
+    const { company_name, industry, employee_size, prefecture } = diagnosisData.companyInfo
+    promptParts.push(`
+【企業情報】
+- 企業名: ${company_name || '未入力'}
+- 業界: ${industry || '未選択'}
+- 従業員規模: ${employee_size || '未選択'}
+- 所在地: ${prefecture || '未選択'}`)
+  }
+
+  // コンテンツ深度を含める
+  if (diagnosisData.contentDepth) {
+    const { photo, text } = diagnosisData.contentDepth
+    // 写真レベルのラベルマッピング
+    const photoLabels: Record<string, string> = {
+      none: 'Lv.0 写真なし',
+      free: 'Lv.1 フリー素材使用',
+      original: 'Lv.2 自社撮影写真',
+      edited: 'Lv.3 加工・編集写真',
+      ab_test: 'Lv.4 A/Bテスト実施中',
+    }
+    // テキストレベルのラベルマッピング
+    const textLabels: Record<string, string> = {
+      basic: 'Lv.0 基本情報のみ',
+      detailed: 'Lv.1 詳細記載',
+      interview: 'Lv.2 従業員の声あり',
+      competitive: 'Lv.3 競合分析反映',
+      ab_test: 'Lv.4 A/Bテスト実施中',
+    }
+    promptParts.push(`
+【コンテンツ深度評価】
+- 写真コンテンツ: ${photo ? photoLabels[photo] || photo : '未選択'}
+- テキストコンテンツ: ${text ? textLabels[text] || text : '未選択'}`)
+  }
+
+  // 現在の活動状況
+  promptParts.push(`
+【現在のPESO活動状況】
+${JSON.stringify(diagnosisData.currentActivities, null, 2)}`)
+
+  // 予算情報があれば追加
+  if (diagnosisData.budget) {
+    promptParts.push(`
+【予算情報】
+${JSON.stringify(diagnosisData.budget, null, 2)}`)
+  }
+
+  // 目標があれば追加
+  if (diagnosisData.goals && diagnosisData.goals.length > 0) {
+    promptParts.push(`
+【目標】
+${diagnosisData.goals.join('\n')}`)
+  }
+
+  const userPrompt = promptParts.join('\n')
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -338,10 +386,107 @@ ${JSON.stringify(context, null, 2)}`
     throw new Error('Unexpected response type')
   }
 
-  const jsonMatch = content.text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
+  const recommendJsonMatch = content.text.match(/\{[\s\S]*\}/)
+  if (!recommendJsonMatch) {
     throw new Error('Failed to parse response JSON')
   }
 
-  return JSON.parse(jsonMatch[0])
+  return JSON.parse(recommendJsonMatch[0])
+}
+
+// ----- AIクエリ提案 (GAP-012) -----
+export interface KeywordSuggestion {
+  keyword: string
+  category: 'related' | 'competitor' | 'longtail'
+  relevanceScore: number
+  reason: string
+}
+
+export interface KeywordSuggestionsResult {
+  keywords: KeywordSuggestion[]
+  suggestedCategories: string[]
+  searchTips: string[]
+}
+
+export async function suggestRelatedKeywords(params: {
+  jobType?: string
+  area?: string
+  conditions?: string[]
+  currentKeywords?: string[]
+  suggestionType?: 'related' | 'competitor' | 'longtail' | 'all'
+}): Promise<KeywordSuggestionsResult> {
+  const { jobType, area, conditions, currentKeywords, suggestionType = 'all' } = params
+
+  const systemPrompt = `あなたは医療・介護業界の求人検索キーワードの専門家です。
+ユーザーの入力に基づいて、効果的な検索キーワードを提案してください。
+
+提案するキーワードは以下の3カテゴリに分類してください：
+1. **related（関連キーワード）**: 直接関連する検索ワード
+2. **competitor（競合キーワード）**: 競合他社や類似サービスに関するキーワード
+3. **longtail（ロングテールキーワード）**: より具体的で競合が少ないニッチなキーワード
+
+各キーワードには以下を付与してください：
+- relevanceScore: 1-100の関連度スコア
+- reason: なぜこのキーワードを提案するかの理由（20文字以内）
+
+また、追加で以下も提案してください：
+- suggestedCategories: 検索を拡張できるカテゴリ（例：「夜勤」「日勤のみ」など条件面）
+- searchTips: より効果的な検索のためのアドバイス
+
+回答は必ず以下のJSON形式で返してください：
+{
+  "keywords": [
+    {"keyword": "キーワード1", "category": "related", "relevanceScore": 95, "reason": "理由"},
+    {"keyword": "キーワード2", "category": "competitor", "relevanceScore": 80, "reason": "理由"},
+    {"keyword": "キーワード3", "category": "longtail", "relevanceScore": 70, "reason": "理由"}
+  ],
+  "suggestedCategories": ["カテゴリ1", "カテゴリ2"],
+  "searchTips": ["アドバイス1", "アドバイス2"]
+}`
+
+  const userPromptParts: string[] = ['以下の条件に基づいて、効果的な検索キーワードを提案してください。']
+
+  if (jobType) {
+    userPromptParts.push(`【職種】${jobType}`)
+  }
+  if (area) {
+    userPromptParts.push(`【エリア】${area}`)
+  }
+  if (conditions && conditions.length > 0) {
+    userPromptParts.push(`【条件】${conditions.join(', ')}`)
+  }
+  if (currentKeywords && currentKeywords.length > 0) {
+    userPromptParts.push(`【現在のキーワード】${currentKeywords.join(', ')}`)
+    userPromptParts.push('上記のキーワードと重複しない、新しいキーワードを提案してください。')
+  }
+
+  if (suggestionType !== 'all') {
+    userPromptParts.push(`【提案タイプ】${suggestionType}カテゴリのキーワードのみを提案してください。`)
+  }
+
+  const userPrompt = userPromptParts.join('\n\n')
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    messages: [
+      {
+        role: 'user',
+        content: userPrompt,
+      },
+    ],
+    system: systemPrompt,
+  })
+
+  const content = response.content[0]
+  if (content.type !== 'text') {
+    throw new Error('Unexpected response type')
+  }
+
+  const suggestJsonMatch = content.text.match(/\{[\s\S]*\}/)
+  if (!suggestJsonMatch) {
+    throw new Error('Failed to parse response JSON')
+  }
+
+  return JSON.parse(suggestJsonMatch[0])
 }

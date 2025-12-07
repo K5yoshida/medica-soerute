@@ -12,6 +12,7 @@ import {
   IntentClassification,
   QueryType,
 } from '@/lib/query-intent'
+import { sendTrialExpirationNotification } from '@/lib/email'
 
 /**
  * バッチ処理のサイズ定数
@@ -858,6 +859,121 @@ function parseNumber(value: string | undefined): number | null {
 }
 
 /**
+ * トライアル期間終了通知スケジュールジョブ
+ * 設計書: GAP-009 トライアル期間終了通知スケジュール
+ *
+ * 毎日09:00 JSTに実行し、トライアル終了まで7/3/1/0日のユーザーに通知メールを送信
+ * 重複通知を防ぐため、upgrade_notified_at を使用して送信済みを記録
+ */
+export const trialNotificationScheduler = inngest.createFunction(
+  {
+    id: 'trial-notification-scheduler',
+    retries: 2,
+  },
+  // 毎日00:00 UTC = 09:00 JST
+  { cron: '0 0 * * *' },
+  async ({ step }) => {
+    // 通知対象の残り日数
+    const notificationDays = [7, 3, 1, 0]
+
+    const results = await step.run('check-trial-users', async () => {
+      const supabase = createServiceClient()
+      const now = new Date()
+
+      const notificationResults: {
+        daysRemaining: number
+        usersFound: number
+        notificationsSent: number
+        errors: string[]
+      }[] = []
+
+      for (const days of notificationDays) {
+        // 対象日の開始と終了を計算
+        const targetDate = new Date(now)
+        targetDate.setDate(targetDate.getDate() + days)
+        const startOfDay = new Date(targetDate)
+        startOfDay.setHours(0, 0, 0, 0)
+        const endOfDay = new Date(targetDate)
+        endOfDay.setHours(23, 59, 59, 999)
+
+        // トライアルプランで、指定日に終了するユーザーを取得
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id, email, company_name, trial_ends_at, upgrade_notified_at')
+          .eq('plan', 'trial')
+          .gte('trial_ends_at', startOfDay.toISOString())
+          .lte('trial_ends_at', endOfDay.toISOString())
+
+        if (error) {
+          console.error(`Failed to fetch users for ${days} days:`, error)
+          notificationResults.push({
+            daysRemaining: days,
+            usersFound: 0,
+            notificationsSent: 0,
+            errors: [error.message],
+          })
+          continue
+        }
+
+        const usersToNotify = users || []
+        let notificationsSent = 0
+        const errors: string[] = []
+
+        for (const user of usersToNotify) {
+          // 既に同じ日数で通知済みかチェック（24時間以内に同じ通知を送らない）
+          if (user.upgrade_notified_at) {
+            const lastNotified = new Date(user.upgrade_notified_at)
+            const hoursSinceLastNotification = (now.getTime() - lastNotified.getTime()) / (1000 * 60 * 60)
+            if (hoursSinceLastNotification < 24) {
+              continue
+            }
+          }
+
+          try {
+            const result = await sendTrialExpirationNotification({
+              email: user.email,
+              userName: user.company_name || undefined,
+              daysRemaining: days,
+              trialEndsAt: user.trial_ends_at!,
+            })
+
+            if (result.success) {
+              // 通知送信日時を記録
+              await supabase
+                .from('users')
+                .update({ upgrade_notified_at: now.toISOString() })
+                .eq('id', user.id)
+              notificationsSent++
+            } else {
+              errors.push(`${user.email}: ${result.error}`)
+            }
+          } catch (err) {
+            errors.push(`${user.email}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+          }
+        }
+
+        notificationResults.push({
+          daysRemaining: days,
+          usersFound: usersToNotify.length,
+          notificationsSent,
+          errors,
+        })
+      }
+
+      return notificationResults
+    })
+
+    console.log('Trial notification results:', JSON.stringify(results, null, 2))
+
+    return {
+      success: true,
+      results,
+      executedAt: new Date().toISOString(),
+    }
+  }
+)
+
+/**
  * すべてのInngest関数をエクスポート
  */
-export const functions = [importCsvJob]
+export const functions = [importCsvJob, trialNotificationScheduler]

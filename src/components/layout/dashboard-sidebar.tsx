@@ -73,6 +73,13 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
   }
 
   const handleLogout = async () => {
+    // セッション削除（同時ログイン制御）
+    try {
+      await fetch('/api/auth/session', { method: 'DELETE' })
+    } catch {
+      // セッション削除失敗は無視
+    }
+
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/auth/login')

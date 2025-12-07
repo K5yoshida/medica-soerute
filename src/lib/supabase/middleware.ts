@@ -6,6 +6,10 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
 import { checkApiRateLimit } from '@/lib/rate-limiter-edge'
+import {
+  validateSessionEdge,
+  getSessionTokenFromRequest,
+} from '@/lib/auth/session-edge'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -96,6 +100,26 @@ export async function updateSession(request: NextRequest) {
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/auth/login'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // 同時ログイン制御: セッション有効性チェック
+  // 設計書: 23_セキュリティ設計書 - 同時ログイン制御
+  // 認証済みユーザーが保護されたルートにアクセスする場合のみチェック
+  if (user && (protectedRoutes.some(route => pathname.startsWith(route)) || pathname.startsWith('/admin'))) {
+    const sessionToken = getSessionTokenFromRequest(request)
+    const { valid, reason } = await validateSessionEdge(sessionToken)
+
+    // セッションが無効な場合（他デバイスでログインされた場合）
+    if (!valid && reason === 'invalid') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/login'
+      url.searchParams.set('reason', 'session_expired')
+      url.searchParams.set('redirect', pathname)
+      // Supabaseのセッションもクリア
+      supabaseResponse.cookies.delete('sb-access-token')
+      supabaseResponse.cookies.delete('sb-refresh-token')
       return NextResponse.redirect(url)
     }
   }

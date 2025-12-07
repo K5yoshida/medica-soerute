@@ -194,6 +194,141 @@ export async function sendPaymentFailedNotification({
 }
 
 /**
+ * トライアル期間終了通知メールを送信
+ * 設計書: GAP-009 トライアル期間終了通知スケジュール
+ *
+ * @param daysRemaining - 残り日数（7, 3, 1, 0）
+ */
+export async function sendTrialExpirationNotification({
+  email,
+  userName,
+  daysRemaining,
+  trialEndsAt,
+}: {
+  email: string
+  userName?: string
+  daysRemaining: number
+  trialEndsAt: string
+}): Promise<EmailResult> {
+  const displayName = userName || 'お客様'
+  const endDate = new Date(trialEndsAt).toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  // 残り日数に応じたメッセージ
+  const urgencyMessages: Record<number, { subject: string; urgency: string; color: string }> = {
+    7: {
+      subject: 'トライアル期間終了まで1週間です - MEDICA SOERUTE',
+      urgency: 'トライアル期間終了まで残り7日',
+      color: '#3B82F6', // blue
+    },
+    3: {
+      subject: 'トライアル期間終了まで3日です - MEDICA SOERUTE',
+      urgency: 'トライアル期間終了まで残り3日',
+      color: '#F59E0B', // amber
+    },
+    1: {
+      subject: '【重要】明日トライアル期間が終了します - MEDICA SOERUTE',
+      urgency: 'トライアル期間は明日終了します',
+      color: '#EF4444', // red
+    },
+    0: {
+      subject: '【重要】本日トライアル期間が終了します - MEDICA SOERUTE',
+      urgency: 'トライアル期間は本日終了します',
+      color: '#DC2626', // dark red
+    },
+  }
+
+  const config = urgencyMessages[daysRemaining] || urgencyMessages[7]
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: #18181B; color: white; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+    <h1 style="margin: 0; font-size: 20px;">MEDICA SOERUTE</h1>
+  </div>
+
+  <div style="background: white; border: 1px solid #E4E4E7; border-top: none; padding: 32px; border-radius: 0 0 8px 8px;">
+    <p style="margin-top: 0;">${displayName}様</p>
+
+    <p>いつもMEDICA SOERUTEをご利用いただきありがとうございます。</p>
+
+    <div style="background: ${config.color}10; border: 1px solid ${config.color}40; border-radius: 8px; padding: 16px; margin: 24px 0;">
+      <p style="margin: 0; color: ${config.color}; font-weight: 600; font-size: 18px;">
+        ${config.urgency}
+      </p>
+      <p style="margin: 8px 0 0 0; color: #71717A; font-size: 14px;">
+        終了日: ${endDate}
+      </p>
+    </div>
+
+    <p style="font-size: 14px;">
+      トライアル期間終了後もサービスを継続してご利用いただくには、有料プランへのアップグレードが必要です。
+    </p>
+
+    <h3 style="font-size: 16px; margin-top: 24px;">有料プランの特典</h3>
+    <ul style="font-size: 14px; padding-left: 20px;">
+      <li>すべての分析機能が無制限で利用可能</li>
+      <li>PESO診断レポートの生成</li>
+      <li>マッチング結果のエクスポート</li>
+      <li>優先サポート</li>
+    </ul>
+
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${process.env.NEXT_PUBLIC_APP_URL}/settings/billing" style="display: inline-block; background: #18181B; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 500;">
+        プランをアップグレード
+      </a>
+    </div>
+
+    <p style="font-size: 13px; color: #71717A;">
+      ご不明な点がございましたら、お気軽にサポートまでお問い合わせください。
+    </p>
+  </div>
+
+  <div style="text-align: center; padding: 24px; color: #A1A1AA; font-size: 12px;">
+    <p style="margin: 0;">© ${new Date().getFullYear()} MEDICA SOERUTE. All rights reserved.</p>
+    <p style="margin: 8px 0 0 0;">
+      このメールは自動送信されています。
+    </p>
+  </div>
+</body>
+</html>
+`
+
+  const text = `${displayName}様
+
+いつもMEDICA SOERUTEをご利用いただきありがとうございます。
+
+${config.urgency}
+終了日: ${endDate}
+
+トライアル期間終了後もサービスを継続してご利用いただくには、有料プランへのアップグレードが必要です。
+
+■ 有料プランの特典
+- すべての分析機能が無制限で利用可能
+- PESO診断レポートの生成
+- マッチング結果のエクスポート
+- 優先サポート
+
+プランのアップグレードはこちら:
+${process.env.NEXT_PUBLIC_APP_URL}/settings/billing
+
+ご不明な点がございましたら、お気軽にサポートまでお問い合わせください。
+
+© ${new Date().getFullYear()} MEDICA SOERUTE
+`
+
+  return sendEmail({ to: email, subject: config.subject, html, text })
+}
+
+/**
  * HTMLタグを除去してプレーンテキストに変換
  */
 function stripHtml(html: string): string {

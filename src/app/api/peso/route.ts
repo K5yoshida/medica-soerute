@@ -52,6 +52,24 @@ export async function POST(request: Request) {
       }
     }
 
+    // PESO診断回数の制限チェック
+    // 設計書: GAP-010 PESO回数制限の分離
+    if (
+      typedUserData.monthly_peso_limit !== -1 &&
+      typedUserData.monthly_peso_count >= typedUserData.monthly_peso_limit
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'PESO_LIMIT_EXCEEDED',
+            message: '今月のPESO診断回数上限に達しました。プランをアップグレードしてください。',
+          },
+        },
+        { status: 403 }
+      )
+    }
+
     // リクエストボディを取得
     const body = await request.json()
     const diagnosisData: PesoDiagnosisData = body
@@ -75,6 +93,10 @@ export async function POST(request: Request) {
       console.error('Failed to save PESO diagnosis:', saveError)
       // 保存に失敗しても結果は返す
     }
+
+    // PESO診断回数をインクリメント
+    // 設計書: GAP-010 PESO回数制限の分離
+    await supabase.rpc('increment_peso_count', { p_user_id: user.id })
 
     // 使用ログを記録
     await supabase.from('usage_logs').insert({
