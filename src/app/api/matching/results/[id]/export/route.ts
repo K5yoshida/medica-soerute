@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { User, PlanType } from '@/types'
+import { generateMatchingPDF } from '@/lib/pdf/generator'
 
 // プラン別のエクスポート制限
 const EXPORT_PERMISSIONS: Record<PlanType, { csv: boolean; pdf: boolean }> = {
@@ -13,8 +14,15 @@ const EXPORT_PERMISSIONS: Record<PlanType, { csv: boolean; pdf: boolean }> = {
 
 interface MatchedMedia {
   name?: string
+  mediaName?: string // API応答での名称
   score?: number
+  matchScore?: number // API応答でのスコア
   rank?: number
+  // GAP-015: 予算配分情報
+  budgetAllocation?: number // 推奨予算配分率
+  expectedROI?: string // 期待ROI
+  recommendedBudget?: string // 推奨予算額
+  estimatedCost?: string // 想定費用
 }
 
 interface JobRequirements {
@@ -129,12 +137,38 @@ export async function GET(
         },
       })
     } else {
-      // PDF生成（簡易版 - 実際にはpuppeteerやjspdfなど使用）
-      // 現時点ではPDF生成未実装のため、エラーを返す
-      return NextResponse.json(
-        { success: false, error: { code: 'NOT_IMPLEMENTED', message: 'PDF生成は現在準備中です' } },
-        { status: 501 }
-      )
+      // PDF生成（GAP-023）
+      const matchedMedia = (result.matched_media || []).map((media, index) => ({
+        name: media.name || media.mediaName || `媒体${index + 1}`,
+        score: media.score ?? media.matchScore ?? 0,
+        rank: media.rank ?? index + 1,
+        budgetAllocation: media.budgetAllocation,
+        expectedROI: media.expectedROI,
+        recommendedBudget: media.recommendedBudget,
+        matchReasons: [],
+      }))
+
+      const pdfData = {
+        id: result.id,
+        job_requirements: {
+          location: result.job_requirements?.prefecture,
+          occupation: result.job_requirements?.job_category,
+          employmentType: result.job_requirements?.employment_type,
+        },
+        matched_media: matchedMedia,
+        created_at: result.created_at,
+        saved_name: result.analysis_detail?.saved_name,
+      }
+
+      const pdfBuffer = generateMatchingPDF(pdfData)
+      const filename = `analysis_${analysisId.substring(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`
+
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      })
     }
   } catch (error) {
     console.error('Export matching result error:', error)
@@ -162,12 +196,17 @@ function generateMatchingCSV(result: AnalysisResultRow): string {
   lines.push(`雇用形態,${requirements.employment_type || '-'}`)
   lines.push('')
 
-  // マッチング結果
+  // マッチング結果（GAP-015: 予算配分列追加）
   lines.push('■ マッチング結果')
-  lines.push('順位,媒体名,スコア')
+  lines.push('順位,媒体名,スコア,予算配分(%),推奨予算,期待ROI')
   const matchedMedia = result.matched_media || []
   matchedMedia.forEach((media, index) => {
-    lines.push(`${index + 1},${media.name || '-'},${media.score || '-'}`)
+    const name = media.name || media.mediaName || '-'
+    const score = media.score ?? media.matchScore ?? '-'
+    const budgetAlloc = media.budgetAllocation ?? '-'
+    const budget = media.recommendedBudget || '-'
+    const roi = media.expectedROI || '-'
+    lines.push(`${index + 1},${name},${score},${budgetAlloc},${budget},${roi}`)
   })
   lines.push('')
 

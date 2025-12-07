@@ -17,22 +17,34 @@ import { ChevronLeft, ChevronRight, Check, Loader2, Star, Folder, Download, X } 
 
 type Step = 'input' | 'query' | 'loading' | 'result'
 
+// GAP-015: 予算配分を含む結果型
 interface MatchResult {
   rank: number
+  mediaId: string
   mediaName: string
   score: number
   searchShare: string
   monthlyTraffic: string
   color: string
+  // GAP-015: 予算配分情報
+  budgetAllocation?: number // 推奨予算配分率（0-100%）
+  expectedROI?: string // 期待ROI
+  recommendedBudget?: string // 推奨予算額
+  estimatedCost?: string // 想定費用
+  matchReasons?: string[] // マッチング理由
 }
 
+// デフォルトの表示用サンプル（APIレスポンスがない場合のフォールバック）
 const sampleResults: MatchResult[] = [
-  { rank: 1, mediaName: 'Indeed', score: 85.2, searchShare: '32%', monthlyTraffic: '12,400', color: '#2557a7' },
-  { rank: 2, mediaName: 'ジョブメドレー', score: 72.8, searchShare: '24%', monthlyTraffic: '8,200', color: '#00a98f' },
-  { rank: 3, mediaName: 'カイゴジョブ', score: 64.1, searchShare: '18%', monthlyTraffic: '5,600', color: '#e85298' },
-  { rank: 4, mediaName: 'マイナビ介護', score: 52.3, searchShare: '14%', monthlyTraffic: '4,100', color: '#ff6b35' },
-  { rank: 5, mediaName: 'e介護転職', score: 41.6, searchShare: '8%', monthlyTraffic: '2,300', color: '#4a90a4' },
+  { rank: 1, mediaId: 'indeed', mediaName: 'Indeed', score: 85.2, searchShare: '32%', monthlyTraffic: '12,400', color: '#2557a7', budgetAllocation: 40, expectedROI: '応募単価 3,000円', recommendedBudget: '50万円〜80万円' },
+  { rank: 2, mediaId: 'jobmedley', mediaName: 'ジョブメドレー', score: 72.8, searchShare: '24%', monthlyTraffic: '8,200', color: '#00a98f', budgetAllocation: 30, expectedROI: '応募単価 4,500円', recommendedBudget: '30万円〜50万円' },
+  { rank: 3, mediaId: 'kaigojob', mediaName: 'カイゴジョブ', score: 64.1, searchShare: '18%', monthlyTraffic: '5,600', color: '#e85298', budgetAllocation: 15, expectedROI: '応募単価 5,000円', recommendedBudget: '15万円〜25万円' },
+  { rank: 4, mediaId: 'mynavi', mediaName: 'マイナビ介護', score: 52.3, searchShare: '14%', monthlyTraffic: '4,100', color: '#ff6b35', budgetAllocation: 10, expectedROI: '応募単価 6,000円', recommendedBudget: '10万円〜20万円' },
+  { rank: 5, mediaId: 'ekaigo', mediaName: 'e介護転職', score: 41.6, searchShare: '8%', monthlyTraffic: '2,300', color: '#4a90a4', budgetAllocation: 5, expectedROI: '応募単価 8,000円', recommendedBudget: '5万円〜10万円' },
 ]
+
+// 予算配分の円グラフ用カラーパレット
+const BUDGET_COLORS = ['#0D9488', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']
 
 const suggestedQueries = [
   { text: '川崎市 訪問介護 求人', selected: true },
@@ -820,6 +832,90 @@ export default function MatchingPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* GAP-015: 予算配分提案セクション */}
+            <div
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #E4E4E7',
+                borderRadius: '8px',
+                padding: '20px',
+                marginBottom: '24px',
+              }}
+            >
+              <div style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', marginBottom: '16px' }}>
+                予算配分の提案
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                {/* 円グラフ風の予算配分バー */}
+                <div>
+                  <div style={{ fontSize: '13px', color: '#52525B', marginBottom: '12px' }}>推奨投資割合</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {sampleResults.slice(0, 5).map((result, index) => (
+                      <div key={result.mediaId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '80px', fontSize: '12px', color: '#52525B', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {result.mediaName}
+                        </div>
+                        <div style={{ flex: 1, height: '16px', background: '#F4F4F5', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              width: `${result.budgetAllocation || 0}%`,
+                              height: '100%',
+                              background: BUDGET_COLORS[index % BUDGET_COLORS.length],
+                              borderRadius: '4px',
+                              transition: 'width 0.5s ease',
+                            }}
+                          />
+                        </div>
+                        <div style={{ width: '40px', fontSize: '12px', fontWeight: 600, color: '#18181B', textAlign: 'right' }}>
+                          {result.budgetAllocation || 0}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 予算・ROI詳細テーブル */}
+                <div>
+                  <div style={{ fontSize: '13px', color: '#52525B', marginBottom: '12px' }}>推奨予算と期待ROI</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {sampleResults.slice(0, 5).map((result, index) => (
+                      <div
+                        key={result.mediaId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: index === 0 ? '#F0FDFA' : '#FAFAFA',
+                          borderRadius: '6px',
+                          borderLeft: `3px solid ${BUDGET_COLORS[index % BUDGET_COLORS.length]}`,
+                        }}
+                      >
+                        <div style={{ flex: 1, fontSize: '12px', color: '#52525B' }}>
+                          {result.recommendedBudget || '-'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#0D9488', fontWeight: 500 }}>
+                          {result.expectedROI || '-'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '12px',
+                  background: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#92400E',
+                }}
+              >
+                ※ 予算配分はAIによる推定値です。実際の掲載費用は各媒体の料金プランによって異なります。
+              </div>
             </div>
 
             {/* Analysis conditions summary */}

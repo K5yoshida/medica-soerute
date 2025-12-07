@@ -42,6 +42,10 @@ export interface MatchedMedia {
   considerations: string[]
   estimatedCost?: string
   recommendedPeriod?: string
+  // GAP-015: 予算配分提案
+  budgetAllocation?: number // 0-100%（推奨投資割合）
+  expectedROI?: string // 期待ROI（例: "応募単価 5,000円程度"）
+  recommendedBudget?: string // 推奨予算（例: "30万円〜50万円"）
 }
 
 export interface AnalysisDetail {

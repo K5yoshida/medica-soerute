@@ -20,6 +20,7 @@ export async function analyzeMediaMatch(
   matchedMedia: MatchedMedia[]
   analysisDetail: AnalysisDetail
 }> {
+  // GAP-015: 予算配分提案を含むシステムプロンプト
   const systemPrompt = `あなたは医療・介護業界の求人媒体選定の専門家です。
 求人条件と媒体情報を分析し、最適な求人媒体をマッチングスコアと共に推薦してください。
 
@@ -29,6 +30,7 @@ export async function analyzeMediaMatch(
 3. 地域・エリアでの強み
 4. コストパフォーマンス
 5. 採用緊急度との整合性
+6. 予算配分の最適化（全媒体の合計が100%になるよう配分）
 
 回答は必ず以下のJSON形式で返してください：
 {
@@ -41,7 +43,10 @@ export async function analyzeMediaMatch(
       "strengths": ["この求人での強み1", "強み2"],
       "considerations": ["注意点1", "注意点2"],
       "estimatedCost": "想定費用感",
-      "recommendedPeriod": "推奨掲載期間"
+      "recommendedPeriod": "推奨掲載期間",
+      "budgetAllocation": 0-100の数値（推奨予算配分率、全媒体合計で100%）,
+      "expectedROI": "期待ROI（例: 応募単価 5,000円程度）",
+      "recommendedBudget": "推奨予算（例: 30万円〜50万円）"
     }
   ],
   "analysisDetail": {

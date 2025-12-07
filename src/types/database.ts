@@ -349,6 +349,7 @@ export interface Database {
         }
       }
       // GAP-021: PESO施策マスターテーブル
+      // GAP-011: 4フレームワークマッピング追加
       tactics_master: {
         Row: {
           id: string
@@ -363,6 +364,10 @@ export interface Database {
           estimated_cost_range: string | null
           expected_impact: ExpectedImpact | null
           is_active: boolean
+          // GAP-011: 4フレームワークマッピング
+          funnel_stages: number[] | null // 1=認知, 2=興味, 3=比較, 4=応募
+          conversion_stages: number[] | null // 1=Impression, 2=PV, 3=CV
+          journey_stages: number[] | null // 1=検索, 2=探索, 3=保存, 4=評価, 5=応募
           created_at: string
           updated_at: string
         }
@@ -379,6 +384,9 @@ export interface Database {
           estimated_cost_range?: string | null
           expected_impact?: ExpectedImpact | null
           is_active?: boolean
+          funnel_stages?: number[] | null
+          conversion_stages?: number[] | null
+          journey_stages?: number[] | null
           created_at?: string
           updated_at?: string
         }
@@ -395,6 +403,9 @@ export interface Database {
           estimated_cost_range?: string | null
           expected_impact?: ExpectedImpact | null
           is_active?: boolean
+          funnel_stages?: number[] | null
+          conversion_stages?: number[] | null
+          journey_stages?: number[] | null
           created_at?: string
           updated_at?: string
         }

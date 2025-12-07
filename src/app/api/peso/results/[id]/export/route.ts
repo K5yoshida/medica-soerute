@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { User, PlanType } from '@/types'
 import { logAuditEvent, extractClientInfo } from '@/lib/audit'
+import { generatePesoPDF } from '@/lib/pdf/generator'
 
 // プラン別のエクスポート制限
 const EXPORT_PERMISSIONS: Record<PlanType, { csv: boolean; pdf: boolean }> = {
@@ -150,11 +151,51 @@ export async function GET(
         },
       })
     } else {
-      // PDF生成（未実装）
-      return NextResponse.json(
-        { success: false, error: { code: 'NOT_IMPLEMENTED', message: 'PDF生成は現在準備中です' } },
-        { status: 501 }
-      )
+      // PDF生成（GAP-023）
+      const scores = result.scores || {}
+      const recommendations = result.recommendations || []
+
+      const pdfData = {
+        id: result.id,
+        scores: {
+          paid: scores.paid ?? 0,
+          earned: scores.earned ?? 0,
+          shared: scores.shared ?? 0,
+          owned: scores.owned ?? 0,
+        },
+        recommendations: recommendations.map(rec =>
+          typeof rec === 'string' ? rec : (rec.action || '')
+        ),
+        created_at: result.created_at,
+        saved_name: result.diagnosis_data?.saved_name,
+        companyInfo: result.diagnosis_data ? {
+          company_name: result.diagnosis_data.company_name,
+          industry: result.diagnosis_data.industry,
+          employee_size: result.diagnosis_data.employee_size,
+        } : undefined,
+      }
+
+      const pdfBuffer = generatePesoPDF(pdfData)
+      const filename = `peso_diagnosis_${diagnosisId.substring(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`
+
+      // 監査ログ記録
+      const clientInfo = extractClientInfo(request)
+      await logAuditEvent({
+        action: 'data.exported',
+        userId: user.id,
+        targetResourceType: 'peso_diagnosis',
+        targetResourceId: diagnosisId,
+        details: { format: 'pdf' },
+        ...clientInfo,
+        success: true,
+      })
+
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      })
     }
   } catch (error) {
     console.error('Export PESO result error:', error)

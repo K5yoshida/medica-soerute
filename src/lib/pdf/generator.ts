@@ -1,0 +1,368 @@
+/**
+ * PDF Generator Module
+ * GAP-023: PDFレポート生成機能
+ *
+ * jsPDFを使用してサーバーサイドでPDFレポートを生成
+ * Professional/Enterprise/Medicaプラン限定
+ */
+
+import { jsPDF } from 'jspdf'
+
+// 日本語フォント埋め込みは複雑なため、現時点ではASCII文字+日本語をBase64エンコードで処理
+// 将来的にはNotoSansJPなどのフォントを埋め込む
+
+interface MatchedMedia {
+  name: string
+  score: number
+  rank: number
+  budgetAllocation?: number
+  expectedROI?: string
+  recommendedBudget?: string
+  matchReasons?: string[]
+}
+
+interface JobRequirements {
+  location?: string
+  occupation?: string
+  employmentType?: string
+}
+
+interface MatchingReportData {
+  id: string
+  job_requirements: JobRequirements | null
+  matched_media: MatchedMedia[]
+  created_at: string
+  saved_name?: string
+}
+
+interface PesoScores {
+  paid: number
+  earned: number
+  shared: number
+  owned: number
+}
+
+interface PesoReportData {
+  id: string
+  scores: PesoScores
+  recommendations: string[]
+  created_at: string
+  saved_name?: string
+  companyInfo?: {
+    company_name?: string
+    industry?: string
+    employee_size?: string
+  }
+}
+
+/**
+ * マッチング分析結果のPDFを生成
+ */
+export function generateMatchingPDF(data: MatchingReportData): Buffer {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  })
+
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const margin = 20
+  let y = margin
+
+  // ヘッダー
+  doc.setFillColor(13, 148, 136) // #0D9488
+  doc.rect(0, 0, pageWidth, 30, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(18)
+  doc.text('Media Matching Analysis Report', margin, 15)
+
+  doc.setFontSize(10)
+  doc.text('MEDICA SOERUTE', margin, 23)
+
+  // 本文開始
+  y = 45
+  doc.setTextColor(0, 0, 0)
+
+  // 分析情報
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Analysis Information', margin, y)
+  y += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 100, 100)
+
+  const requirements = data.job_requirements || {}
+  doc.text(`Location: ${requirements.location || '-'}`, margin, y)
+  y += 6
+  doc.text(`Occupation: ${requirements.occupation || '-'}`, margin, y)
+  y += 6
+  doc.text(`Employment Type: ${requirements.employmentType || '-'}`, margin, y)
+  y += 6
+  doc.text(`Analysis Date: ${new Date(data.created_at).toLocaleString('ja-JP')}`, margin, y)
+  y += 15
+
+  // 区切り線
+  doc.setDrawColor(200, 200, 200)
+  doc.line(margin, y, pageWidth - margin, y)
+  y += 10
+
+  // ランキング結果
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(0, 0, 0)
+  doc.text('Ranking Results', margin, y)
+  y += 10
+
+  // ランキングカード
+  data.matched_media.forEach((media, index) => {
+    if (y > 250) {
+      doc.addPage()
+      y = margin
+    }
+
+    // ランク円
+    const rankColors: Record<number, [number, number, number]> = {
+      0: [13, 148, 136],   // 1位: teal
+      1: [254, 243, 199],  // 2位: amber bg
+      2: [255, 237, 213],  // 3位: orange bg
+    }
+    const rankColor = rankColors[index] || [244, 244, 245]
+
+    doc.setFillColor(rankColor[0], rankColor[1], rankColor[2])
+    doc.circle(margin + 8, y + 6, 6, 'F')
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(index === 0 ? 255 : 50, index === 0 ? 255 : 50, index === 0 ? 255 : 50)
+    doc.text(`${index + 1}`, margin + 6, y + 8)
+
+    // 媒体名とスコア
+    doc.setFontSize(12)
+    doc.setTextColor(0, 0, 0)
+    doc.text(media.name, margin + 20, y + 6)
+
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`${media.score}%`, pageWidth - margin - 15, y + 6)
+
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 100, 100)
+    doc.text('Match Score', pageWidth - margin - 15, y + 11)
+
+    y += 18
+  })
+
+  // 予算配分セクション（データがある場合）
+  const mediaWithBudget = data.matched_media.filter(m => m.budgetAllocation)
+  if (mediaWithBudget.length > 0) {
+    if (y > 220) {
+      doc.addPage()
+      y = margin
+    }
+
+    y += 10
+    doc.setDrawColor(200, 200, 200)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 10
+
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(0, 0, 0)
+    doc.text('Budget Allocation Recommendation', margin, y)
+    y += 10
+
+    mediaWithBudget.slice(0, 5).forEach((media) => {
+      if (y > 270) {
+        doc.addPage()
+        y = margin
+      }
+
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(0, 0, 0)
+      doc.text(media.name, margin, y)
+
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${media.budgetAllocation || 0}%`, margin + 60, y)
+
+      doc.setTextColor(100, 100, 100)
+      doc.text(media.recommendedBudget || '-', margin + 80, y)
+      doc.text(media.expectedROI || '-', margin + 120, y)
+
+      y += 8
+    })
+  }
+
+  // フッター
+  const footerY = doc.internal.pageSize.getHeight() - 15
+  doc.setFontSize(8)
+  doc.setTextColor(150, 150, 150)
+  doc.text('Generated by MEDICA SOERUTE - Confidential', margin, footerY)
+  doc.text(new Date().toISOString().split('T')[0], pageWidth - margin - 25, footerY)
+
+  // PDF出力をBufferとして返す
+  return Buffer.from(doc.output('arraybuffer'))
+}
+
+/**
+ * PESO診断結果のPDFを生成
+ */
+export function generatePesoPDF(data: PesoReportData): Buffer {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  })
+
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const margin = 20
+  let y = margin
+
+  // ヘッダー
+  doc.setFillColor(13, 148, 136)
+  doc.rect(0, 0, pageWidth, 30, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(18)
+  doc.text('PESO Diagnosis Report', margin, 15)
+
+  doc.setFontSize(10)
+  doc.text('MEDICA SOERUTE', margin, 23)
+
+  // 本文開始
+  y = 45
+
+  // 診断情報
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(0, 0, 0)
+  doc.text('Diagnosis Information', margin, y)
+  y += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 100, 100)
+
+  if (data.companyInfo) {
+    doc.text(`Company: ${data.companyInfo.company_name || '-'}`, margin, y)
+    y += 6
+    doc.text(`Industry: ${data.companyInfo.industry || '-'}`, margin, y)
+    y += 6
+    doc.text(`Size: ${data.companyInfo.employee_size || '-'}`, margin, y)
+    y += 6
+  }
+  doc.text(`Diagnosis Date: ${new Date(data.created_at).toLocaleString('ja-JP')}`, margin, y)
+  y += 15
+
+  // 区切り線
+  doc.setDrawColor(200, 200, 200)
+  doc.line(margin, y, pageWidth - margin, y)
+  y += 10
+
+  // PESOスコア
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(0, 0, 0)
+  doc.text('PESO Scores', margin, y)
+  y += 10
+
+  const totalScore = Math.round(
+    (data.scores.paid + data.scores.earned + data.scores.shared + data.scores.owned) / 4
+  )
+
+  // 総合スコア
+  doc.setFillColor(13, 148, 136)
+  doc.circle(pageWidth / 2, y + 15, 15, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(16)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`${totalScore}`, pageWidth / 2 - 5, y + 18)
+
+  y += 40
+
+  // 各カテゴリスコア
+  const categories = [
+    { key: 'paid', label: 'Paid', color: [59, 130, 246] as [number, number, number] },
+    { key: 'earned', label: 'Earned', color: [245, 158, 11] as [number, number, number] },
+    { key: 'shared', label: 'Shared', color: [236, 72, 153] as [number, number, number] },
+    { key: 'owned', label: 'Owned', color: [16, 185, 129] as [number, number, number] },
+  ]
+
+  const colWidth = (pageWidth - margin * 2) / 4
+
+  categories.forEach((cat, index) => {
+    const x = margin + index * colWidth + colWidth / 2
+    const score = data.scores[cat.key as keyof PesoScores]
+
+    // カテゴリ円
+    doc.setFillColor(cat.color[0], cat.color[1], cat.color[2])
+    doc.circle(x, y, 12, 'F')
+
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text(cat.label.charAt(0), x - 2, y + 3)
+
+    // スコア
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(14)
+    doc.text(`${score}`, x - 5, y + 22)
+
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text(cat.label, x - 8, y + 28)
+  })
+
+  y += 45
+
+  // 区切り線
+  doc.setDrawColor(200, 200, 200)
+  doc.line(margin, y, pageWidth - margin, y)
+  y += 10
+
+  // 改善提案
+  if (data.recommendations && data.recommendations.length > 0) {
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(0, 0, 0)
+    doc.text('Recommendations', margin, y)
+    y += 10
+
+    data.recommendations.forEach((rec, index) => {
+      if (y > 270) {
+        doc.addPage()
+        y = margin
+      }
+
+      doc.setFillColor(250, 250, 250)
+      doc.roundedRect(margin, y - 3, pageWidth - margin * 2, 12, 2, 2, 'F')
+
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(50, 50, 50)
+
+      // 長いテキストを折り返す
+      const maxWidth = pageWidth - margin * 2 - 10
+      const text = typeof rec === 'string' ? rec : (rec as { title?: string }).title || ''
+      const lines = doc.splitTextToSize(text, maxWidth)
+
+      doc.text(`${index + 1}.`, margin + 3, y + 4)
+      doc.text(lines, margin + 10, y + 4)
+
+      y += lines.length * 6 + 8
+    })
+  }
+
+  // フッター
+  const footerY = doc.internal.pageSize.getHeight() - 15
+  doc.setFontSize(8)
+  doc.setTextColor(150, 150, 150)
+  doc.text('Generated by MEDICA SOERUTE - Confidential', margin, footerY)
+  doc.text(new Date().toISOString().split('T')[0], pageWidth - margin - 25, footerY)
+
+  return Buffer.from(doc.output('arraybuffer'))
+}
