@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { getStripe } from '@/lib/stripe/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { sendPaymentFailedNotification } from '@/lib/email'
+import { logger } from '@/lib/monitoring'
 import Stripe from 'stripe'
 
 // 新プラン体系: starter(月20回), professional(無制限)
@@ -161,19 +163,55 @@ export async function POST(request: Request) {
 
         const { data: users } = await supabase
           .from('users')
-          .select('id')
+          .select('id, email, display_name')
           .eq('stripe_customer_id', customerId)
           .limit(1)
 
         if (users && users.length > 0) {
+          const user = users[0]
+
+          // ログを記録
           await supabase.from('usage_logs').insert({
-            user_id: users[0].id,
+            user_id: user.id,
             action_type: 'payment_failed',
             metadata: {
               invoice_id: invoice.id,
               amount: invoice.amount_due,
             },
           })
+
+          // 決済失敗通知メールを送信
+          if (user.email) {
+            const emailResult = await sendPaymentFailedNotification({
+              email: user.email,
+              userName: user.display_name,
+              invoiceId: invoice.id,
+              amount: invoice.amount_due,
+              currency: invoice.currency,
+            })
+
+            if (emailResult.success) {
+              logger.info('Payment failed notification sent', {
+                category: 'billing',
+                action: 'payment_failed_notification',
+                userId: user.id,
+                metadata: {
+                  invoice_id: invoice.id,
+                  email_message_id: emailResult.messageId,
+                },
+              })
+            } else {
+              logger.error('Failed to send payment failed notification', {
+                category: 'billing',
+                action: 'payment_failed_notification',
+                userId: user.id,
+                errorMessage: emailResult.error,
+                metadata: {
+                  invoice_id: invoice.id,
+                },
+              })
+            }
+          }
         }
         break
       }
