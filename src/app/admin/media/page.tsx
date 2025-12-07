@@ -1057,6 +1057,16 @@ export default function MediaPage() {
                             SNS: {swExtractResult.traffic_sources.social}%
                           </span>
                         )}
+                        {swExtractResult.traffic_sources.display && (
+                          <span style={{ fontSize: '11px', background: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '4px' }}>
+                            広告: {swExtractResult.traffic_sources.display}%
+                          </span>
+                        )}
+                        {swExtractResult.traffic_sources.mail && (
+                          <span style={{ fontSize: '11px', background: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '4px' }}>
+                            メール: {swExtractResult.traffic_sources.mail}%
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
