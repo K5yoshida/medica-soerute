@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Search,
@@ -11,6 +11,7 @@ import {
   HelpCircle,
   X,
   List,
+  ExternalLink,
 } from 'lucide-react'
 import { MediaSearch } from '@/components/catalog/media-search'
 import { RankingResults } from '@/components/catalog/ranking-results'
@@ -71,88 +72,63 @@ interface ColumnHelp {
 const COLUMN_HELP: Record<string, ColumnHelp> = {
   monthly_visits: {
     title: '月間訪問数',
-    description: 'サイト全体の月間ユニーク訪問者数です。検索・直接アクセス・SNS・広告など、すべての流入経路からの訪問を含みます。',
+    description: 'サイト全体の月間ユニーク訪問者数です。',
     source: 'SimilarWeb',
-    note: '直近1ヶ月のデータを表示しています。',
   },
   bounce_rate: {
     title: '直帰率',
-    description: 'サイトに訪問後、他のページを閲覧せずに離脱した訪問者の割合です。低いほどサイト内の回遊性が高いことを示します。',
+    description: 'サイトに訪問後、他のページを閲覧せずに離脱した訪問者の割合です。',
     source: 'SimilarWeb',
-    note: '一般的に40%以下が良好とされています。',
   },
   pages_per_visit: {
     title: 'PV/訪問',
-    description: '1回の訪問あたりの平均閲覧ページ数です。高いほどユーザーがサイト内のコンテンツを多く閲覧していることを示します。',
+    description: '1回の訪問あたりの平均閲覧ページ数です。',
     source: 'SimilarWeb',
   },
   avg_visit_duration: {
     title: '滞在時間',
-    description: '1回の訪問あたりの平均滞在時間です。長いほどユーザーがコンテンツをじっくり閲覧していることを示します。',
+    description: '1回の訪問あたりの平均滞在時間です。',
     source: 'SimilarWeb',
-    note: '求人サイトでは3分以上が良好とされています。',
   },
   search_pct: {
     title: '検索流入',
-    description: 'Google等の検索エンジンからの流入割合です。オーガニック検索（自然検索）と有料検索（リスティング広告）の合計です。',
+    description: 'Google等の検索エンジンからの流入割合です。',
     source: 'SimilarWeb',
-    note: 'SEO対策の効果を測る指標として重要です。',
   },
   direct_pct: {
     title: '直接流入',
-    description: 'URLを直接入力したり、ブックマークからアクセスした訪問の割合です。ブランド認知度の指標となります。',
+    description: 'URLを直接入力したり、ブックマークからアクセスした訪問の割合です。',
     source: 'SimilarWeb',
   },
   referral_pct: {
     title: '参照流入',
-    description: '他のWebサイトからのリンク経由でアクセスした訪問の割合です。外部サイトでの露出度を示します。',
+    description: '他のWebサイトからのリンク経由でアクセスした訪問の割合です。',
     source: 'SimilarWeb',
   },
   display_pct: {
     title: '広告流入',
-    description: 'ディスプレイ広告（バナー広告等）からの流入割合です。有料広告への依存度を示します。',
+    description: 'ディスプレイ広告からの流入割合です。',
     source: 'SimilarWeb',
   },
   social_pct: {
     title: 'SNS流入',
-    description: 'Twitter、Facebook、Instagram等のSNSからの流入割合です。ソーシャルメディアでの認知度を示します。',
+    description: 'SNSからの流入割合です。',
     source: 'SimilarWeb',
   },
   keyword_count: {
     title: 'クエリ数',
-    description: 'この媒体が検索上位を獲得しているクエリの数です。多いほどSEOが強いことを示します。',
+    description: 'この媒体が検索上位を獲得しているクエリの数です。',
     source: 'ラッコキーワード',
-    note: '検索順位100位以内のクエリを集計しています。',
   },
   total_search_volume: {
     title: '月間Vol合計',
-    description: 'この媒体が獲得しているキーワードの月間検索ボリュームの合計です。ユーザーがこれらのキーワードを検索した回数の合計を示します。',
+    description: 'この媒体が獲得しているキーワードの月間検索ボリュームの合計です。',
     source: 'ラッコキーワード',
-    note: '検索ボリュームが大きいほど、潜在的なリーチが広いことを示します。',
   },
   estimated_traffic: {
     title: '推定流入',
-    description: '各キーワードの検索ボリュームと順位から算出した、検索経由の推定月間流入数の合計です。',
+    description: '検索経由の推定月間流入数の合計です。',
     source: 'ラッコキーワード',
-    note: '月間訪問数とは計算方法が異なるため、数値が一致しないことがあります。',
-  },
-  intent_a: {
-    title: '応募直前クエリ',
-    description: '「〇〇 求人」「〇〇 応募」など、求人への応募意欲が高いユーザーが検索するキーワードの割合です。',
-    source: 'ラッコキーワード（AI分類）',
-    note: 'コンバージョンに最も近いキーワードです。この割合が高い媒体は応募獲得に強いと言えます。',
-  },
-  intent_b: {
-    title: '比較検討クエリ',
-    description: '「〇〇 評判」「〇〇 口コミ」「〇〇 比較」など、転職先を比較検討しているユーザーが検索するキーワードの割合です。',
-    source: 'ラッコキーワード（AI分類）',
-    note: '検討段階のユーザーを獲得できるキーワードです。',
-  },
-  intent_c: {
-    title: '情報収集クエリ',
-    description: '「〇〇 年収」「〇〇 仕事内容」「〇〇 資格」など、業界や職種についての情報を収集しているユーザーが検索するキーワードの割合です。',
-    source: 'ラッコキーワード（AI分類）',
-    note: '潜在層向けのキーワードです。認知拡大に効果的です。',
   },
 }
 
@@ -161,14 +137,9 @@ function formatNumber(num: number | null | undefined): string {
   return num.toLocaleString('ja-JP')
 }
 
-function formatCompactNumber(num: number | null | undefined): string {
-  if (num === null || num === undefined) return '-'
-  return num.toLocaleString('ja-JP')
-}
-
 function formatPercent(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-'
-  return `${num.toFixed(1)}%`
+  return `${Math.round(num)}%`
 }
 
 function formatDuration(seconds: number | null | undefined): string {
@@ -184,117 +155,80 @@ function HelpModal({ helpKey, onClose }: { helpKey: string; onClose: () => void 
   if (!help) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <div
-        className="relative bg-white rounded-lg w-full mx-4"
         style={{
-          maxWidth: '480px',
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.4)',
+        }}
+        onClick={onClose}
+      />
+      <div
+        style={{
+          position: 'relative',
+          background: '#FFFFFF',
+          borderRadius: '8px',
+          width: '100%',
+          maxWidth: '400px',
+          margin: '16px',
           border: '1px solid #E4E4E7',
           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
         }}
       >
         <div
-          className="flex items-center justify-between"
           style={{
             padding: '16px 20px',
             borderBottom: '1px solid #E4E4E7',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <h3
-            className="font-semibold"
-            style={{
-              fontSize: '16px',
-              color: '#18181B',
-            }}
-          >
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: 0 }}>
             {help.title}
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded transition-colors hover:bg-zinc-100"
-            style={{ color: '#A1A1AA' }}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div style={{ padding: '20px' }}>
-          <p
-            className="leading-relaxed mb-4"
             style={{
-              fontSize: '14px',
-              color: '#52525B',
+              padding: '4px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              borderRadius: '4px',
             }}
           >
+            <X style={{ width: 18, height: 18, color: '#A1A1AA' }} />
+          </button>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          <p style={{ fontSize: '13px', color: '#52525B', lineHeight: 1.6, margin: '0 0 12px 0' }}>
             {help.description}
           </p>
-          <div className="flex items-center gap-2 mb-2">
-            <span
-              className="px-2 py-0.5 rounded"
-              style={{
-                fontSize: '11px',
-                fontWeight: 500,
-                background: '#F4F4F5',
-                color: '#52525B',
-              }}
-            >
-              データソース: {help.source}
-            </span>
-          </div>
-          {help.note && (
-            <p
-              className="mt-3 pt-3"
-              style={{
-                fontSize: '12px',
-                color: '#A1A1AA',
-                borderTop: '1px solid #F4F4F5',
-              }}
-            >
-              {help.note}
-            </p>
-          )}
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 500,
+              background: '#F4F4F5',
+              color: '#52525B',
+              padding: '4px 8px',
+              borderRadius: '4px',
+            }}
+          >
+            データソース: {help.source}
+          </span>
         </div>
       </div>
     </div>
-  )
-}
-
-// ヘルプ付きテーブルヘッダーコンポーネント
-function TableHeader({
-  label,
-  helpKey,
-  align = 'center',
-  width,
-  borderRight,
-  onHelpClick,
-}: {
-  label: string
-  helpKey: string
-  align?: 'left' | 'center' | 'right'
-  width?: number
-  borderRight?: boolean
-  onHelpClick: (key: string) => void
-}) {
-  const alignClass = align === 'left' ? 'text-left' : align === 'center' ? 'text-center' : 'text-right'
-  const justifyClass = align === 'left' ? '' : align === 'center' ? 'justify-center' : 'justify-end'
-  return (
-    <th
-      className={`${alignClass} px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap`}
-      style={{ background: '#FAFAFA', height: '41px', width: width ? `${width}px` : undefined, minWidth: width ? `${width}px` : undefined, borderRight: borderRight ? '1px solid #E4E4E7' : undefined }}
-    >
-      <div className={`flex items-center gap-1 ${justifyClass}`}>
-        <span>{label}</span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onHelpClick(helpKey)
-          }}
-          className="text-zinc-300 hover:text-teal-500 transition"
-        >
-          <HelpCircle className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </th>
   )
 }
 
@@ -307,65 +241,12 @@ export default function CatalogPage() {
   const [activeHelp, setActiveHelp] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pageSize = 20
 
   // ランキング検索用の状態
   const [rankingKeywords, setRankingKeywords] = useState<string[]>([])
   const [rankingResults, setRankingResults] = useState<RankingResult[]>([])
   const [isRankingLoading, setIsRankingLoading] = useState(false)
-
-  // サイドバー状態をリッスン
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebar-collapsed')
-    if (saved === 'true') {
-      setSidebarCollapsed(true)
-    }
-
-    const handleSidebarToggle = (e: CustomEvent<{ collapsed: boolean }>) => {
-      setSidebarCollapsed(e.detail.collapsed)
-    }
-
-    window.addEventListener('sidebar-toggle', handleSidebarToggle as EventListener)
-    return () => {
-      window.removeEventListener('sidebar-toggle', handleSidebarToggle as EventListener)
-    }
-  }, [])
-
-  const contentMaxWidth = sidebarCollapsed ? '1356px' : '1200px'
-
-  // 左右テーブルのスクロール同期用ref
-  const leftTableRef = useRef<HTMLDivElement>(null)
-  const rightTableRef = useRef<HTMLDivElement>(null)
-  const scrollSource = useRef<'left' | 'right' | null>(null)
-  const rafId = useRef<number | null>(null)
-
-  const handleLeftScroll = () => {
-    if (scrollSource.current === 'right') return
-    scrollSource.current = 'left'
-
-    if (rafId.current) cancelAnimationFrame(rafId.current)
-    rafId.current = requestAnimationFrame(() => {
-      if (rightTableRef.current && leftTableRef.current) {
-        rightTableRef.current.scrollTop = leftTableRef.current.scrollTop
-      }
-      scrollSource.current = null
-    })
-  }
-
-  const handleRightScroll = () => {
-    if (scrollSource.current === 'left') return
-    scrollSource.current = 'right'
-
-    if (rafId.current) cancelAnimationFrame(rafId.current)
-    rafId.current = requestAnimationFrame(() => {
-      if (leftTableRef.current && rightTableRef.current) {
-        leftTableRef.current.scrollTop = rightTableRef.current.scrollTop
-      }
-      scrollSource.current = null
-    })
-  }
 
   // 媒体一覧を取得
   const fetchMedia = useCallback(async () => {
@@ -443,42 +324,54 @@ export default function CatalogPage() {
   return (
     <>
       {/* ヘルプモーダル */}
-      {activeHelp && (
-        <HelpModal helpKey={activeHelp} onClose={() => setActiveHelp(null)} />
-      )}
+      {activeHelp && <HelpModal helpKey={activeHelp} onClose={() => setActiveHelp(null)} />}
 
       {/* ページヘッダー */}
       <header
-        className="bg-white border-b border-zinc-200"
-        style={{ position: 'sticky', top: 0, zIndex: 40 }}
+        style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E4E4E7',
+          padding: '16px 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+        }}
       >
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ maxWidth: contentMaxWidth }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h1 className="text-[15px] font-semibold text-zinc-900 tracking-tight">
+            <h1 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: 0 }}>
               媒体カタログ
             </h1>
-            <p className="text-[13px] text-zinc-400 mt-0.5">
+            <p style={{ fontSize: '13px', color: '#A1A1AA', marginTop: '2px' }}>
               採用条件に合った媒体を探す・比較する
             </p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={fetchMedia}
-              disabled={isLoading}
-              className="p-2 border border-zinc-200 rounded-md text-zinc-600 bg-white hover:bg-zinc-50 transition disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          <button
+            onClick={fetchMedia}
+            disabled={isLoading}
+            style={{
+              padding: '8px',
+              border: '1px solid #E4E4E7',
+              borderRadius: '6px',
+              background: '#FFFFFF',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.5 : 1,
+            }}
+          >
+            <RefreshCw
+              style={{
+                width: 16,
+                height: 16,
+                color: '#52525B',
+                animation: isLoading ? 'spin 1s linear infinite' : 'none',
+              }}
+            />
+          </button>
         </div>
       </header>
 
       {/* コンテンツエリア */}
-      <div className="p-6">
+      <div style={{ padding: '24px' }}>
         {/* キーワード検索ボックス */}
         <MediaSearch onSearch={handleRankingSearch} isLoading={isRankingLoading} />
 
@@ -492,278 +385,300 @@ export default function CatalogPage() {
         )}
 
         {/* 全媒体一覧セクション */}
-        <div className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <List className="w-5 h-5 text-zinc-400" />
-              <h3 className="font-semibold text-zinc-900" style={{ fontSize: '15px' }}>
+        <div style={{ marginTop: '32px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <List style={{ width: 18, height: 18, color: '#A1A1AA' }} />
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: 0 }}>
                 全媒体一覧
               </h3>
-              <span className="text-zinc-400" style={{ fontSize: '13px' }}>
+              <span style={{ fontSize: '13px', color: '#A1A1AA' }}>
                 （{formatNumber(totalCount)}媒体）
               </span>
             </div>
 
             {/* テーブル用の媒体名検索 */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <div style={{ position: 'relative' }}>
+              <Search
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 16,
+                  height: 16,
+                  color: '#A1A1AA',
+                }}
+              />
               <input
                 type="text"
                 placeholder="媒体名で検索..."
                 value={tableSearchQuery}
                 onChange={(e) => setTableSearchQuery(e.target.value)}
-                className="w-56 pl-9 pr-3 py-2 border border-zinc-200 rounded-md text-[13px] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+                style={{
+                  width: '200px',
+                  paddingLeft: '36px',
+                  paddingRight: '12px',
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
               />
             </div>
           </div>
 
           {error ? (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg text-[13px]">{error}</div>
+            <div
+              style={{
+                background: '#FEF2F2',
+                border: '1px solid #FEE2E2',
+                borderRadius: '8px',
+                padding: '16px',
+                color: '#991B1B',
+                fontSize: '13px',
+              }}
+            >
+              {error}
+            </div>
           ) : isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
-              <span className="ml-2 text-[13px] text-zinc-500">読み込み中...</span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px',
+              }}
+            >
+              <Loader2
+                style={{ width: 24, height: 24, color: '#0D9488', animation: 'spin 1s linear infinite' }}
+              />
+              <span style={{ marginLeft: '8px', fontSize: '13px', color: '#52525B' }}>
+                読み込み中...
+              </span>
             </div>
           ) : mediaList.length === 0 ? (
-            <div className="text-center py-12 text-zinc-500 text-[13px]">媒体が見つかりません</div>
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '48px',
+                color: '#A1A1AA',
+                fontSize: '13px',
+              }}
+            >
+              媒体が見つかりません
+            </div>
           ) : (
             <>
-              {/* テーブルコンテナ */}
+              {/* テーブル - 横スクロール対応 */}
               <div
-                className="bg-white border border-zinc-200 rounded-lg"
-                style={{ display: 'flex', overflow: 'hidden', position: 'relative', maxHeight: 'calc(100vh - 400px)' }}
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                }}
               >
-                {/* 左側: 媒体名列（固定） */}
-                <div
-                  ref={leftTableRef}
-                  onScroll={handleLeftScroll}
-                  className="hide-scrollbar"
-                  style={{
-                    flexShrink: 0,
-                    width: '180px',
-                    borderRight: '1px solid #E4E4E7',
-                    background: '#FAFAFA',
-                    position: 'relative',
-                    zIndex: 1,
-                    overflowY: 'auto',
-                  }}
-                >
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                      <tr style={{ borderBottom: '1px solid #E4E4E7', height: '41px' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+                    <thead>
+                      <tr style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
                         <th
-                          className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap"
-                          style={{ background: '#F4F4F5', padding: '0 16px 0 20px' }}
+                          style={{
+                            textAlign: 'left',
+                            padding: '12px 16px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            color: '#52525B',
+                            whiteSpace: 'nowrap',
+                            position: 'sticky',
+                            left: 0,
+                            background: '#FAFAFA',
+                            zIndex: 1,
+                          }}
                         >
                           媒体名
                         </th>
+                        <HeaderCell label="月間訪問" helpKey="monthly_visits" onHelp={setActiveHelp} />
+                        <HeaderCell label="直帰率" helpKey="bounce_rate" onHelp={setActiveHelp} />
+                        <HeaderCell label="PV/訪問" helpKey="pages_per_visit" onHelp={setActiveHelp} />
+                        <HeaderCell label="滞在" helpKey="avg_visit_duration" onHelp={setActiveHelp} />
+                        <HeaderCell label="検索" helpKey="search_pct" onHelp={setActiveHelp} />
+                        <HeaderCell label="直接" helpKey="direct_pct" onHelp={setActiveHelp} />
+                        <HeaderCell label="参照" helpKey="referral_pct" onHelp={setActiveHelp} />
+                        <HeaderCell label="広告" helpKey="display_pct" onHelp={setActiveHelp} />
+                        <HeaderCell label="SNS" helpKey="social_pct" onHelp={setActiveHelp} />
+                        <HeaderCell label="クエリ数" helpKey="keyword_count" onHelp={setActiveHelp} />
+                        <HeaderCell label="月間Vol" helpKey="total_search_volume" onHelp={setActiveHelp} />
+                        <HeaderCell label="推定流入" helpKey="estimated_traffic" onHelp={setActiveHelp} />
+                        <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }} />
                       </tr>
                     </thead>
                     <tbody>
-                      {mediaList.map((media) => (
+                      {mediaList.map((media, index) => (
                         <tr
                           key={media.id}
                           onClick={() => router.push(`/dashboard/catalog/${media.id}`)}
-                          onMouseEnter={() => setHoveredRowId(media.id)}
-                          onMouseLeave={() => setHoveredRowId(null)}
-                          className={`catalog-row ${hoveredRowId === media.id ? 'is-hovered' : ''}`}
-                          style={{ borderBottom: '1px solid #F4F4F5', height: '57px' }}
+                          style={{
+                            borderBottom: index < mediaList.length - 1 ? '1px solid #F4F4F5' : 'none',
+                            cursor: 'pointer',
+                            transition: 'background 0.1s ease',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAFA')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                         >
-                          <td style={{ padding: '0 16px 0 20px' }}>
-                            <div className="flex items-center gap-3" title={`${media.name}\n${media.domain || ''}`}>
-                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                          {/* 媒体名 - 固定列 */}
+                          <td
+                            style={{
+                              padding: '12px 16px',
+                              position: 'sticky',
+                              left: 0,
+                              background: '#FFFFFF',
+                              zIndex: 1,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div
+                                style={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: '50%',
+                                  background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: '#FFFFFF',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  flexShrink: 0,
+                                }}
+                              >
                                 {media.name.charAt(0)}
                               </div>
-                              <div className="overflow-hidden">
-                                <div className="flex items-center gap-1">
-                                  <span className="media-name text-sm font-medium text-zinc-900 transition truncate">
-                                    {media.name}
-                                  </span>
-                                  <svg
-                                    className="inline-chevron w-3.5 h-3.5"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M9 18l6-6-6-6" />
-                                  </svg>
+                              <div style={{ minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    color: '#18181B',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '140px',
+                                  }}
+                                >
+                                  {media.name}
                                 </div>
-                                <div className="text-xs text-zinc-400 truncate">
+                                <div
+                                  style={{
+                                    fontSize: '11px',
+                                    color: '#A1A1AA',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '140px',
+                                  }}
+                                >
                                   {media.domain || '-'}
                                 </div>
                               </div>
                             </div>
+                          </td>
+                          <DataCell value={formatNumber(media.monthly_visits)} bold />
+                          <DataCell value={formatPercent(media.bounce_rate)} />
+                          <DataCell value={media.pages_per_visit?.toFixed(1) || '-'} />
+                          <DataCell value={formatDuration(media.avg_visit_duration)} />
+                          <DataCell
+                            value={formatPercent(media.latest_traffic?.search_pct)}
+                            color="#0EA5E9"
+                          />
+                          <DataCell
+                            value={formatPercent(media.latest_traffic?.direct_pct)}
+                            color="#3B82F6"
+                          />
+                          <DataCell
+                            value={formatPercent(media.latest_traffic?.referral_pct)}
+                            color="#F43F5E"
+                          />
+                          <DataCell
+                            value={formatPercent(media.latest_traffic?.display_pct)}
+                            color="#F59E0B"
+                          />
+                          <DataCell
+                            value={formatPercent(media.latest_traffic?.social_pct)}
+                            color="#10B981"
+                          />
+                          <DataCell value={formatNumber(media.keyword_count)} />
+                          <DataCell value={formatNumber(media.total_search_volume)} />
+                          <DataCell value={formatNumber(media.total_estimated_traffic)} />
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/dashboard/catalog/${media.id}`)
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                background: '#F0FDFA',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                color: '#0D9488',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              詳細
+                              <ExternalLink style={{ width: 12, height: 12 }} />
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-
-                {/* 右側: データ列 */}
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                  <div
-                    ref={rightTableRef}
-                    onScroll={handleRightScroll}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      overflowY: 'auto',
-                      overflowX: 'auto',
-                    }}
-                  >
-                    <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                        <tr style={{ borderBottom: '1px solid #E4E4E7', height: '41px' }}>
-                          <TableHeader label="月間訪問" helpKey="monthly_visits" width={100} onHelpClick={setActiveHelp} />
-                          <TableHeader label="直帰率" helpKey="bounce_rate" width={70} onHelpClick={setActiveHelp} />
-                          <TableHeader label="PV/訪問" helpKey="pages_per_visit" width={70} onHelpClick={setActiveHelp} />
-                          <TableHeader label="滞在時間" helpKey="avg_visit_duration" width={80} borderRight onHelpClick={setActiveHelp} />
-                          <TableHeader label="検索" helpKey="search_pct" width={60} onHelpClick={setActiveHelp} />
-                          <TableHeader label="直接" helpKey="direct_pct" width={60} onHelpClick={setActiveHelp} />
-                          <TableHeader label="参照" helpKey="referral_pct" width={60} onHelpClick={setActiveHelp} />
-                          <TableHeader label="広告" helpKey="display_pct" width={60} onHelpClick={setActiveHelp} />
-                          <TableHeader label="SNS" helpKey="social_pct" width={60} borderRight onHelpClick={setActiveHelp} />
-                          <TableHeader label="クエリ数" helpKey="keyword_count" width={90} onHelpClick={setActiveHelp} />
-                          <TableHeader label="月間Vol" helpKey="total_search_volume" width={100} onHelpClick={setActiveHelp} />
-                          <TableHeader label="推定流入" helpKey="estimated_traffic" width={100} borderRight onHelpClick={setActiveHelp} />
-                          <TableHeader label="応募" helpKey="intent_a" width={60} onHelpClick={setActiveHelp} />
-                          <TableHeader label="比較" helpKey="intent_b" width={60} onHelpClick={setActiveHelp} />
-                          <TableHeader label="情報" helpKey="intent_c" width={60} borderRight onHelpClick={setActiveHelp} />
-                          <th
-                            className="text-center px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap"
-                            style={{ background: '#FAFAFA', height: '41px', width: '60px', minWidth: '60px' }}
-                          >
-                            詳細
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mediaList.map((media) => (
-                          <tr
-                            key={media.id}
-                            onClick={() => router.push(`/dashboard/catalog/${media.id}`)}
-                            onMouseEnter={() => setHoveredRowId(media.id)}
-                            onMouseLeave={() => setHoveredRowId(null)}
-                            className={`cursor-pointer transition ${hoveredRowId === media.id ? 'bg-zinc-100' : ''}`}
-                            style={{ borderBottom: '1px solid #F4F4F5', height: '57px' }}
-                          >
-                            <td className="px-2 py-2.5 text-center" style={{ width: '100px', minWidth: '100px' }}>
-                              <span className="text-sm font-semibold text-zinc-900">
-                                {formatCompactNumber(media.monthly_visits)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '70px', minWidth: '70px' }}>
-                              <span className="text-sm text-zinc-600">
-                                {formatPercent(media.bounce_rate)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '70px', minWidth: '70px' }}>
-                              <span className="text-sm text-zinc-600">
-                                {media.pages_per_visit ? media.pages_per_visit.toFixed(1) : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '80px', minWidth: '80px', borderRight: '1px solid #E4E4E7' }}>
-                              <span className="text-sm text-zinc-600">
-                                {formatDuration(media.avg_visit_duration)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <span className="text-sm text-sky-600 font-medium">
-                                {media.latest_traffic?.search_pct != null ? `${media.latest_traffic.search_pct.toFixed(0)}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <span className="text-sm text-blue-600">
-                                {media.latest_traffic?.direct_pct != null ? `${media.latest_traffic.direct_pct.toFixed(0)}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <span className="text-sm text-rose-600">
-                                {media.latest_traffic?.referral_pct != null ? `${media.latest_traffic.referral_pct.toFixed(0)}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <span className="text-sm text-amber-600">
-                                {media.latest_traffic?.display_pct != null ? `${media.latest_traffic.display_pct.toFixed(0)}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px', borderRight: '1px solid #E4E4E7' }}>
-                              <span className="text-sm text-green-600">
-                                {media.latest_traffic?.social_pct != null ? `${media.latest_traffic.social_pct.toFixed(0)}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '90px', minWidth: '90px' }}>
-                              <span className="text-sm text-zinc-600">
-                                {formatNumber(media.keyword_count)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '100px', minWidth: '100px' }}>
-                              <span className="text-sm text-zinc-600">
-                                {formatCompactNumber(media.total_search_volume)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '100px', minWidth: '100px', borderRight: '1px solid #E4E4E7' }}>
-                              <span className="text-sm text-zinc-600">
-                                {formatCompactNumber(media.total_estimated_traffic)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <span className="text-sm font-medium text-red-600">
-                                {media.intent_a_pct != null ? `${media.intent_a_pct}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <span className="text-sm font-medium text-orange-600">
-                                {media.intent_b_pct != null ? `${media.intent_b_pct}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px', borderRight: '1px solid #E4E4E7' }}>
-                              <span className="text-sm font-medium text-cyan-600">
-                                {media.intent_c_pct != null ? `${media.intent_c_pct}%` : '-'}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center" style={{ width: '60px', minWidth: '60px' }}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  router.push(`/dashboard/catalog/${media.id}`)
-                                }}
-                                className="px-2 py-1 text-xs font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 rounded transition-colors"
-                              >
-                                詳細
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
 
               {/* ページネーション */}
               {totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
+                <div
+                  style={{
+                    marginTop: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <span style={{ fontSize: '13px', color: '#A1A1AA' }}>
-                    {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} / {formatNumber(totalCount)} 件
+                    {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)}{' '}
+                    / {formatNumber(totalCount)} 件
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="p-2 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       style={{
+                        padding: '8px',
                         border: '1px solid #E4E4E7',
                         borderRadius: '6px',
                         background: '#FFFFFF',
-                        color: '#52525B',
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                        opacity: currentPage === 1 ? 0.5 : 1,
                       }}
                     >
-                      <ChevronLeft className="w-4 h-4" />
+                      <ChevronLeft style={{ width: 16, height: 16, color: '#52525B' }} />
                     </button>
                     <span style={{ fontSize: '13px', color: '#52525B', padding: '0 8px' }}>
                       {currentPage} / {totalPages}
@@ -771,15 +686,16 @@ export default function CatalogPage() {
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="p-2 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       style={{
+                        padding: '8px',
                         border: '1px solid #E4E4E7',
                         borderRadius: '6px',
                         background: '#FFFFFF',
-                        color: '#52525B',
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                        opacity: currentPage === totalPages ? 0.5 : 1,
                       }}
                     >
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight style={{ width: 16, height: 16, color: '#52525B' }} />
                     </button>
                   </div>
                 </div>
@@ -789,5 +705,81 @@ export default function CatalogPage() {
         </div>
       </div>
     </>
+  )
+}
+
+// ヘッダーセルコンポーネント
+function HeaderCell({
+  label,
+  helpKey,
+  onHelp,
+}: {
+  label: string
+  helpKey: string
+  onHelp: (key: string) => void
+}) {
+  return (
+    <th
+      style={{
+        textAlign: 'center',
+        padding: '12px 8px',
+        fontSize: '12px',
+        fontWeight: 500,
+        color: '#52525B',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+        }}
+      >
+        <span>{label}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onHelp(helpKey)
+          }}
+          style={{
+            padding: '2px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            opacity: 0.4,
+          }}
+        >
+          <HelpCircle style={{ width: 12, height: 12, color: '#52525B' }} />
+        </button>
+      </div>
+    </th>
+  )
+}
+
+// データセルコンポーネント
+function DataCell({
+  value,
+  bold,
+  color,
+}: {
+  value: string
+  bold?: boolean
+  color?: string
+}) {
+  return (
+    <td
+      style={{
+        padding: '12px 8px',
+        textAlign: 'center',
+        fontSize: '13px',
+        fontWeight: bold ? 600 : 400,
+        color: color || '#52525B',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {value}
+    </td>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Check, Loader2, Star, Folder, Download } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Check, Loader2, Star, Folder, Download, X } from 'lucide-react'
 
 /**
  * Media Matching Page
@@ -51,6 +51,12 @@ export default function MatchingPage() {
     employment: '',
   })
   const [queries, setQueries] = useState(suggestedQueries)
+  const [resultId, setResultId] = useState<string | null>(null)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const selectedCount = queries.filter((q) => q.selected).length
 
@@ -62,7 +68,33 @@ export default function MatchingPage() {
 
   const handleAnalyze = async () => {
     setStep('loading')
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+
+    try {
+      // マッチングAPI呼び出し
+      const selectedQueryTexts = queries.filter((q) => q.selected).map((q) => q.text)
+      const response = await fetch('/api/matching', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conditions: {
+            location: formData.address || '川崎市麻生区',
+            occupation: formData.occupation || '訪問介護',
+            employmentType: formData.employment || '正社員',
+          },
+          keywords: selectedQueryTexts,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.data?.id) {
+          setResultId(data.data.id)
+        }
+      }
+    } catch (error) {
+      console.error('Matching analysis error:', error)
+    }
+
     setStep('result')
   }
 
@@ -80,7 +112,77 @@ export default function MatchingPage() {
     setStep('input')
     setFormData({ address: '', occupation: '', employment: '' })
     setQueries(suggestedQueries)
+    setResultId(null)
+    setSaveName('')
   }
+
+  // 結果保存
+  const handleSave = useCallback(async () => {
+    if (!resultId || !saveName.trim()) return
+
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/matching/results/${resultId}/save`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: saveName.trim() }),
+      })
+
+      if (response.ok) {
+        setShowSaveModal(false)
+        setSaveName('')
+        alert('保存しました')
+      } else {
+        const data = await response.json()
+        alert(data.error?.message || '保存に失敗しました')
+      }
+    } catch {
+      alert('保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }, [resultId, saveName])
+
+  // CSVエクスポート
+  const handleExport = useCallback(async (format: 'csv' | 'pdf') => {
+    if (!resultId) {
+      alert('分析結果がありません')
+      return
+    }
+
+    setExporting(true)
+    try {
+      const response = await fetch(`/api/matching/results/${resultId}/export?format=${format}`)
+
+      if (!response.ok) {
+        const data = await response.json()
+        alert(data.error?.message || 'エクスポートに失敗しました')
+        return
+      }
+
+      if (format === 'csv') {
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `matching_result_${resultId}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } else {
+        const data = await response.json()
+        if (data.data?.pdf_url) {
+          window.open(data.data.pdf_url, '_blank')
+        }
+      }
+      setShowExportModal(false)
+    } catch {
+      alert('エクスポートに失敗しました')
+    } finally {
+      setExporting(false)
+    }
+  }, [resultId])
 
   return (
     <>
@@ -614,36 +716,42 @@ export default function MatchingPage() {
             {/* Action buttons */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px' }}>
               <button
+                onClick={() => setShowSaveModal(true)}
+                disabled={!resultId}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid #E4E4E7',
                   borderRadius: '6px',
                   fontSize: '13px',
-                  color: '#52525B',
+                  color: resultId ? '#52525B' : '#A1A1AA',
                   background: '#FFFFFF',
-                  cursor: 'pointer',
+                  cursor: resultId ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   transition: 'background 0.15s ease',
+                  opacity: resultId ? 1 : 0.6,
                 }}
               >
                 <Folder style={{ width: 16, height: 16 }} />
                 保存
               </button>
               <button
+                onClick={() => setShowExportModal(true)}
+                disabled={!resultId}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid #E4E4E7',
                   borderRadius: '6px',
                   fontSize: '13px',
-                  color: '#52525B',
+                  color: resultId ? '#52525B' : '#A1A1AA',
                   background: '#FFFFFF',
-                  cursor: 'pointer',
+                  cursor: resultId ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   transition: 'background 0.15s ease',
+                  opacity: resultId ? 1 : 0.6,
                 }}
               >
                 <Download style={{ width: 16, height: 16 }} />
@@ -780,6 +888,199 @@ export default function MatchingPage() {
           </div>
         )}
       </div>
+
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+          onClick={() => setShowSaveModal(false)}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '400px',
+              margin: '16px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#18181B', margin: 0 }}>
+                分析結果を保存
+              </h3>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+              >
+                <X style={{ width: 20, height: 20, color: '#71717A' }} />
+              </button>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#52525B', marginBottom: '4px' }}>
+                保存名
+              </label>
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="例：川崎市訪問介護分析_12月"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  background: '#FFFFFF',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  color: '#52525B',
+                  cursor: 'pointer',
+                }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!saveName.trim() || saving}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  background: saveName.trim() ? '#0D9488' : '#A1A1AA',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#FFFFFF',
+                  cursor: saveName.trim() && !saving ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                {saving ? <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} /> : <Folder style={{ width: 16, height: 16 }} />}
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+          onClick={() => setShowExportModal(false)}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '400px',
+              margin: '16px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#18181B', margin: 0 }}>
+                エクスポート形式を選択
+              </h3>
+              <button
+                onClick={() => setShowExportModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+              >
+                <X style={{ width: 20, height: 20, color: '#71717A' }} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button
+                onClick={() => handleExport('csv')}
+                disabled={exporting}
+                style={{
+                  padding: '16px',
+                  background: '#FFFFFF',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  color: '#18181B',
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left',
+                }}
+              >
+                <Download style={{ width: 20, height: 20, color: '#0D9488' }} />
+                <div>
+                  <div style={{ fontWeight: 500 }}>CSVファイル</div>
+                  <div style={{ fontSize: '12px', color: '#71717A' }}>Excel等で開けます</div>
+                </div>
+              </button>
+              <button
+                onClick={() => handleExport('pdf')}
+                disabled={exporting}
+                style={{
+                  padding: '16px',
+                  background: '#FFFFFF',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  color: '#18181B',
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left',
+                }}
+              >
+                <Download style={{ width: 20, height: 20, color: '#7C3AED' }} />
+                <div>
+                  <div style={{ fontWeight: 500 }}>PDFファイル</div>
+                  <div style={{ fontSize: '12px', color: '#71717A' }}>印刷・共有用</div>
+                </div>
+              </button>
+            </div>
+            {exporting && (
+              <div style={{ marginTop: '16px', textAlign: 'center', color: '#71717A', fontSize: '13px' }}>
+                <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite', display: 'inline-block', marginRight: '8px' }} />
+                エクスポート中...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }

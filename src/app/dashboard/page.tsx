@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Grid2X2, Star, FileText, ChevronRight, Clock } from 'lucide-react'
+import { Grid2X2, Star, FileText, ChevronRight, Clock, X, Sparkles } from 'lucide-react'
 
 /**
  * Dashboard Home Page
@@ -12,10 +12,15 @@ import { Grid2X2, Star, FileText, ChevronRight, Clock } from 'lucide-react'
 
 interface UserData {
   monthly_analysis_count: number
+  role: 'admin' | 'internal' | 'user'
+  plan: 'medica' | 'enterprise' | 'trial' | 'starter' | 'professional'
+  upgrade_notified_at: string | null
 }
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null)
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
+  const [dismissingBanner, setDismissingBanner] = useState(false)
 
   useEffect(() => {
     fetch('/api/user/profile')
@@ -23,9 +28,32 @@ export default function DashboardPage() {
       .then((data) => {
         if (data.success) {
           setUser(data.data)
+          // 法人プランで通知未確認の場合にバナー表示
+          const userData = data.data as UserData
+          if (
+            (userData.role === 'internal' || userData.role === 'admin') &&
+            userData.upgrade_notified_at === null
+          ) {
+            setShowUpgradeBanner(true)
+          }
         }
       })
       .catch(console.error)
+  }, [])
+
+  // 通知確認ハンドラー
+  const handleDismissBanner = useCallback(async () => {
+    setDismissingBanner(true)
+    try {
+      const res = await fetch('/api/user/notification/upgrade', { method: 'POST' })
+      if (res.ok) {
+        setShowUpgradeBanner(false)
+      }
+    } catch (error) {
+      console.error('Failed to dismiss banner:', error)
+    } finally {
+      setDismissingBanner(false)
+    }
   }, [])
 
   const recentAnalyses = [
@@ -80,6 +108,72 @@ export default function DashboardPage() {
           分析を開始しましょう
         </p>
       </header>
+
+      {/* Upgrade Notification Banner */}
+      {showUpgradeBanner && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #10B981 0%, #0D9488 100%)',
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              background: 'rgba(255,255,255,0.2)',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Sparkles style={{ width: 20, height: 20, color: '#FFFFFF' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF', marginBottom: '2px' }}>
+              法人プランにアップグレードされました
+            </div>
+            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>
+              すべての機能が無制限でご利用いただけます。媒体分析・PESO診断など、ぜひご活用ください。
+            </div>
+          </div>
+          <button
+            onClick={handleDismissBanner}
+            disabled={dismissingBanner}
+            style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '8px 16px',
+              color: '#FFFFFF',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: dismissingBanner ? 'not-allowed' : 'pointer',
+              opacity: dismissingBanner ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'background 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!dismissingBanner) {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.3)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.2)'
+            }}
+          >
+            {dismissingBanner ? '確認中...' : '確認しました'}
+            {!dismissingBanner && <X style={{ width: 14, height: 14 }} />}
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ padding: '24px' }}>

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 /**
  * Admin API: ドメイン管理
  *
  * GET  - ドメイン一覧取得
- * POST - ドメイン追加
+ * POST - ドメイン追加（既存ユーザーも自動更新）
  */
 
 // ドメイン一覧取得
@@ -187,9 +187,39 @@ export async function POST(request: Request) {
       )
     }
 
+    // ===== 既存ユーザーの自動更新 =====
+    // このドメインのメールを持つ既存ユーザーを internal + 指定プラン に更新
+    const serviceClient = createServiceClient()
+    const domainLower = domain.toLowerCase()
+
+    // メールドメインが一致するユーザーを検索して更新
+    // email LIKE '%@domain.com' で検索
+    const { data: updatedUsers, error: updateError } = await serviceClient
+      .from('users')
+      .update({
+        role: 'internal',
+        plan: plan,
+        trial_ends_at: null, // 法人プランになるのでトライアル終了日をクリア
+        upgrade_notified_at: null, // アップグレード通知を表示するためNULLに
+        updated_at: new Date().toISOString(),
+      })
+      .ilike('email', `%@${domainLower}`)
+      .select('id')
+
+    if (updateError) {
+      console.error('Failed to update existing users:', updateError)
+      // ドメイン登録は成功しているので警告のみ
+    }
+
+    const updatedCount = updatedUsers?.length || 0
+    console.log(`Domain registered: ${domainLower}, Updated ${updatedCount} existing users to internal/${plan}`)
+
     return NextResponse.json({
       success: true,
-      data: newDomain,
+      data: {
+        ...newDomain,
+        updated_users_count: updatedCount,
+      },
     })
   } catch (error) {
     console.error('Create domain error:', error)

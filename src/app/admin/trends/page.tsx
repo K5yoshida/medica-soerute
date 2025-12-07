@@ -45,56 +45,42 @@ interface KeywordRankingTrend {
   estimated_traffic: number | null
 }
 
-// ダミーデータ生成（後でAPIから取得）
-const generateDummyTrafficTrends = (): TrafficTrend[] => {
-  const periods = ['2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12']
-  const baseVisits = Math.floor(Math.random() * 500000) + 100000
-
-  return periods.map((period) => ({
-    period,
-    monthly_visits: Math.floor(baseVisits * (1 + (Math.random() - 0.5) * 0.3)),
-    search_pct: 35 + Math.random() * 20,
-    direct_pct: 20 + Math.random() * 15,
-    referral_pct: 10 + Math.random() * 10,
-    display_pct: 5 + Math.random() * 8,
-    social_pct: 8 + Math.random() * 10,
-    email_pct: 2 + Math.random() * 5,
-    bounce_rate: 45 + Math.random() * 15,
-    pages_per_visit: 2 + Math.random() * 3,
-    avg_visit_duration: 120 + Math.random() * 180,
-  }))
+// APIレスポンス型
+interface TrafficApiResponse {
+  success: boolean
+  data?: {
+    periods: string[]
+    media: Array<{
+      media_id: string
+      media_name: string
+      domain: string | null
+      trends: TrafficTrend[]
+      latest_metrics: {
+        monthly_visits: number | null
+        bounce_rate: number | null
+        pages_per_visit: number | null
+        avg_visit_duration: number | null
+      }
+    }>
+  }
+  error?: { message: string }
 }
 
-const generateDummyKeywordTrends = (): KeywordRankingTrend[] => {
-  const periods = ['2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12']
-  const keywords = ['看護師 求人', '介護士 転職', '薬剤師 年収', '理学療法士 求人', '作業療法士 転職']
-
-  const result: KeywordRankingTrend[] = []
-  keywords.forEach(keyword => {
-    let baseRank = Math.floor(Math.random() * 30) + 1
-    periods.forEach(period => {
-      baseRank = Math.max(1, Math.min(100, baseRank + Math.floor((Math.random() - 0.5) * 10)))
-      result.push({
-        period,
-        keyword,
-        search_rank: baseRank,
-        monthly_search_volume: Math.floor(Math.random() * 10000) + 1000,
-        estimated_traffic: Math.floor(Math.random() * 5000) + 500,
-      })
-    })
-  })
-
-  return result
+interface KeywordsApiResponse {
+  success: boolean
+  data?: {
+    media: Array<{ id: string; name: string; domain: string | null }>
+    keywords: Record<string, Array<{
+      keyword_id: string
+      keyword: string
+      intent: string | null
+      rank: number | null
+      search_volume: number | null
+      estimated_traffic: number | null
+    }>>
+  }
+  error?: { message: string }
 }
-
-// ダミー媒体リスト
-const dummyMediaList: MediaOption[] = [
-  { id: '1', name: 'ナース人材バンク', domain: 'nursejinzaibank.com' },
-  { id: '2', name: 'マイナビ看護師', domain: 'kango.mynavi.jp' },
-  { id: '3', name: 'レバウェル看護', domain: 'levwell-kango.jp' },
-  { id: '4', name: '看護roo!', domain: 'kango-roo.com' },
-  { id: '5', name: 'ジョブメドレー', domain: 'job-medley.com' },
-]
 
 // =====================================
 // ユーティリティ関数
@@ -180,11 +166,12 @@ export default function TrendsPage() {
           domain: m.domain,
         })))
       } else {
-        // APIがまだない場合はダミーデータ
-        setMediaList(dummyMediaList)
+        console.error('Failed to fetch media list:', data.error?.message)
+        setMediaList([])
       }
-    } catch {
-      setMediaList(dummyMediaList)
+    } catch (error) {
+      console.error('Error fetching media list:', error)
+      setMediaList([])
     }
   }, [])
 
@@ -198,24 +185,52 @@ export default function TrendsPage() {
 
     setIsLoading(true)
     try {
-      // TODO: 実際のAPIから取得
-      // const res = await fetch(`/api/admin/trends?media_ids=${selectedMediaIds.join(',')}&period=${periodRange}`)
+      // Traffic API から取得
+      const trafficRes = await fetch(
+        `/api/admin/trends/traffic?media_ids=${selectedMediaIds.join(',')}&period=${periodRange}`
+      )
+      const trafficData: TrafficApiResponse = await trafficRes.json()
 
-      // 現在はダミーデータを使用
-      const newTrafficTrends: Record<string, TrafficTrend[]> = {}
-      const newKeywordTrends: Record<string, KeywordRankingTrend[]> = {}
+      if (trafficData.success && trafficData.data) {
+        const newTrafficTrends: Record<string, TrafficTrend[]> = {}
+        trafficData.data.media.forEach(media => {
+          newTrafficTrends[media.media_id] = media.trends
+        })
+        setTrafficTrends(newTrafficTrends)
+      } else {
+        console.error('Failed to fetch traffic trends:', trafficData.error?.message)
+        setTrafficTrends({})
+      }
 
-      selectedMediaIds.forEach(id => {
-        newTrafficTrends[id] = generateDummyTrafficTrends()
-        newKeywordTrends[id] = generateDummyKeywordTrends()
-      })
+      // Keywords API から取得
+      const keywordsRes = await fetch(
+        `/api/admin/trends/keywords?media_ids=${selectedMediaIds.join(',')}&limit=20`
+      )
+      const keywordsData: KeywordsApiResponse = await keywordsRes.json()
 
-      setTrafficTrends(newTrafficTrends)
-      setKeywordTrends(newKeywordTrends)
+      if (keywordsData.success && keywordsData.data) {
+        const newKeywordTrends: Record<string, KeywordRankingTrend[]> = {}
+        Object.entries(keywordsData.data.keywords).forEach(([mediaId, keywords]) => {
+          newKeywordTrends[mediaId] = keywords.map(kw => ({
+            period: new Date().toISOString().slice(0, 7), // 現在の月
+            keyword: kw.keyword,
+            search_rank: kw.rank,
+            monthly_search_volume: kw.search_volume,
+            estimated_traffic: kw.estimated_traffic,
+          }))
+        })
+        setKeywordTrends(newKeywordTrends)
+      } else {
+        console.error('Failed to fetch keyword trends:', keywordsData.error?.message)
+        setKeywordTrends({})
+      }
+    } catch (error) {
+      console.error('Error fetching trends:', error)
+      setTrafficTrends({})
+      setKeywordTrends({})
     } finally {
       setIsLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMediaIds, periodRange])
 
   useEffect(() => {

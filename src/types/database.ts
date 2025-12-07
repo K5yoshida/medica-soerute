@@ -36,8 +36,11 @@ export interface Database {
           trial_ends_at: string | null
           monthly_analysis_count: number
           monthly_analysis_limit: number
+          monthly_peso_count: number
+          monthly_peso_limit: number
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
+          upgrade_notified_at: string | null
           created_at: string
           updated_at: string
         }
@@ -50,8 +53,11 @@ export interface Database {
           trial_ends_at?: string | null
           monthly_analysis_count?: number
           monthly_analysis_limit?: number
+          monthly_peso_count?: number
+          monthly_peso_limit?: number
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          upgrade_notified_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -64,8 +70,11 @@ export interface Database {
           trial_ends_at?: string | null
           monthly_analysis_count?: number
           monthly_analysis_limit?: number
+          monthly_peso_count?: number
+          monthly_peso_limit?: number
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          upgrade_notified_at?: string | null
           created_at?: string
           updated_at?: string
         }
