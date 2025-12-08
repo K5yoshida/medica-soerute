@@ -491,7 +491,7 @@ export default function ImportPage() {
       <div style={{ padding: '24px' }}>
         <div>
           {/* Wizard */}
-          <div style={{ maxWidth: '800px' }}>
+          <div style={{ maxWidth: '100%' }}>
             {/* Step Indicator */}
             <div
               style={{
