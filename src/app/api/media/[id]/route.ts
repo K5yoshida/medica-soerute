@@ -55,6 +55,9 @@ export async function GET(request: Request, { params }: RouteParams) {
       .order('period', { ascending: false })
       .limit(3)
 
+    // 最新のトラフィックデータを取得
+    const latestTraffic = trafficHistory && trafficHistory.length > 0 ? trafficHistory[0] : null
+
     // キーワード統計を計算
     const typedKeywords = keywords as KeywordData[] | null
     const keywordStats = {
@@ -69,6 +72,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         ...media,
         keyword_stats: keywordStats,
         traffic_history: trafficHistory || [],
+        latest_traffic: latestTraffic,
       },
     })
   } catch (error) {

@@ -95,7 +95,7 @@ export async function GET(
     const endTime = new Date(completedAt.getTime() + 60 * 1000).toISOString()
 
     let query = supabase
-      .from('query_master')
+      .from('keywords')
       .select('keyword, intent, intent_reason, max_monthly_search_volume', { count: 'exact' })
       .gte('intent_updated_at', startTime)
       .lte('intent_updated_at', endTime)

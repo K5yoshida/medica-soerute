@@ -37,6 +37,8 @@ export function DashboardMain({ children }: { children: React.ReactNode }) {
         flex: 1,
         marginLeft,
         minHeight: '100vh',
+        maxWidth: `calc(100vw - ${marginLeft})`,
+        overflow: 'hidden',
       }}
     >
       {children}

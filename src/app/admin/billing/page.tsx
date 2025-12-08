@@ -75,88 +75,79 @@ export default function AdminBillingPage() {
   const fetchBillingData = async () => {
     setLoading(true)
     try {
-      // TODO: 実際のAPIに接続
-      // const res = await fetch(`/api/admin/billing?page=${currentPage}&type=${typeFilter}&range=${dateRange}`)
-      // const data = await res.json()
+      const res = await fetch('/api/admin/billing/dashboard')
+      const data = await res.json()
 
-      // Mock data
-      setStats({
-        mrr: 1580000,
-        arr: 18960000,
-        mrrChange: 12.5,
-        paidUsers: 86,
-        paidUsersChange: 8,
-        avgRevenue: 18372,
-        avgRevenueChange: 3.2,
-        churnRate: 2.1,
-        churnRateChange: -0.5,
-      })
+      if (data.success && data.data) {
+        const apiData = data.data
+        const totalPaidUsers = apiData.active_subscriptions
 
-      setPlanBreakdown([
-        { plan: 'Starter', users: 42, revenue: 411600, percentage: 26, color: '#0D9488' },
-        { plan: 'Professional', users: 38, revenue: 752400, percentage: 48, color: '#7C3AED' },
-        { plan: 'Enterprise', users: 6, revenue: 416000, percentage: 26, color: '#F59E0B' },
-      ])
+        // プラン別の料金設定
+        const planPrices: Record<string, number> = {
+          starter: 9800,
+          professional: 29800,
+          enterprise: 50000,
+        }
 
-      setTransactions([
-        {
-          id: 'tx_001',
-          userId: 'usr_123',
-          userName: '山田 太郎',
-          email: 'yamada@example.com',
-          plan: 'Professional',
-          amount: 19800,
-          type: 'subscription',
-          status: 'completed',
-          createdAt: '2024-01-15T10:30:00Z',
-        },
-        {
-          id: 'tx_002',
-          userId: 'usr_124',
-          userName: '鈴木 花子',
-          email: 'suzuki@example.com',
-          plan: 'Professional',
-          amount: 10000,
-          type: 'upgrade',
-          status: 'completed',
-          createdAt: '2024-01-14T14:20:00Z',
-        },
-        {
-          id: 'tx_003',
-          userId: 'usr_125',
-          userName: '田中 一郎',
-          email: 'tanaka@example.com',
-          plan: 'Starter',
-          amount: 9800,
-          type: 'subscription',
-          status: 'completed',
-          createdAt: '2024-01-13T09:15:00Z',
-        },
-        {
-          id: 'tx_004',
-          userId: 'usr_126',
-          userName: '佐藤 美咲',
-          email: 'sato@example.com',
-          plan: 'Starter',
-          amount: -9800,
-          type: 'refund',
-          status: 'completed',
-          createdAt: '2024-01-12T16:45:00Z',
-        },
-        {
-          id: 'tx_005',
-          userId: 'usr_127',
-          userName: '高橋 健太',
-          email: 'takahashi@example.com',
-          plan: 'Professional',
-          amount: 0,
-          type: 'cancellation',
-          status: 'completed',
-          createdAt: '2024-01-11T11:00:00Z',
-        },
-      ])
+        // 平均単価を計算
+        const avgRevenue = totalPaidUsers > 0 ? Math.round(apiData.mrr / totalPaidUsers) : 0
 
-      setTotalPages(3)
+        setStats({
+          mrr: apiData.mrr,
+          arr: apiData.arr,
+          mrrChange: apiData.user_growth.growth_rate,
+          paidUsers: totalPaidUsers,
+          paidUsersChange: apiData.user_growth.growth_rate,
+          avgRevenue: avgRevenue,
+          avgRevenueChange: 0,
+          churnRate: apiData.churn_rate,
+          churnRateChange: 0,
+        })
+
+        // プラン別内訳を計算
+        const planData = apiData.plan_breakdown
+        const totalMrr = apiData.mrr || 1
+        const breakdown: PlanBreakdown[] = []
+
+        if (planData.starter > 0) {
+          const revenue = planData.starter * planPrices.starter
+          breakdown.push({
+            plan: 'Starter',
+            users: planData.starter,
+            revenue,
+            percentage: Math.round((revenue / totalMrr) * 100),
+            color: '#0D9488',
+          })
+        }
+        if (planData.professional > 0) {
+          const revenue = planData.professional * planPrices.professional
+          breakdown.push({
+            plan: 'Professional',
+            users: planData.professional,
+            revenue,
+            percentage: Math.round((revenue / totalMrr) * 100),
+            color: '#7C3AED',
+          })
+        }
+        if (planData.enterprise > 0) {
+          const revenue = planData.enterprise * planPrices.enterprise
+          breakdown.push({
+            plan: 'Enterprise',
+            users: planData.enterprise,
+            revenue,
+            percentage: Math.round((revenue / totalMrr) * 100),
+            color: '#F59E0B',
+          })
+        }
+
+        setPlanBreakdown(breakdown)
+
+        // 取引履歴はStripe連携後に実装（現在は空配列）
+        setTransactions([])
+        setTotalPages(1)
+      } else {
+        console.error('Failed to fetch billing data:', data.error?.message)
+      }
     } catch (error) {
       console.error('Failed to fetch billing data:', error)
     } finally {

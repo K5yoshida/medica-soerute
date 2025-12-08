@@ -1,7 +1,16 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Check, Loader2, Star, Folder, Download, X } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, Check, Loader2, Star, Folder, Download, X, Sparkles, AlertCircle } from 'lucide-react'
+
+// 職種マスターの型定義
+interface JobCategory {
+  id: string
+  code: string
+  name: string
+  category: string
+  sort_order: number
+}
 
 /**
  * Media Matching Page
@@ -46,13 +55,21 @@ const sampleResults: MatchResult[] = [
 // 予算配分の円グラフ用カラーパレット
 const BUDGET_COLORS = ['#0D9488', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']
 
-const suggestedQueries = [
-  { text: '川崎市 訪問介護 求人', selected: true },
-  { text: '麻生区 介護 正社員', selected: true },
-  { text: '訪問介護 ヘルパー 募集', selected: true },
-  { text: '川崎 介護職 転職', selected: true },
-  { text: '神奈川 訪問介護 未経験', selected: false },
-  { text: '介護福祉士 訪問 求人', selected: false },
+// F-MAT-002: AIサジェストクエリの型定義
+interface SuggestedQuery {
+  text: string
+  selected: boolean
+  category?: 'related' | 'competitor' | 'longtail'
+  relevanceScore?: number
+  reason?: string
+}
+
+// デフォルトのサジェストクエリ（APIフォールバック用）
+const getDefaultQueries = (address: string, occupation: string): SuggestedQuery[] => [
+  { text: `${address || '川崎市'} ${occupation || '訪問介護'} 求人`, selected: true, category: 'related', relevanceScore: 95 },
+  { text: `${occupation || '訪問介護'} 正社員 募集`, selected: true, category: 'related', relevanceScore: 90 },
+  { text: `${occupation || '訪問介護'} 転職`, selected: true, category: 'related', relevanceScore: 85 },
+  { text: `${occupation || '訪問介護'} 未経験 可`, selected: false, category: 'longtail', relevanceScore: 75 },
 ]
 
 export default function MatchingPage() {
@@ -62,19 +79,101 @@ export default function MatchingPage() {
     occupation: '',
     employment: '',
   })
-  const [queries, setQueries] = useState(suggestedQueries)
+  const [queries, setQueries] = useState<SuggestedQuery[]>([])
   const [resultId, setResultId] = useState<string | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
+  // F-MAT-002: AIサジェスト関連の状態
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
+  const [usedFallback, setUsedFallback] = useState(false)
+  // 職種マスター
+  const [jobCategories, setJobCategories] = useState<JobCategory[]>([])
+  const [jobCategoriesLoading, setJobCategoriesLoading] = useState(true)
+
+  // 職種マスターを取得
+  useEffect(() => {
+    const fetchJobCategories = async () => {
+      try {
+        const response = await fetch('/api/job-categories')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data) {
+            setJobCategories(data.data)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch job categories:', error)
+      } finally {
+        setJobCategoriesLoading(false)
+      }
+    }
+    fetchJobCategories()
+  }, [])
 
   const selectedCount = queries.filter((q) => q.selected).length
 
-  const handleNext = () => {
+  // F-MAT-002: AIクエリ提案APIを呼び出す関数
+  const fetchSuggestedQueries = useCallback(async () => {
+    setSuggestLoading(true)
+    setSuggestError(null)
+    setUsedFallback(false)
+
+    try {
+      const response = await fetch('/api/keywords/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobType: formData.occupation || '訪問介護',
+          area: formData.address || '',
+          conditions: formData.employment ? [formData.employment] : [],
+          suggestionType: 'all',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error?.message || 'キーワード提案の取得に失敗しました')
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.data?.keywords?.length > 0) {
+        // APIからのキーワードを選択可能な形式に変換
+        const suggestedQueries: SuggestedQuery[] = data.data.keywords.map(
+          (kw: { keyword: string; category: string; relevanceScore: number; reason: string }, index: number) => ({
+            text: kw.keyword,
+            selected: index < 4, // 上位4件をデフォルトで選択
+            category: kw.category as 'related' | 'competitor' | 'longtail',
+            relevanceScore: kw.relevanceScore,
+            reason: kw.reason,
+          })
+        )
+        setQueries(suggestedQueries)
+      } else {
+        // 空の結果の場合はフォールバック
+        setQueries(getDefaultQueries(formData.address, formData.occupation))
+        setUsedFallback(true)
+      }
+    } catch (error) {
+      console.error('Keyword suggestion error:', error)
+      setSuggestError(error instanceof Error ? error.message : 'エラーが発生しました')
+      // フォールバック：デフォルトのクエリを使用
+      setQueries(getDefaultQueries(formData.address, formData.occupation))
+      setUsedFallback(true)
+    } finally {
+      setSuggestLoading(false)
+    }
+  }, [formData.address, formData.occupation, formData.employment])
+
+  const handleNext = async () => {
     if (step === 'input') {
       setStep('query')
+      // F-MAT-002: Step1完了時にAIクエリ提案APIを呼び出し
+      await fetchSuggestedQueries()
     }
   }
 
@@ -118,14 +217,19 @@ export default function MatchingPage() {
 
   const goBackToInput = () => {
     setStep('input')
+    setQueries([])
+    setSuggestError(null)
+    setUsedFallback(false)
   }
 
   const handleReset = () => {
     setStep('input')
     setFormData({ address: '', occupation: '', employment: '' })
-    setQueries(suggestedQueries)
+    setQueries([])
     setResultId(null)
     setSaveName('')
+    setSuggestError(null)
+    setUsedFallback(false)
   }
 
   // 結果保存
@@ -452,6 +556,7 @@ export default function MatchingPage() {
                       <select
                         value={formData.occupation}
                         onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
+                        disabled={jobCategoriesLoading}
                         style={{
                           width: '100%',
                           padding: '8px 12px',
@@ -460,14 +565,16 @@ export default function MatchingPage() {
                           fontSize: '13px',
                           outline: 'none',
                           background: '#FFFFFF',
-                          cursor: 'pointer',
+                          cursor: jobCategoriesLoading ? 'wait' : 'pointer',
                           boxSizing: 'border-box',
                         }}
                       >
                         <option value="">選択してください</option>
-                        <option value="訪問介護">訪問介護</option>
-                        <option value="訪問看護">訪問看護</option>
-                        <option value="施設介護">施設介護</option>
+                        {jobCategories.map((category) => (
+                          <option key={category.id} value={category.name}>
+                            {category.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -571,62 +678,143 @@ export default function MatchingPage() {
                   padding: '20px',
                 }}
               >
+                {/* F-MAT-002: AI推定バッジと説明 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                   <span
                     style={{
                       fontSize: '10px',
                       fontWeight: 600,
                       padding: '2px 8px',
-                      background: 'rgba(16,185,129,0.1)',
-                      color: '#059669',
+                      background: usedFallback ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
+                      color: usedFallback ? '#D97706' : '#059669',
                       borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
                     }}
                   >
-                    AI推定
+                    {usedFallback ? (
+                      <>
+                        <AlertCircle style={{ width: 10, height: 10 }} />
+                        基本提案
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles style={{ width: 10, height: 10 }} />
+                        AI提案
+                      </>
+                    )}
                   </span>
                   <span style={{ fontSize: '13px', color: '#52525B' }}>
-                    川崎市で訪問介護の正社員を探す30-40代
+                    {formData.address || '指定なし'}で{formData.occupation || '介護'}の{formData.employment || '求人'}を探す求職者
                   </span>
                 </div>
                 <p style={{ fontSize: '12px', color: '#A1A1AA', marginBottom: '20px' }}>
-                  推定ペルソナに基づいて、検索される可能性の高いクエリを提案しています
+                  {usedFallback
+                    ? '基本的なキーワードを提案しています。より詳細な条件を入力すると精度が向上します。'
+                    : 'AIが入力条件を分析し、検索される可能性の高いクエリを提案しています'}
                 </p>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
-                  {queries.map((query, index) => (
-                    <button
-                      key={index}
-                      onClick={() => toggleQuery(index)}
-                      style={{
-                        padding: '8px 16px',
-                        border: query.selected ? '1px solid #0D9488' : '1px solid #E4E4E7',
-                        borderRadius: '9999px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: query.selected ? '#F0FDFA' : '#FFFFFF',
-                        color: query.selected ? '#0D9488' : '#52525B',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      {query.text}
-                    </button>
-                  ))}
-                  <button
+                {/* F-MAT-002: ローディング状態 */}
+                {suggestLoading ? (
+                  <div
                     style={{
-                      padding: '8px 16px',
-                      border: '1px dashed #E4E4E7',
-                      borderRadius: '9999px',
-                      fontSize: '13px',
-                      color: '#A1A1AA',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      transition: 'border-color 0.15s ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '32px',
+                      gap: '12px',
                     }}
                   >
-                    + カスタム追加
-                  </button>
-                </div>
+                    <Loader2
+                      style={{
+                        width: 32,
+                        height: 32,
+                        color: '#0D9488',
+                        animation: 'spin 1s linear infinite',
+                      }}
+                    />
+                    <span style={{ fontSize: '13px', color: '#52525B' }}>
+                      AIがキーワードを分析中...
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    {/* F-MAT-002: エラー表示 */}
+                    {suggestError && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '12px',
+                          background: '#FEF3C7',
+                          border: '1px solid #FDE68A',
+                          borderRadius: '6px',
+                          marginBottom: '16px',
+                          fontSize: '12px',
+                          color: '#92400E',
+                        }}
+                      >
+                        <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+                        <span>{suggestError}。デフォルトのキーワードを表示しています。</span>
+                      </div>
+                    )}
+
+                    {/* クエリ選択ボタン群 */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+                      {queries.map((query, index) => (
+                        <button
+                          key={index}
+                          onClick={() => toggleQuery(index)}
+                          title={query.reason || undefined}
+                          style={{
+                            padding: '8px 16px',
+                            border: query.selected ? '1px solid #0D9488' : '1px solid #E4E4E7',
+                            borderRadius: '9999px',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            background: query.selected ? '#F0FDFA' : '#FFFFFF',
+                            color: query.selected ? '#0D9488' : '#52525B',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            position: 'relative',
+                          }}
+                        >
+                          {query.text}
+                          {query.relevanceScore && query.relevanceScore >= 90 && (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                top: '-4px',
+                                right: '-4px',
+                                width: '8px',
+                                height: '8px',
+                                background: '#0D9488',
+                                borderRadius: '50%',
+                              }}
+                            />
+                          )}
+                        </button>
+                      ))}
+                      <button
+                        style={{
+                          padding: '8px 16px',
+                          border: '1px dashed #E4E4E7',
+                          borderRadius: '9999px',
+                          fontSize: '13px',
+                          color: '#A1A1AA',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          transition: 'border-color 0.15s ease',
+                        }}
+                      >
+                        + カスタム追加
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 <div
                   style={{
@@ -638,24 +826,42 @@ export default function MatchingPage() {
                   }}
                 >
                   <span style={{ fontSize: '14px', color: '#A1A1AA' }}>{selectedCount}件選択中</span>
+                  {!suggestLoading && queries.length > 0 && (
+                    <button
+                      onClick={fetchSuggestedQueries}
+                      style={{
+                        fontSize: '12px',
+                        color: '#0D9488',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Sparkles style={{ width: 12, height: 12 }} />
+                      再提案
+                    </button>
+                  )}
                 </div>
               </div>
 
               <button
                 onClick={handleAnalyze}
-                disabled={selectedCount === 0}
+                disabled={selectedCount === 0 || suggestLoading}
                 style={{
                   width: '100%',
                   marginTop: '16px',
                   padding: '10px 16px',
-                  background: selectedCount === 0 ? '#A1A1AA' : '#0D9488',
+                  background: selectedCount === 0 || suggestLoading ? '#A1A1AA' : '#0D9488',
                   color: '#FFFFFF',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '13px',
                   fontWeight: 500,
-                  cursor: selectedCount === 0 ? 'not-allowed' : 'pointer',
-                  opacity: selectedCount === 0 ? 0.5 : 1,
+                  cursor: selectedCount === 0 || suggestLoading ? 'not-allowed' : 'pointer',
+                  opacity: selectedCount === 0 || suggestLoading ? 0.5 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

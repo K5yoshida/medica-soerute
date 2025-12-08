@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     // マッチング履歴を取得
     if (!type || type === 'matching') {
       const { data: matchingData, error: matchingError, count: matchingCount } = await supabase
-        .from('analysis_results')
+        .from('matching_results')
         .select('id, job_requirements, matched_media, created_at', { count: 'exact' })
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })

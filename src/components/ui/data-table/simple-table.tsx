@@ -87,10 +87,10 @@ export function SimpleTable<T>({
   return (
     <div
       className="bg-white border border-zinc-200 rounded-lg overflow-hidden"
-      style={{ maxHeight }}
+      style={{ maxHeight, width: '100%' }}
     >
-      <div style={{ overflowY: 'auto', maxHeight }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ overflowY: 'auto', maxHeight, width: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr style={{ borderBottom: '1px solid #E4E4E7', height: '41px' }}>
               {/* 固定列ヘッダー */}
@@ -99,7 +99,6 @@ export function SimpleTable<T>({
                 style={{
                   background: '#F4F4F5',
                   padding: '0 16px 0 20px',
-                  width: `${fixedColumn.width}px`,
                   minWidth: `${fixedColumn.width}px`,
                 }}
               >
@@ -144,7 +143,6 @@ export function SimpleTable<T>({
                   <td
                     style={{
                       padding: '0 16px 0 20px',
-                      width: `${fixedColumn.width}px`,
                       minWidth: `${fixedColumn.width}px`,
                     }}
                   >
@@ -156,8 +154,7 @@ export function SimpleTable<T>({
                       key={col.id}
                       className={`px-2 py-2.5 ${col.align === 'left' ? 'text-left' : col.align === 'right' ? 'text-right' : 'text-center'}`}
                       style={{
-                        width: col.width ? `${col.width}px` : undefined,
-                        minWidth: col.minWidth ?? col.width ? `${col.minWidth ?? col.width}px` : undefined,
+                        minWidth: col.minWidth ? `${col.minWidth}px` : col.width ? `${col.width}px` : undefined,
                         borderRight: col.borderRight ? '1px solid #E4E4E7' : undefined,
                       }}
                     >

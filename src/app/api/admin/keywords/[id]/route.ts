@@ -70,8 +70,8 @@ export async function PATCH(
     // リクエストボディをパース
     const body: UpdateRequest = await request.json()
 
-    // バリデーション
-    const validIntents: QueryIntentType[] = ['branded', 'transactional', 'commercial', 'informational', 'unknown']
+    // バリデーション（4カテゴリ: branded, transactional, informational, b2b + unknown）
+    const validIntents: QueryIntentType[] = ['branded', 'transactional', 'informational', 'b2b', 'unknown']
     if (body.intent && !validIntents.includes(body.intent)) {
       return NextResponse.json(
         { success: false, error: { message: '無効な意図分類です' } },
@@ -88,7 +88,7 @@ export async function PATCH(
 
     // キーワードの存在確認
     const { data: existingKeyword, error: findError } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('id, keyword')
       .eq('id', keywordId)
       .single()
@@ -131,7 +131,7 @@ export async function PATCH(
 
     // 更新実行
     const { data: updatedKeyword, error: updateError } = await supabase
-      .from('query_master')
+      .from('keywords')
       .update(updateData)
       .eq('id', keywordId)
       .select('id, keyword, intent, intent_reason, is_verified, verified_by, verified_at, classification_source')

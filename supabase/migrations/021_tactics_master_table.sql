@@ -58,7 +58,7 @@ CREATE POLICY "tactics_master_admin_all_policy" ON public.tactics_master
     EXISTS (
       SELECT 1 FROM public.users
       WHERE users.id = auth.uid()
-      AND users.role IN ('admin', 'medica')
+      AND users.role IN ('admin', 'internal')
     )
   );
 

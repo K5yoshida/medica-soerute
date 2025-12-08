@@ -17,8 +17,8 @@ export type UserRole = 'admin' | 'internal' | 'user'
 export type PlanType = 'medica' | 'enterprise' | 'trial' | 'starter' | 'professional'
 export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed'
 export type MediaCategory = 'general' | 'nursing' | 'pharmacy' | 'dental' | 'welfare' | 'rehabilitation'
-// クエリ意図: branded=指名検索, transactional=応募直前, commercial=比較検討, informational=情報収集
-export type QueryIntentType = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
+// クエリ意図: branded=指名検索, transactional=応募意図, informational=情報収集, b2b=法人向け
+export type QueryIntentType = 'branded' | 'transactional' | 'informational' | 'b2b' | 'unknown'
 // 分類ソース: rule=ルールベース, ai=Claude AI, manual=管理者手動, unknown=不明
 export type ClassificationSourceType = 'rule' | 'ai' | 'manual' | 'unknown'
 // PESOカテゴリ: GAP-021
@@ -129,7 +129,8 @@ export interface Database {
           updated_at?: string
         }
       }
-      analysis_results: {
+      // P3-1: analysis_results → matching_results にリネーム（設計書12_DB一覧との整合性）
+      matching_results: {
         Row: {
           id: string
           user_id: string
@@ -245,7 +246,8 @@ export interface Database {
           updated_at?: string
         }
       }
-      query_master: {
+      // キーワードマスター（旧query_master）
+      keywords: {
         Row: {
           id: string
           keyword: string
@@ -298,10 +300,11 @@ export interface Database {
           updated_at?: string
         }
       }
-      media_query_data: {
+      // 媒体別キーワードデータ（旧media_query_data）
+      media_keywords: {
         Row: {
           id: string
-          query_id: string
+          keyword_id: string
           media_id: string
           ranking_position: number | null
           monthly_search_volume: number | null
@@ -317,7 +320,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          query_id: string
+          keyword_id: string
           media_id: string
           ranking_position?: number | null
           monthly_search_volume?: number | null
@@ -333,7 +336,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          query_id?: string
+          keyword_id?: string
           media_id?: string
           ranking_position?: number | null
           monthly_search_volume?: number | null
@@ -410,6 +413,87 @@ export interface Database {
           updated_at?: string
         }
       }
+      // P3-2: 監査ログテーブル（設計書: 12_DB一覧）
+      audit_logs: {
+        Row: {
+          id: string
+          user_id: string | null
+          action_type: string
+          resource_type: string
+          resource_id: string | null
+          old_value: Json | null
+          new_value: Json | null
+          ip_address: string | null
+          user_agent: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          action_type: string
+          resource_type: string
+          resource_id?: string | null
+          old_value?: Json | null
+          new_value?: Json | null
+          ip_address?: string | null
+          user_agent?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          action_type?: string
+          resource_type?: string
+          resource_id?: string | null
+          old_value?: Json | null
+          new_value?: Json | null
+          ip_address?: string | null
+          user_agent?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+      }
+      // P3-3: 職種マスターテーブル
+      job_categories: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          parent_id: string | null
+          category: MediaCategory
+          sort_order: number
+          is_active: boolean
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          parent_id?: string | null
+          category?: MediaCategory
+          sort_order?: number
+          is_active?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          name?: string
+          parent_id?: string | null
+          category?: MediaCategory
+          sort_order?: number
+          is_active?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -429,10 +513,23 @@ export interface Database {
 // ----- Helper Types -----
 export type User = Database['public']['Tables']['users']['Row']
 export type MediaMaster = Database['public']['Tables']['media_master']['Row']
-export type AnalysisResult = Database['public']['Tables']['analysis_results']['Row']
+// P3-1: analysis_results → matching_results
+export type MatchingResult = Database['public']['Tables']['matching_results']['Row']
+// 後方互換性のためエイリアスを維持（将来的に削除予定）
+export type AnalysisResult = MatchingResult
 export type PesoDiagnosis = Database['public']['Tables']['peso_diagnoses']['Row']
 export type UsageLog = Database['public']['Tables']['usage_logs']['Row']
 export type AllowedDomain = Database['public']['Tables']['allowed_domains']['Row']
-export type QueryMaster = Database['public']['Tables']['query_master']['Row']
-export type MediaQueryData = Database['public']['Tables']['media_query_data']['Row']
+// キーワードマスター（旧QueryMaster）
+export type Keyword = Database['public']['Tables']['keywords']['Row']
+// 後方互換性のためエイリアスを維持（将来的に削除予定）
+export type QueryMaster = Keyword
+// 媒体別キーワードデータ（旧MediaQueryData）
+export type MediaKeyword = Database['public']['Tables']['media_keywords']['Row']
+// 後方互換性のためエイリアスを維持（将来的に削除予定）
+export type MediaQueryData = MediaKeyword
 export type TacticsMaster = Database['public']['Tables']['tactics_master']['Row']
+// P3-2: 監査ログ
+export type AuditLog = Database['public']['Tables']['audit_logs']['Row']
+// P3-3: マスターテーブル
+export type JobCategory = Database['public']['Tables']['job_categories']['Row']

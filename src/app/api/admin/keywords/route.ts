@@ -15,6 +15,7 @@ interface KeywordItem {
   intent: QueryIntentType
   intent_confidence: string | null
   intent_reason: string | null
+  query_type: string | null
   max_monthly_search_volume: number | null
   max_cpc: number | null
   is_verified: boolean
@@ -72,12 +73,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<KeywordsRe
     const verified = searchParams.get('verified')
     const source = searchParams.get('source')
     const page = parseInt(searchParams.get('page') || '1', 10)
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100)
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
     const offset = (page - 1) * limit
+    const sortBy = searchParams.get('sort_by') || 'max_monthly_search_volume'
+    const sortOrder = searchParams.get('sort_order') || 'desc'
+
+    // 許可されたソートカラム
+    const allowedSortColumns = [
+      'max_monthly_search_volume',
+      'max_cpc',
+      'created_at',
+      'updated_at',
+      'keyword',
+    ]
+    const sortColumn = allowedSortColumns.includes(sortBy) ? sortBy : 'max_monthly_search_volume'
+    const ascending = sortOrder === 'asc'
 
     // キーワード一覧を取得
     let query = supabase
-      .from('query_master')
+      .from('keywords')
       .select(
         `
         id,
@@ -86,6 +100,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<KeywordsRe
         intent,
         intent_confidence,
         intent_reason,
+        query_type,
         max_monthly_search_volume,
         max_cpc,
         is_verified,
@@ -97,7 +112,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<KeywordsRe
       `,
         { count: 'exact' }
       )
-      .order('max_monthly_search_volume', { ascending: false, nullsFirst: false })
+      .order(sortColumn, { ascending, nullsFirst: false })
       .range(offset, offset + limit - 1)
 
     // 検索フィルター（キーワード部分一致）

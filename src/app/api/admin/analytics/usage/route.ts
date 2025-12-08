@@ -111,9 +111,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<UsageAnaly
     // 4. Service Clientでデータ取得
     const serviceClient = createServiceClient()
 
-    // 4.1 analysis_results（マッチング結果）を取得
+    // 4.1 matching_results（マッチング結果）を取得
     const { data: matchingData, error: matchingError } = await serviceClient
-      .from('analysis_results')
+      .from('matching_results')
       .select('id, user_id, created_at')
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())

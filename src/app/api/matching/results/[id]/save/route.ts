@@ -36,7 +36,7 @@ export async function POST(
 
     // 分析結果を取得して所有者確認
     const { data: analysisResult, error: fetchError } = await supabase
-      .from('analysis_results')
+      .from('matching_results')
       .select('*')
       .eq('id', analysisId)
       .eq('user_id', user.id)
@@ -57,7 +57,7 @@ export async function POST(
     }
 
     const { error: updateError } = await supabase
-      .from('analysis_results')
+      .from('matching_results')
       .update({ analysis_detail: updatedDetail })
       .eq('id', analysisId)
 

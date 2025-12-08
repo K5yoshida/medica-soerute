@@ -43,8 +43,7 @@ export function TableHeader({
       style={{
         background: '#FAFAFA',
         height: '41px',
-        width: width ? `${width}px` : undefined,
-        minWidth: minWidth ?? width ? `${minWidth ?? width}px` : undefined,
+        minWidth: minWidth ? `${minWidth}px` : width ? `${width}px` : undefined,
         borderRight: borderRight ? '1px solid #E4E4E7' : undefined,
         fontSize: '11px',
         fontWeight: 600,

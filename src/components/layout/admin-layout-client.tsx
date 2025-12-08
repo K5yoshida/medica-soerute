@@ -34,6 +34,8 @@ export function AdminMain({ children }: { children: React.ReactNode }) {
         flex: 1,
         marginLeft,
         minHeight: '100vh',
+        minWidth: 0,
+        overflowX: 'hidden',
       }}
     >
       {children}

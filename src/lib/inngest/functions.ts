@@ -27,6 +27,13 @@ const AI_BATCH_SIZE = 50            // Claude API: 1リクエストあたりの�
 const PROGRESS_UPDATE_INTERVAL = 500 // 進捗更新間隔
 
 /**
+ * インポート条件の閾値
+ * 月間検索数100以上、かつ推定流入数50以上のデータのみインポート
+ */
+const MIN_SEARCH_VOLUME = 100       // 月間検索数の最小値
+const MIN_ESTIMATED_TRAFFIC = 50    // 推定流入数の最小値
+
+/**
  * パース済み行データの型定義
  */
 interface ParsedRow {
@@ -189,6 +196,7 @@ export const importCsvJob = inngest.createFunction(
       // データ行をパース
       const rows: ParsedRow[] = []
       const parseErrors: string[] = []
+      let skippedByThreshold = 0  // 閾値でスキップされた件数
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim()
@@ -206,13 +214,27 @@ export const importCsvJob = inngest.createFunction(
             .replace(/\s+/g, ' ')
             .trim()
 
+          const searchVolume = searchVolumeIndex !== -1
+            ? parseNumber(values[searchVolumeIndex])
+            : null
+          const traffic = trafficIndex !== -1
+            ? parseNumber(values[trafficIndex])
+            : null
+
+          // インポート条件のバリデーション
+          // 月間検索数100以上、かつ推定流入数50以上のみインポート
+          const searchVolumeOk = searchVolume !== null && searchVolume >= MIN_SEARCH_VOLUME
+          const trafficOk = traffic !== null && traffic >= MIN_ESTIMATED_TRAFFIC
+
+          if (!searchVolumeOk || !trafficOk) {
+            skippedByThreshold++
+            continue  // 閾値未満のデータはスキップ
+          }
+
           rows.push({
             keyword,
             normalizedKeyword,
-            searchVolume:
-              searchVolumeIndex !== -1
-                ? parseNumber(values[searchVolumeIndex])
-                : null,
+            searchVolume,
             cpc:
               cpcIndex !== -1
                 ? parseFloat(values[cpcIndex]?.replace(/[^0-9.]/g, '') || '0') ||
@@ -230,8 +252,7 @@ export const importCsvJob = inngest.createFunction(
               searchRankIndex !== -1
                 ? parseNumber(values[searchRankIndex])
                 : null,
-            traffic:
-              trafficIndex !== -1 ? parseNumber(values[trafficIndex]) : null,
+            traffic,
             url:
               urlIndex !== -1
                 ? values[urlIndex]?.replace(/^["']|["']$/g, '').trim() || null
@@ -246,6 +267,10 @@ export const importCsvJob = inngest.createFunction(
         }
       }
 
+      if (skippedByThreshold > 0) {
+        console.log(`インポート条件でスキップ: ${skippedByThreshold}件（月間検索数<${MIN_SEARCH_VOLUME} または 推定流入数<${MIN_ESTIMATED_TRAFFIC}）`)
+      }
+
       // 総行数を更新
       await supabase
         .from('import_jobs')
@@ -255,7 +280,7 @@ export const importCsvJob = inngest.createFunction(
         })
         .eq('id', jobId)
 
-      return { rows, parseErrors }
+      return { rows, parseErrors, skippedByThreshold }
     })
 
     // =========================================
@@ -314,7 +339,7 @@ export const importCsvJob = inngest.createFunction(
         const batch = normalizedKeywords.slice(i, i + DB_LOOKUP_BATCH_SIZE)
 
         const { data: existingQueries, error } = await supabase
-          .from('query_master')
+          .from('keywords')
           .select('keyword_normalized, intent, intent_confidence, intent_reason, is_verified')
           .in('keyword_normalized', batch)
 
@@ -640,7 +665,7 @@ export const importCsvJob = inngest.createFunction(
 
         const batch = queryBatch.slice(i, i + DB_BATCH_SIZE)
         const { error: batchError } = await supabase
-          .from('query_master')
+          .from('keywords')
           .upsert(batch, {
             onConflict: 'keyword_normalized',
             ignoreDuplicates: false,
@@ -671,31 +696,41 @@ export const importCsvJob = inngest.createFunction(
         }
       }
 
-      // media_idが指定されている場合はmedia_query_dataも作成
+      // media_idが指定されている場合はmedia_keywordsも作成
       if (mediaId && parsedData.rows.length > 0) {
         const normalizedKeywords = parsedData.rows.map((r) => r.normalizedKeyword)
-        const { data: queryIds } = await supabase
-          .from('query_master')
-          .select('id, keyword_normalized')
-          .in('keyword_normalized', normalizedKeywords)
 
-        if (queryIds && queryIds.length > 0) {
-          const keywordToId = new Map(
-            queryIds.map(
-              (q: { id: string; keyword_normalized: string }) => [
-                q.keyword_normalized,
-                q.id,
-              ]
-            )
-          )
+        // keywordsテーブルからIDを取得（バッチ処理で分割）
+        const keywordToId = new Map<string, string>()
+        for (let i = 0; i < normalizedKeywords.length; i += DB_LOOKUP_BATCH_SIZE) {
+          const batch = normalizedKeywords.slice(i, i + DB_LOOKUP_BATCH_SIZE)
+          const { data: keywordIds, error: lookupError } = await supabase
+            .from('keywords')
+            .select('id, keyword_normalized')
+            .in('keyword_normalized', batch)
 
-          const mediaQueryBatch = parsedData.rows
+          if (lookupError) {
+            console.warn('keywords lookup error:', lookupError.message)
+            continue
+          }
+
+          if (keywordIds) {
+            keywordIds.forEach((q: { id: string; keyword_normalized: string }) => {
+              keywordToId.set(q.keyword_normalized, q.id)
+            })
+          }
+        }
+
+        console.log(`media_keywords: ${keywordToId.size}件のキーワードIDを取得`)
+
+        if (keywordToId.size > 0) {
+          const mediaKeywordsBatch = parsedData.rows
             .map((row) => {
-              const queryId = keywordToId.get(row.normalizedKeyword)
-              if (!queryId) return null
+              const keywordId = keywordToId.get(row.normalizedKeyword)
+              if (!keywordId) return null
 
               return {
-                query_id: queryId,
+                keyword_id: keywordId,
                 media_id: mediaId,
                 ranking_position: row.searchRank,
                 monthly_search_volume: row.searchVolume,
@@ -709,19 +744,29 @@ export const importCsvJob = inngest.createFunction(
             })
             .filter(Boolean)
 
-          for (let i = 0; i < mediaQueryBatch.length; i += DB_BATCH_SIZE) {
-            const batch = mediaQueryBatch.slice(i, i + DB_BATCH_SIZE)
+          console.log(`media_keywords: ${mediaKeywordsBatch.length}件をupsert予定`)
+
+          let mediaKeywordsSuccess = 0
+          let mediaKeywordsError = 0
+
+          for (let i = 0; i < mediaKeywordsBatch.length; i += DB_BATCH_SIZE) {
+            const batch = mediaKeywordsBatch.slice(i, i + DB_BATCH_SIZE)
             const { error: mediaError } = await supabase
-              .from('media_query_data')
+              .from('media_keywords')
               .upsert(batch, {
-                onConflict: 'media_id,query_id',
+                onConflict: 'media_id,keyword_id',
                 ignoreDuplicates: false,
               })
 
             if (mediaError) {
-              console.warn('media_query_data batch error:', mediaError.message)
+              console.warn('media_keywords batch error:', mediaError.message)
+              mediaKeywordsError += batch.length
+            } else {
+              mediaKeywordsSuccess += batch.length
             }
           }
+
+          console.log(`media_keywords: 完了 (成功: ${mediaKeywordsSuccess}, エラー: ${mediaKeywordsError})`)
         }
       }
 
@@ -735,11 +780,12 @@ export const importCsvJob = inngest.createFunction(
       const supabase = createServiceClient()
 
       // 意図分類サマリを集計（重複排除後のデータで集計）
+      // 4カテゴリ: branded, transactional, informational, b2b + unknown
       const intentSummary = {
         branded: 0,
         transactional: 0,
-        commercial: 0,
         informational: 0,
+        b2b: 0,
         unknown: 0,
       }
 
@@ -776,6 +822,7 @@ export const importCsvJob = inngest.createFunction(
         total_input: parsedData.rows.length,
         unique_keywords: insertResult.uniqueCount,
         duplicate_keywords: insertResult.duplicateCount,
+        skipped_by_threshold: parsedData.skippedByThreshold,  // 閾値でスキップされた件数
       }
 
       // ジョブを完了状態に更新

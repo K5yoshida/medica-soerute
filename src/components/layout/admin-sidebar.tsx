@@ -30,12 +30,19 @@ interface AdminSidebarProps {
   user: User
 }
 
-const mainNavItems = [
-  { title: 'ダッシュボード', href: '/admin', icon: LayoutDashboard },
+// ダッシュボード（単独）
+const dashboardItem = { title: 'ダッシュボード', href: '/admin', icon: LayoutDashboard }
+
+// アカウント管理セクション
+const accountNavItems = [
   { title: 'ユーザー管理', href: '/admin/users', icon: Users },
   { title: 'ドメイン管理', href: '/admin/domains', icon: Globe },
+]
+
+// データ管理セクション
+const dataNavItems = [
   { title: 'キーワード管理', href: '/admin/keywords', icon: Tags },
-  { title: '媒体マスター', href: '/admin/media', icon: Database },
+  { title: '媒体マスター管理', href: '/admin/media', icon: Database },
 ]
 
 const analyticsNavItems = [
@@ -233,7 +240,21 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
           overflowY: 'auto',
         }}
       >
-        {/* メインセクション */}
+        {/* ダッシュボード（単独） */}
+        <div style={{ marginBottom: '12px' }}>
+          <NavLink item={dashboardItem} isActive={isActive(dashboardItem.href)} isCollapsed={isCollapsed} />
+        </div>
+
+        {/* Divider */}
+        <div
+          style={{
+            height: '1px',
+            background: 'rgba(255,255,255,0.08)',
+            margin: isCollapsed ? '12px 4px' : '12px 12px',
+          }}
+        />
+
+        {/* アカウント管理セクション */}
         <div style={{ marginBottom: '20px' }}>
           {!isCollapsed && (
             <div
@@ -247,10 +268,41 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
                 marginBottom: '8px',
               }}
             >
-              管理
+              アカウント管理
             </div>
           )}
-          {mainNavItems.map((item) => (
+          {accountNavItems.map((item) => (
+            <NavLink key={item.href} item={item} isActive={isActive(item.href)} isCollapsed={isCollapsed} />
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div
+          style={{
+            height: '1px',
+            background: 'rgba(255,255,255,0.08)',
+            margin: isCollapsed ? '12px 4px' : '12px 12px',
+          }}
+        />
+
+        {/* データ管理セクション */}
+        <div style={{ marginBottom: '20px' }}>
+          {!isCollapsed && (
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: '#A5B4FC',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                padding: '0 12px',
+                marginBottom: '8px',
+              }}
+            >
+              データ管理
+            </div>
+          )}
+          {dataNavItems.map((item) => (
             <NavLink key={item.href} item={item} isActive={isActive(item.href)} isCollapsed={isCollapsed} />
           ))}
         </div>

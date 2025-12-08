@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { User } from '@/types'
 import { suggestRelatedKeywords } from '@/lib/claude/client'
+import { withFallback, getDefaultKeywordSuggestions } from '@/lib/claude/fallback'
 
 interface SuggestKeywordsRequest {
   // 職種
@@ -90,14 +91,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Claude APIでキーワードを提案
-    const suggestions = await suggestRelatedKeywords({
-      jobType: body.jobType,
-      area: body.area,
-      conditions: body.conditions,
-      currentKeywords: body.currentKeywords,
-      suggestionType: body.suggestionType || 'all',
-    })
+    // F-EXT-001: Claude APIでキーワードを提案（フォールバック付き）
+    const result = await withFallback(
+      () => suggestRelatedKeywords({
+        jobType: body.jobType,
+        area: body.area,
+        conditions: body.conditions,
+        currentKeywords: body.currentKeywords,
+        suggestionType: body.suggestionType || 'all',
+      }),
+      () => getDefaultKeywordSuggestions(body.jobType)
+    )
+
+    if (!result.success || !result.data) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'E-EXT-401',
+            message: 'AIサービスが一時的に利用できません',
+          },
+        },
+        { status: 503 }
+      )
+    }
 
     // 使用ログを記録
     await supabase.from('usage_logs').insert({
@@ -106,13 +123,19 @@ export async function POST(request: NextRequest) {
       metadata: {
         job_type: body.jobType,
         area: body.area,
-        suggestion_count: suggestions.keywords.length,
+        suggestion_count: result.data.keywords.length,
+        used_fallback: result.usedFallback,
+        retry_count: result.retryCount,
       },
     })
 
     return NextResponse.json({
       success: true,
-      data: suggestions,
+      data: result.data,
+      meta: {
+        usedFallback: result.usedFallback,
+        fallbackReason: result.fallbackReason,
+      },
     })
   } catch (error) {
     console.error('Keyword suggestion error:', error)

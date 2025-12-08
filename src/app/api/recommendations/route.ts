@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getRecommendations } from '@/lib/claude/client'
+import { withFallback, getDefaultRecommendationsFallback } from '@/lib/claude/fallback'
 import type { User } from '@/types'
 
 export async function GET() {
@@ -54,7 +55,7 @@ export async function GET() {
 
     // 直近の分析結果を取得
     const { data: analysisResults } = await supabase
-      .from('analysis_results')
+      .from('matching_results')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'completed')
@@ -82,7 +83,7 @@ export async function GET() {
       })
     }
 
-    // Claude APIで施策提案を生成
+    // F-EXT-001: Claude APIで施策提案を生成（フォールバック付き）
     const latestPesoScores = pesoDiagnoses?.[0]?.scores as {
       paid: number
       earned: number
@@ -90,10 +91,26 @@ export async function GET() {
       owned: number
     } | undefined
 
-    const recommendations = await getRecommendations({
-      analysisResults: analysisResults || [],
-      pesoScores: latestPesoScores,
-    })
+    const result = await withFallback(
+      () => getRecommendations({
+        analysisResults: analysisResults || [],
+        pesoScores: latestPesoScores,
+      }),
+      () => getDefaultRecommendationsFallback()
+    )
+
+    if (!result.success || !result.data) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'E-EXT-404',
+            message: 'AIサービスが一時的に利用できません。しばらく時間をおいて再度お試しください。',
+          },
+        },
+        { status: 503 }
+      )
+    }
 
     // 使用ログを記録
     await supabase.from('usage_logs').insert({
@@ -102,6 +119,8 @@ export async function GET() {
       metadata: {
         analysis_count: analysisResults?.length || 0,
         peso_count: pesoDiagnoses?.length || 0,
+        used_fallback: result.usedFallback,
+        retry_count: result.retryCount,
       },
     })
 
@@ -109,11 +128,15 @@ export async function GET() {
       success: true,
       data: {
         hasData: true,
-        recommendations,
+        recommendations: result.data,
         basedOn: {
           analysisCount: analysisResults?.length || 0,
           pesoCount: pesoDiagnoses?.length || 0,
         },
+      },
+      meta: {
+        usedFallback: result.usedFallback,
+        fallbackReason: result.fallbackReason,
       },
     })
   } catch (error) {

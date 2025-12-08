@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { analyzePeso } from '@/lib/claude/client'
+import { withFallback, getDefaultPesoFallback } from '@/lib/claude/fallback'
 import type { PesoDiagnosisData, User } from '@/types'
 
 export async function POST(request: Request) {
@@ -74,8 +75,26 @@ export async function POST(request: Request) {
     const body = await request.json()
     const diagnosisData: PesoDiagnosisData = body
 
-    // Claude APIでPESO分析を実行
-    const pesoResult = await analyzePeso(diagnosisData)
+    // F-EXT-001: Claude APIでPESO分析を実行（フォールバック付き）
+    const result = await withFallback(
+      () => analyzePeso(diagnosisData),
+      () => getDefaultPesoFallback()
+    )
+
+    if (!result.success || !result.data) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'E-EXT-403',
+            message: 'AIサービスが一時的に利用できません。しばらく時間をおいて再度お試しください。',
+          },
+        },
+        { status: 503 }
+      )
+    }
+
+    const pesoResult = result.data
 
     // 診断結果をDBに保存
     const { data: savedResult, error: saveError } = await supabase
@@ -105,12 +124,18 @@ export async function POST(request: Request) {
       metadata: {
         diagnosis_id: savedResult?.id,
         scores: pesoResult.scores,
+        used_fallback: result.usedFallback,
+        retry_count: result.retryCount,
       },
     })
 
     return NextResponse.json({
       success: true,
       data: pesoResult,
+      meta: {
+        usedFallback: result.usedFallback,
+        fallbackReason: result.fallbackReason,
+      },
     })
   } catch (error) {
     console.error('PESO diagnosis error:', error)

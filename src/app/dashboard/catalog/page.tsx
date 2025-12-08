@@ -53,14 +53,23 @@ interface RankingResult {
   domain: string | null
   matched_keyword_count: number
   total_estimated_traffic: number
-  intent_a_count: number
-  intent_a_pct: number
+  // intent別の流入数（4カテゴリ: branded, transactional, informational, b2b）
+  branded_traffic?: number
+  transactional_traffic?: number
+  informational_traffic?: number
+  b2b_traffic?: number
+  // intent別のキーワード数
+  branded_count?: number
+  transactional_count?: number
+  informational_count?: number
+  b2b_count?: number
   monthly_visits: number | null
   top_keywords: Array<{
     keyword: string
     monthly_search_volume: number
     estimated_traffic: number
     search_rank: number
+    intent?: string
   }>
 }
 
@@ -117,20 +126,10 @@ const COLUMN_HELP: Record<string, ColumnHelp> = {
     description: 'SNSからの流入割合です。',
     source: 'SimilarWeb',
   },
-  keyword_count: {
-    title: 'クエリ数',
-    description: 'この媒体が検索上位を獲得しているクエリの数です。',
-    source: 'ラッコキーワード',
-  },
-  total_search_volume: {
-    title: '月間Vol合計',
-    description: 'この媒体が獲得しているキーワードの月間検索ボリュームの合計です。',
-    source: 'ラッコキーワード',
-  },
-  estimated_traffic: {
-    title: '推定流入',
-    description: '検索経由の推定月間流入数の合計です。',
-    source: 'ラッコキーワード',
+  email_pct: {
+    title: 'メール流入',
+    description: 'メールマガジン等からの流入割合です。',
+    source: 'SimilarWeb',
   },
 }
 
@@ -141,7 +140,7 @@ function formatNumber(num: number | null | undefined): string {
 
 function formatPercent(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-'
-  return `${Math.round(num)}%`
+  return `${num.toFixed(2)}%`
 }
 
 function formatDuration(seconds: number | null | undefined): string {
@@ -249,6 +248,8 @@ export default function CatalogPage() {
   const [rankingKeywords, setRankingKeywords] = useState<string[]>([])
   const [rankingResults, setRankingResults] = useState<RankingResult[]>([])
   const [isRankingLoading, setIsRankingLoading] = useState(false)
+  const [rankingSortBy, setRankingSortBy] = useState('total')
+  const [lastSearchKeywords, setLastSearchKeywords] = useState('')
 
   // 比較機能用の状態
   const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set())
@@ -293,12 +294,13 @@ export default function CatalogPage() {
   }, [tableSearchQuery])
 
   // ランキング検索
-  const handleRankingSearch = useCallback(async (keywords: string) => {
+  const handleRankingSearch = useCallback(async (keywords: string, sortBy: string = 'total') => {
     setIsRankingLoading(true)
+    setLastSearchKeywords(keywords)
     try {
       const params = new URLSearchParams()
       params.set('keywords', keywords)
-      params.set('sort_by', 'estimated_traffic')
+      params.set('sort_by', sortBy)
       params.set('limit', '20')
 
       const res = await fetch(`/api/media/ranking?${params.toString()}`)
@@ -318,6 +320,14 @@ export default function CatalogPage() {
       setIsRankingLoading(false)
     }
   }, [])
+
+  // ソート変更時にAPIを再呼び出し
+  const handleSortChange = useCallback((newSortBy: string) => {
+    setRankingSortBy(newSortBy)
+    if (lastSearchKeywords) {
+      handleRankingSearch(lastSearchKeywords, newSortBy)
+    }
+  }, [lastSearchKeywords, handleRankingSearch])
 
   const handleClearRanking = useCallback(() => {
     setRankingKeywords([])
@@ -413,6 +423,8 @@ export default function CatalogPage() {
             keywords={rankingKeywords}
             results={rankingResults}
             onClear={handleClearRanking}
+            onSortChange={handleSortChange}
+            currentSort={rankingSortBy}
           />
         )}
 
@@ -520,19 +532,16 @@ export default function CatalogPage() {
                   overflow: 'hidden',
                 }}
               >
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
-                    <thead>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                       <tr style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
                         {/* チェックボックス列 */}
                         <th
                           style={{
                             width: '48px',
                             padding: '12px 8px',
-                            position: 'sticky',
-                            left: 0,
                             background: '#FAFAFA',
-                            zIndex: 2,
                           }}
                         >
                           <span style={{ fontSize: '11px', color: '#A1A1AA' }}>比較</span>
@@ -545,10 +554,7 @@ export default function CatalogPage() {
                             fontWeight: 500,
                             color: '#52525B',
                             whiteSpace: 'nowrap',
-                            position: 'sticky',
-                            left: 48,
                             background: '#FAFAFA',
-                            zIndex: 1,
                           }}
                         >
                           媒体名
@@ -556,15 +562,13 @@ export default function CatalogPage() {
                         <HeaderCell label="月間訪問" helpKey="monthly_visits" onHelp={setActiveHelp} />
                         <HeaderCell label="直帰率" helpKey="bounce_rate" onHelp={setActiveHelp} />
                         <HeaderCell label="PV/訪問" helpKey="pages_per_visit" onHelp={setActiveHelp} />
-                        <HeaderCell label="滞在" helpKey="avg_visit_duration" onHelp={setActiveHelp} />
+                        <HeaderCell label="平均滞在" helpKey="avg_visit_duration" onHelp={setActiveHelp} />
                         <HeaderCell label="検索" helpKey="search_pct" onHelp={setActiveHelp} />
                         <HeaderCell label="直接" helpKey="direct_pct" onHelp={setActiveHelp} />
                         <HeaderCell label="参照" helpKey="referral_pct" onHelp={setActiveHelp} />
                         <HeaderCell label="広告" helpKey="display_pct" onHelp={setActiveHelp} />
+                        <HeaderCell label="メール" helpKey="email_pct" onHelp={setActiveHelp} />
                         <HeaderCell label="SNS" helpKey="social_pct" onHelp={setActiveHelp} />
-                        <HeaderCell label="クエリ数" helpKey="keyword_count" onHelp={setActiveHelp} />
-                        <HeaderCell label="月間Vol" helpKey="total_search_volume" onHelp={setActiveHelp} />
-                        <HeaderCell label="推定流入" helpKey="estimated_traffic" onHelp={setActiveHelp} />
                         <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }} />
                       </tr>
                     </thead>
@@ -573,32 +577,61 @@ export default function CatalogPage() {
                         <tr
                           key={media.id}
                           onClick={() => router.push(`/dashboard/catalog/${media.id}`)}
+                          className="catalog-row"
                           style={{
                             borderBottom: index < mediaList.length - 1 ? '1px solid #F4F4F5' : 'none',
                             cursor: 'pointer',
-                            transition: 'background 0.1s ease',
+                            transition: 'all 0.15s ease',
                             background: selectedMediaIds.has(media.id) ? '#F0FDFA' : 'transparent',
+                            position: 'relative',
                           }}
                           onMouseEnter={(e) => {
                             if (!selectedMediaIds.has(media.id)) {
-                              e.currentTarget.style.background = '#FAFAFA'
+                              e.currentTarget.style.background = '#F0FDFA'
+                              // セルの背景も変更
+                              const checkboxCell = e.currentTarget.querySelector('.checkbox-cell') as HTMLElement
+                              if (checkboxCell) checkboxCell.style.background = '#F0FDFA'
+                              const nameCell = e.currentTarget.querySelector('.media-name-cell') as HTMLElement
+                              if (nameCell) nameCell.style.background = '#F0FDFA'
+                              // 媒体名の色を変更
+                              const nameEl = e.currentTarget.querySelector('.media-name-text') as HTMLElement
+                              if (nameEl) nameEl.style.color = '#0D9488'
+                              // 詳細ボタンを強調
+                              const btnEl = e.currentTarget.querySelector('.detail-btn') as HTMLElement
+                              if (btnEl) {
+                                btnEl.style.background = '#0D9488'
+                                btnEl.style.color = '#FFFFFF'
+                              }
                             }
                           }}
                           onMouseLeave={(e) => {
                             if (!selectedMediaIds.has(media.id)) {
                               e.currentTarget.style.background = 'transparent'
+                              // セルの背景も戻す
+                              const checkboxCell = e.currentTarget.querySelector('.checkbox-cell') as HTMLElement
+                              if (checkboxCell) checkboxCell.style.background = '#FFFFFF'
+                              const nameCell = e.currentTarget.querySelector('.media-name-cell') as HTMLElement
+                              if (nameCell) nameCell.style.background = '#FFFFFF'
+                              // 媒体名の色を戻す
+                              const nameEl = e.currentTarget.querySelector('.media-name-text') as HTMLElement
+                              if (nameEl) nameEl.style.color = '#18181B'
+                              // 詳細ボタンを戻す
+                              const btnEl = e.currentTarget.querySelector('.detail-btn') as HTMLElement
+                              if (btnEl) {
+                                btnEl.style.background = '#F0FDFA'
+                                btnEl.style.color = '#0D9488'
+                              }
                             }
                           }}
                         >
                           {/* チェックボックス */}
                           <td
+                            className="checkbox-cell"
                             style={{
                               padding: '12px 8px',
-                              position: 'sticky',
-                              left: 0,
                               background: selectedMediaIds.has(media.id) ? '#F0FDFA' : '#FFFFFF',
-                              zIndex: 2,
                               textAlign: 'center',
+                              transition: 'background 0.15s ease',
                             }}
                           >
                             <input
@@ -615,60 +648,34 @@ export default function CatalogPage() {
                               }}
                             />
                           </td>
-                          {/* 媒体名 - 固定列 */}
+                          {/* 媒体名 */}
                           <td
+                            className="media-name-cell"
                             style={{
                               padding: '12px 16px',
-                              position: 'sticky',
-                              left: 48,
                               background: selectedMediaIds.has(media.id) ? '#F0FDFA' : '#FFFFFF',
-                              zIndex: 1,
+                              transition: 'background 0.15s ease',
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div>
                               <div
+                                className="media-name-text"
                                 style={{
-                                  width: 32,
-                                  height: 32,
-                                  borderRadius: '50%',
-                                  background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: '#FFFFFF',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  flexShrink: 0,
+                                  fontSize: '13px',
+                                  fontWeight: 500,
+                                  color: '#18181B',
+                                  transition: 'color 0.15s ease',
                                 }}
                               >
-                                {media.name.charAt(0)}
+                                {media.name}
                               </div>
-                              <div style={{ minWidth: 0 }}>
-                                <div
-                                  style={{
-                                    fontSize: '13px',
-                                    fontWeight: 500,
-                                    color: '#18181B',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: '140px',
-                                  }}
-                                >
-                                  {media.name}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    color: '#A1A1AA',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: '140px',
-                                  }}
-                                >
-                                  {media.domain || '-'}
-                                </div>
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  color: '#A1A1AA',
+                                }}
+                              >
+                                {media.domain || '-'}
                               </div>
                             </div>
                           </td>
@@ -693,14 +700,16 @@ export default function CatalogPage() {
                             color="#F59E0B"
                           />
                           <DataCell
+                            value={formatPercent(media.latest_traffic?.email_pct)}
+                            color="#8B5CF6"
+                          />
+                          <DataCell
                             value={formatPercent(media.latest_traffic?.social_pct)}
                             color="#10B981"
                           />
-                          <DataCell value={formatNumber(media.keyword_count)} />
-                          <DataCell value={formatNumber(media.total_search_volume)} />
-                          <DataCell value={formatNumber(media.total_estimated_traffic)} />
                           <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                             <button
+                              className="detail-btn"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 router.push(`/dashboard/catalog/${media.id}`)
@@ -717,6 +726,7 @@ export default function CatalogPage() {
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '4px',
+                                transition: 'all 0.15s ease',
                               }}
                             >
                               詳細

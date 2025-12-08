@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Upload,
   FileText,
@@ -8,7 +9,6 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  Download,
   Clock,
   BarChart3,
   ChevronRight,
@@ -17,6 +17,7 @@ import {
   X,
   Play,
   List,
+  ArrowLeft,
 } from 'lucide-react'
 
 /**
@@ -31,7 +32,7 @@ import {
  */
 
 type ImportType = 'rakko_keywords' | 'similarweb'
-type QueryIntent = 'branded' | 'transactional' | 'commercial' | 'informational' | 'unknown'
+type QueryIntent = 'branded' | 'transactional' | 'informational' | 'b2b' | 'unknown'
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
 
 interface MediaOption {
@@ -75,6 +76,7 @@ interface ImportJob {
     total_input: number
     unique_keywords: number
     duplicate_keywords: number
+    skipped_by_threshold?: number  // 閾値でスキップされた件数
   } | null
   created_at: string
   started_at: string | null
@@ -83,17 +85,17 @@ interface ImportJob {
 
 const INTENT_LABELS: Record<QueryIntent, string> = {
   branded: '指名検索',
-  transactional: '応募直前',
-  commercial: '比較検討',
+  transactional: '応募意図',
   informational: '情報収集',
+  b2b: '法人向け',
   unknown: '未分類',
 }
 
 const INTENT_COLORS: Record<QueryIntent, string> = {
   branded: '#8B5CF6',
   transactional: '#10B981',
-  commercial: '#F59E0B',
   informational: '#3B82F6',
+  b2b: '#059669',
   unknown: '#A1A1AA',
 }
 
@@ -115,6 +117,8 @@ const STEP_LABELS: Record<string, string> = {
 }
 
 export default function ImportPage() {
+  const router = useRouter()
+
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1)
   const [file, setFile] = useState<File | null>(null)
@@ -329,7 +333,7 @@ export default function ImportPage() {
   const nextStep = async () => {
     // Step 2: 媒体選択の必須チェック
     if (currentStep === 2) {
-      if (importType === 'rakko_keywords' && !selectedMediaId) {
+      if (!selectedMediaId) {
         setValidationError('対象媒体の選択は必須です')
         return
       }
@@ -406,28 +410,47 @@ export default function ImportPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h1
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              onClick={() => router.back()}
               style={{
-                fontSize: '15px',
-                fontWeight: 600,
-                color: '#18181B',
-                letterSpacing: '-0.01em',
-                margin: 0,
+                padding: '8px',
+                borderRadius: '6px',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
+              onMouseOver={(e) => (e.currentTarget.style.background = '#F4F4F5')}
+              onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
             >
-              CSVインポート
-            </h1>
-            <p
-              style={{
-                fontSize: '13px',
-                color: '#A1A1AA',
-                marginTop: '2px',
-                fontWeight: 400,
-              }}
-            >
-              キーワードデータを非同期でインポート
-            </p>
+              <ArrowLeft className="w-5 h-5" style={{ color: '#52525B' }} />
+            </button>
+            <div>
+              <h1
+                style={{
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: '#18181B',
+                  letterSpacing: '-0.01em',
+                  margin: 0,
+                }}
+              >
+                CSVインポート
+              </h1>
+              <p
+                style={{
+                  fontSize: '13px',
+                  color: '#A1A1AA',
+                  marginTop: '2px',
+                  fontWeight: 400,
+                }}
+              >
+                キーワードデータを非同期でインポート
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setShowJobList(!showJobList)}
@@ -466,9 +489,9 @@ export default function ImportPage() {
 
       {/* Content */}
       <div style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', gap: '24px' }}>
+        <div>
           {/* Wizard */}
-          <div style={{ flex: 1 }}>
+          <div style={{ maxWidth: '800px' }}>
             {/* Step Indicator */}
             <div
               style={{
@@ -538,6 +561,38 @@ export default function ImportPage() {
                   <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#18181B', marginBottom: '16px' }}>
                     CSVファイルを選択
                   </h2>
+
+                  {/* インポート条件の注意書き */}
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      background: '#FEF3C7',
+                      border: '1px solid #FDE68A',
+                      borderRadius: '8px',
+                      marginBottom: '20px',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                    }}
+                  >
+                    <AlertCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#D97706', marginTop: '1px' }} />
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400E', marginBottom: '4px' }}>
+                        インポート条件
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#78350F', lineHeight: '1.5' }}>
+                        以下の条件を満たすキーワードのみインポートされます：
+                        <ul style={{ margin: '6px 0 0', paddingLeft: '16px' }}>
+                          <li><strong>月間検索数：100以上</strong></li>
+                          <li><strong>推定流入数：50以上</strong></li>
+                        </ul>
+                        <div style={{ marginTop: '6px', fontSize: '11px', color: '#92400E' }}>
+                          ※ 条件を満たさないデータは自動的にスキップされます
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleDrop}
@@ -589,8 +644,8 @@ export default function ImportPage() {
                     インポート設定
                   </h2>
 
-                  {/* Import Type */}
-                  <div style={{ marginBottom: '20px' }}>
+                  {/* Media Selection - 必須 */}
+                  <div>
                     <label
                       style={{
                         display: 'block',
@@ -600,104 +655,35 @@ export default function ImportPage() {
                         marginBottom: '8px',
                       }}
                     >
-                      インポートタイプ
+                      対象媒体 <span style={{ color: '#EF4444' }}>*</span>
                     </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => setImportType('rakko_keywords')}
-                        style={{
-                          flex: 1,
-                          padding: '16px',
-                          border: `1px solid ${importType === 'rakko_keywords' ? '#7C3AED' : '#E4E4E7'}`,
-                          borderRadius: '8px',
-                          background: importType === 'rakko_keywords' ? 'rgba(124,58,237,0.05)' : '#FFFFFF',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            color: importType === 'rakko_keywords' ? '#7C3AED' : '#18181B',
-                          }}
-                        >
-                          ラッコキーワード
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
-                          キーワード・順位・検索ボリューム
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => setImportType('similarweb')}
-                        style={{
-                          flex: 1,
-                          padding: '16px',
-                          border: `1px solid ${importType === 'similarweb' ? '#7C3AED' : '#E4E4E7'}`,
-                          borderRadius: '8px',
-                          background: importType === 'similarweb' ? 'rgba(124,58,237,0.05)' : '#FFFFFF',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            color: importType === 'similarweb' ? '#7C3AED' : '#18181B',
-                          }}
-                        >
-                          SimilarWeb
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
-                          トラフィックデータ
-                        </div>
-                      </button>
-                    </div>
+                    <select
+                      value={selectedMediaId}
+                      onChange={(e) => setSelectedMediaId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: selectedMediaId ? '1px solid #E4E4E7' : '1px solid #FCA5A5',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        color: '#18181B',
+                        background: '#FFFFFF',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="">媒体を選択してください</option>
+                      {mediaList.map((media) => (
+                        <option key={media.id} value={media.id}>
+                          {media.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p style={{ fontSize: '11px', color: selectedMediaId ? '#A1A1AA' : '#EF4444', marginTop: '6px' }}>
+                      {selectedMediaId
+                        ? 'このCSVのキーワードは選択した媒体に紐付けられます'
+                        : '媒体の選択は必須です。媒体カタログに表示するために必要です'}
+                    </p>
                   </div>
-
-                  {/* Media Selection - 必須 */}
-                  {importType === 'rakko_keywords' && (
-                    <div>
-                      <label
-                        style={{
-                          display: 'block',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          color: '#52525B',
-                          marginBottom: '8px',
-                        }}
-                      >
-                        対象媒体 <span style={{ color: '#EF4444' }}>*</span>
-                      </label>
-                      <select
-                        value={selectedMediaId}
-                        onChange={(e) => setSelectedMediaId(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '12px',
-                          border: selectedMediaId ? '1px solid #E4E4E7' : '1px solid #FCA5A5',
-                          borderRadius: '6px',
-                          fontSize: '14px',
-                          color: '#18181B',
-                          background: '#FFFFFF',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <option value="">媒体を選択してください</option>
-                        {mediaList.map((media) => (
-                          <option key={media.id} value={media.id}>
-                            {media.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p style={{ fontSize: '11px', color: selectedMediaId ? '#A1A1AA' : '#EF4444', marginTop: '6px' }}>
-                        {selectedMediaId
-                          ? 'このCSVのキーワードは選択した媒体に紐付けられます'
-                          : '媒体の選択は必須です。媒体カタログに表示するために必要です'}
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1131,10 +1117,19 @@ export default function ImportPage() {
                                   <div style={{ color: '#B45309' }}>AI分類</div>
                                 </div>
                               </div>
-                              {currentJob.classification_stats.duplicate_keywords > 0 && (
+                              {(currentJob.classification_stats.duplicate_keywords > 0 || (currentJob.classification_stats.skipped_by_threshold ?? 0) > 0) && (
                                 <div style={{ marginTop: '8px', fontSize: '11px', color: '#A1A1AA' }}>
-                                  ※ CSV内の重複: {currentJob.classification_stats.duplicate_keywords}件
-                                  （{currentJob.classification_stats.total_input}件 → {currentJob.classification_stats.unique_keywords}件）
+                                  {currentJob.classification_stats.skipped_by_threshold && currentJob.classification_stats.skipped_by_threshold > 0 && (
+                                    <div style={{ marginBottom: '2px' }}>
+                                      ※ 閾値でスキップ: {currentJob.classification_stats.skipped_by_threshold}件（月間検索数&lt;100 または 推定流入数&lt;50）
+                                    </div>
+                                  )}
+                                  {currentJob.classification_stats.duplicate_keywords > 0 && (
+                                    <div>
+                                      ※ CSV内の重複: {currentJob.classification_stats.duplicate_keywords}件
+                                      （{currentJob.classification_stats.total_input}件 → {currentJob.classification_stats.unique_keywords}件）
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1410,195 +1405,200 @@ export default function ImportPage() {
               )}
             </div>
 
-            {/* Template Download */}
-            <div
-              style={{
-                marginTop: '16px',
-                padding: '16px',
-                background: '#FFFFFF',
-                border: '1px solid #E4E4E7',
-                borderRadius: '8px',
-              }}
-            >
-              <p style={{ fontSize: '12px', color: '#52525B', marginBottom: '8px' }}>
-                テンプレートをダウンロード
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '8px 12px',
-                    background: '#FFFFFF',
-                    border: '1px solid #E4E4E7',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    color: '#52525B',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Download className="h-3 w-3" />
-                  ラッコKW用
-                </button>
-                <button
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '8px 12px',
-                    background: '#FFFFFF',
-                    border: '1px solid #E4E4E7',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    color: '#52525B',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Download className="h-3 w-3" />
-                  SimilarWeb用
-                </button>
-              </div>
-            </div>
           </div>
+        </div>
+      </div>
 
-          {/* Job List Sidebar */}
-          {showJobList && (
+      {/* Job List Side Modal */}
+      {showJobList && (
+        <>
+          {/* Overlay */}
+          <div
+            onClick={() => setShowJobList(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.3)',
+              zIndex: 50,
+            }}
+          />
+          {/* Side Panel */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: '400px',
+              background: '#FFFFFF',
+              boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
+              zIndex: 51,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Header */}
             <div
               style={{
-                width: '360px',
-                background: '#FFFFFF',
-                border: '1px solid #E4E4E7',
-                borderRadius: '8px',
-                height: 'fit-content',
+                padding: '20px 24px',
+                borderBottom: '1px solid #E4E4E7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
               }}
             >
-              <div
-                style={{
-                  padding: '16px',
-                  borderBottom: '1px solid #E4E4E7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>
-                  ジョブ一覧
-                </span>
+              <span style={{ fontSize: '16px', fontWeight: 600, color: '#18181B' }}>
+                ジョブ一覧
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
                   onClick={fetchJobs}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    padding: '4px 8px',
+                    padding: '6px 10px',
                     background: '#FFFFFF',
                     border: '1px solid #E4E4E7',
-                    borderRadius: '4px',
-                    fontSize: '11px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
                     color: '#52525B',
                     cursor: 'pointer',
                   }}
                 >
-                  <RefreshCw className="h-3 w-3" />
+                  <RefreshCw className="h-3.5 w-3.5" />
                   更新
                 </button>
-              </div>
-
-              <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                {jobs.length === 0 ? (
-                  <div style={{ padding: '32px', textAlign: 'center', color: '#A1A1AA' }}>
-                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p style={{ fontSize: '13px' }}>ジョブがありません</p>
-                  </div>
-                ) : (
-                  jobs.map((job) => (
-                    <div
-                      key={job.id}
-                      onClick={() => {
-                        setCurrentJobId(job.id)
-                        setCurrentStep(4)
-                      }}
-                      style={{
-                        padding: '12px 16px',
-                        borderBottom: '1px solid #F4F4F5',
-                        cursor: 'pointer',
-                        background: currentJobId === job.id ? '#F5F3FF' : 'transparent',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        {job.status === 'processing' && (
-                          <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#7C3AED' }} />
-                        )}
-                        {job.status === 'completed' && (
-                          <CheckCircle2 className="h-4 w-4" style={{ color: '#10B981' }} />
-                        )}
-                        {job.status === 'failed' && (
-                          <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
-                        )}
-                        {job.status === 'cancelled' && (
-                          <X className="h-4 w-4" style={{ color: '#A1A1AA' }} />
-                        )}
-                        {job.status === 'pending' && (
-                          <Clock className="h-4 w-4" style={{ color: '#A1A1AA' }} />
-                        )}
-                        <span
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            color: '#18181B',
-                            flex: 1,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {job.file_name}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: '#A1A1AA' }}>
-                          {STATUS_LABELS[job.status]}
-                          {job.status === 'processing' && job.current_step && (
-                            <> - {STEP_LABELS[job.current_step] || job.current_step}</>
-                          )}
-                        </span>
-                        <span style={{ fontSize: '11px', color: '#A1A1AA' }}>
-                          {new Date(job.created_at).toLocaleString('ja-JP', {
-                            month: 'numeric',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                      {job.status === 'processing' && job.total_rows && (
-                        <div
-                          style={{
-                            height: '3px',
-                            background: '#E4E4E7',
-                            borderRadius: '2px',
-                            marginTop: '6px',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: '100%',
-                              background: '#7C3AED',
-                              width: `${(job.processed_rows / job.total_rows) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                <button
+                  onClick={() => setShowJobList(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    background: '#F4F4F5',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X className="h-4 w-4" style={{ color: '#52525B' }} />
+                </button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
+
+            {/* Job List */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {jobs.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center', color: '#A1A1AA' }}>
+                  <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p style={{ fontSize: '14px' }}>ジョブがありません</p>
+                </div>
+              ) : (
+                jobs.map((job) => (
+                  <div
+                    key={job.id}
+                    onClick={() => {
+                      setCurrentJobId(job.id)
+                      setCurrentStep(4)
+                      setShowJobList(false)
+                    }}
+                    style={{
+                      padding: '16px 24px',
+                      borderBottom: '1px solid #F4F4F5',
+                      cursor: 'pointer',
+                      background: currentJobId === job.id ? '#F5F3FF' : 'transparent',
+                      transition: 'background 0.15s ease',
+                    }}
+                    onMouseOver={(e) => {
+                      if (currentJobId !== job.id) {
+                        e.currentTarget.style.background = '#FAFAFA'
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (currentJobId !== job.id) {
+                        e.currentTarget.style.background = 'transparent'
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                      {job.status === 'processing' && (
+                        <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#7C3AED' }} />
+                      )}
+                      {job.status === 'completed' && (
+                        <CheckCircle2 className="h-4 w-4" style={{ color: '#10B981' }} />
+                      )}
+                      {job.status === 'failed' && (
+                        <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
+                      )}
+                      {job.status === 'cancelled' && (
+                        <X className="h-4 w-4" style={{ color: '#A1A1AA' }} />
+                      )}
+                      {job.status === 'pending' && (
+                        <Clock className="h-4 w-4" style={{ color: '#A1A1AA' }} />
+                      )}
+                      <span
+                        style={{
+                          fontSize: '14px',
+                          fontWeight: 500,
+                          color: '#18181B',
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {job.file_name}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginLeft: '26px' }}>
+                      <span style={{ fontSize: '12px', color: '#71717A' }}>
+                        {STATUS_LABELS[job.status]}
+                        {job.status === 'processing' && job.current_step && (
+                          <> - {STEP_LABELS[job.current_step] || job.current_step}</>
+                        )}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#A1A1AA' }}>
+                        {new Date(job.created_at).toLocaleString('ja-JP', {
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    {job.status === 'processing' && job.total_rows && (
+                      <div
+                        style={{
+                          height: '4px',
+                          background: '#E4E4E7',
+                          borderRadius: '2px',
+                          marginTop: '8px',
+                          marginLeft: '26px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: '100%',
+                            background: '#7C3AED',
+                            width: `${(job.processed_rows / job.total_rows) * 100}%`,
+                            transition: 'width 0.3s ease',
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Preview Modal */}
       {showPreview && currentJob && (
@@ -1666,7 +1666,7 @@ export default function ImportPage() {
             {/* Filter */}
             <div style={{ padding: '12px 20px', borderBottom: '1px solid #F4F4F5' }}>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['all', 'branded', 'transactional', 'commercial', 'informational', 'unknown'].map((intent) => (
+                {['all', 'branded', 'transactional', 'informational', 'b2b', 'unknown'].map((intent) => (
                   <button
                     key={intent}
                     onClick={() => {

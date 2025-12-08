@@ -2,29 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   ExternalLink,
   Globe,
-  BarChart2,
-  TrendingUp,
-  Users,
   Loader2,
   ChevronLeft,
   ChevronRight,
   ArrowUpRight,
-  Search,
   FileText,
+  RotateCcw,
 } from 'lucide-react'
-import {
-  KeywordFiltersBar,
-  KeywordFilters,
-  defaultFilters,
-  filtersToQueryParams,
-} from '@/components/catalog/keyword-filters'
 import { DocumentSidebar } from '@/components/catalog/document-sidebar'
-import { SimpleTable, ColumnDef } from '@/components/ui/data-table'
+import { FilterDropdown, KeywordFilterDropdown } from '@/components/catalog/rakko-filter-dropdown'
 
 interface MediaDetail {
   id: string
@@ -58,7 +49,10 @@ interface Keyword {
   cpc_usd: number | null
   competition: number | null
   url: string | null
-  intent: string | null
+  query_master: {
+    intent: string | null
+    query_type: string | null
+  } | null
 }
 
 interface KeywordStats {
@@ -79,11 +73,21 @@ interface IntentStats {
   C: IntentStat
 }
 
-// 応募意図ラベル
+// 検索目的ラベル（query_master.query_type）
+const QUERY_TYPE_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
+  Do: { label: 'Do', color: '#E11D48', bgColor: '#FFE4E6' },
+  Know: { label: 'Know', color: '#0284C7', bgColor: '#E0F2FE' },
+  Go: { label: 'Go', color: '#7C3AED', bgColor: '#EDE9FE' },
+  Buy: { label: 'Buy', color: '#D97706', bgColor: '#FEF3C7' },
+}
+
+// 検索段階ラベル（query_master.intent）- 4カテゴリ: branded, transactional, informational, b2b
 const INTENT_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
-  A: { label: '応募直前', color: 'text-rose-600', bgColor: 'bg-rose-100' },
-  B: { label: '比較検討', color: 'text-amber-600', bgColor: 'bg-amber-100' },
-  C: { label: '情報収集', color: 'text-sky-600', bgColor: 'bg-sky-100' },
+  branded: { label: '指名検索', color: '#7C3AED', bgColor: '#EDE9FE' },
+  transactional: { label: '応募意図', color: '#E11D48', bgColor: '#FFE4E6' },
+  informational: { label: '情報収集', color: '#0284C7', bgColor: '#E0F2FE' },
+  b2b: { label: '法人向け', color: '#059669', bgColor: '#D1FAE5' },
+  unknown: { label: '未分類', color: '#71717A', bgColor: '#F4F4F5' },
 }
 
 function formatNumber(num: number | null | undefined): string {
@@ -91,7 +95,7 @@ function formatNumber(num: number | null | undefined): string {
   return num.toLocaleString('ja-JP')
 }
 
-function formatCompactNumber(num: number | null | undefined): string {
+function _formatCompactNumber(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-'
   if (num >= 1000000) {
     return `${(num / 1000000).toFixed(1)}M`
@@ -104,14 +108,52 @@ function formatCompactNumber(num: number | null | undefined): string {
 
 export default function MediaDetailPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const id = params.id as string
+
+  // URLパラメータからキーワードを取得（カタログページからの遷移時）
+  const initialKeywords = searchParams.get('keywords') || ''
 
   const [media, setMedia] = useState<MediaDetail | null>(null)
   const [keywords, setKeywords] = useState<Keyword[]>([])
-  const [keywordStats, setKeywordStats] = useState<KeywordStats | null>(null)
-  const [intentStats, setIntentStats] = useState<IntentStats | null>(null)
-  const [filters, setFilters] = useState<KeywordFilters>(defaultFilters)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [_keywordStats, setKeywordStats] = useState<KeywordStats | null>(null)
+  const [_intentStats, setIntentStats] = useState<IntentStats | null>(null)
+
+  // フィルター状態（URLパラメータで初期化）
+  const [includeKeywords, setIncludeKeywords] = useState(initialKeywords)
+  const [excludeKeywords, setExcludeKeywords] = useState('')
+  const [seoDifficulty, setSeoDifficulty] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+  const [searchVolume, setSearchVolume] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+  const [searchRank, setSearchRank] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+  const [estimatedTraffic, setEstimatedTraffic] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+  const [cpc, setCpc] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+  const [competition, setCompetition] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+
+  // フィルターがアクティブか判定
+  const hasActiveFilters =
+    includeKeywords !== '' ||
+    excludeKeywords !== '' ||
+    seoDifficulty.min !== null || seoDifficulty.max !== null ||
+    searchVolume.min !== null || searchVolume.max !== null ||
+    searchRank.min !== null || searchRank.max !== null ||
+    estimatedTraffic.min !== null || estimatedTraffic.max !== null ||
+    cpc.min !== null || cpc.max !== null ||
+    competition.min !== null || competition.max !== null
+
+  // 全フィルターリセット
+  const handleResetFilters = () => {
+    setIncludeKeywords('')
+    setExcludeKeywords('')
+    setSeoDifficulty({ min: null, max: null })
+    setSearchVolume({ min: null, max: null })
+    setSearchRank({ min: null, max: null })
+    setEstimatedTraffic({ min: null, max: null })
+    setCpc({ min: null, max: null })
+    setCompetition({ min: null, max: null })
+    setCurrentPage(1)
+  }
+
+  const [searchQuery] = useState('')
   const [sortBy, setSortBy] = useState('monthly_search_volume')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [isLoading, setIsLoading] = useState(true)
@@ -159,10 +201,18 @@ export default function MediaDetailPage() {
       }
 
       // フィルター適用
-      const filterParams = filtersToQueryParams(filters)
-      Object.entries(filterParams).forEach(([key, value]) => {
-        params.set(key, value)
-      })
+      if (seoDifficulty.min !== null) params.set('seo_difficulty_min', String(seoDifficulty.min))
+      if (seoDifficulty.max !== null) params.set('seo_difficulty_max', String(seoDifficulty.max))
+      if (searchVolume.min !== null) params.set('search_volume_min', String(searchVolume.min))
+      if (searchVolume.max !== null) params.set('search_volume_max', String(searchVolume.max))
+      if (searchRank.min !== null) params.set('rank_min', String(searchRank.min))
+      if (searchRank.max !== null) params.set('rank_max', String(searchRank.max))
+      if (estimatedTraffic.min !== null) params.set('estimated_traffic_min', String(estimatedTraffic.min))
+      if (estimatedTraffic.max !== null) params.set('estimated_traffic_max', String(estimatedTraffic.max))
+      if (cpc.min !== null) params.set('cpc_min', String(cpc.min))
+      if (cpc.max !== null) params.set('cpc_max', String(cpc.max))
+      if (competition.min !== null) params.set('competition_min', String(competition.min))
+      if (competition.max !== null) params.set('competition_max', String(competition.max))
 
       const res = await fetch(`/api/media/${id}/keywords?${params.toString()}`)
       const data = await res.json()
@@ -171,7 +221,26 @@ export default function MediaDetailPage() {
         throw new Error(data.error?.message || 'キーワードの取得に失敗しました')
       }
 
-      setKeywords(data.data?.keywords || [])
+      // キーワードフィルターはフロントエンドで適用
+      let filteredKeywords = data.data?.keywords || []
+      if (includeKeywords) {
+        const includes = includeKeywords.split(/[\s\n]+/).filter(k => k.trim())
+        if (includes.length > 0) {
+          filteredKeywords = filteredKeywords.filter((kw: Keyword) =>
+            includes.some(inc => kw.keyword.toLowerCase().includes(inc.toLowerCase()))
+          )
+        }
+      }
+      if (excludeKeywords) {
+        const excludes = excludeKeywords.split(/[\s\n]+/).filter(k => k.trim())
+        if (excludes.length > 0) {
+          filteredKeywords = filteredKeywords.filter((kw: Keyword) =>
+            !excludes.some(exc => kw.keyword.toLowerCase().includes(exc.toLowerCase()))
+          )
+        }
+      }
+
+      setKeywords(filteredKeywords)
       setKeywordStats(data.data?.stats || null)
       setIntentStats(data.data?.intent_stats || null)
       setTotalCount(data.pagination?.total || 0)
@@ -180,7 +249,7 @@ export default function MediaDetailPage() {
     } finally {
       setIsLoadingKeywords(false)
     }
-  }, [id, currentPage, sortBy, sortOrder, searchQuery, filters])
+  }, [id, currentPage, sortBy, sortOrder, searchQuery, seoDifficulty, searchVolume, searchRank, estimatedTraffic, cpc, competition, includeKeywords, excludeKeywords])
 
   useEffect(() => {
     fetchMedia()
@@ -205,113 +274,29 @@ export default function MediaDetailPage() {
 
   const totalPages = Math.ceil(totalCount / pageSize)
 
-  // SimpleTable用カラム定義
-  const columns: ColumnDef<Keyword>[] = [
-    {
-      id: 'seo_difficulty',
-      label: 'SEO難易度',
-      width: 130,
-      align: 'center',
-      sortable: true,
-      cell: (kw) =>
-        kw.seo_difficulty !== null ? (
-          <div className="flex items-center justify-center gap-2">
-            <div className="w-10 h-1.5 rounded-full overflow-hidden" style={{ background: '#F4F4F5' }}>
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${kw.seo_difficulty}%`,
-                  background: kw.seo_difficulty > 70 ? '#EF4444' : kw.seo_difficulty > 40 ? '#F59E0B' : '#22C55E',
-                }}
-              />
-            </div>
-            <span style={{ fontSize: '12px', color: '#52525B', width: '24px', textAlign: 'center' }}>
-              {kw.seo_difficulty}
-            </span>
-          </div>
-        ) : (
-          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
-        ),
-    },
-    {
-      id: 'monthly_search_volume',
-      label: '月間検索数',
-      width: 130,
-      align: 'center',
-      sortable: true,
-      cell: (kw) => (
-        <span style={{ fontSize: '13px', color: '#18181B' }}>{formatNumber(kw.monthly_search_volume)}</span>
-      ),
-    },
-    {
-      id: 'search_rank',
-      label: '検索順位',
-      width: 100,
-      align: 'center',
-      sortable: true,
-      cell: (kw) => (
-        <span style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>
-          {kw.search_rank ? kw.search_rank : '-'}
+  // ソート可能なヘッダーセル
+  const SortableHeader = ({ label, columnId }: { label: string; columnId: string }) => (
+    <th
+      onClick={() => handleSort(columnId)}
+      style={{
+        textAlign: 'center',
+        padding: '12px 8px',
+        fontSize: '12px',
+        fontWeight: 500,
+        color: '#52525B',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        background: '#FAFAFA',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+        <span>{label}</span>
+        <span style={{ fontSize: '10px', color: sortBy === columnId ? '#0D9488' : '#D4D4D8' }}>
+          {sortBy === columnId ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}
         </span>
-      ),
-    },
-    {
-      id: 'estimated_traffic',
-      label: '推定流入数',
-      width: 130,
-      align: 'center',
-      sortable: true,
-      cell: (kw) => (
-        <span style={{ fontSize: '13px', color: '#18181B' }}>{formatNumber(kw.estimated_traffic)}</span>
-      ),
-    },
-    {
-      id: 'cpc_usd',
-      label: 'CPC ($)',
-      width: 110,
-      align: 'center',
-      sortable: true,
-      cell: (kw) => (
-        <span style={{ fontSize: '12px', color: '#52525B' }}>
-          {kw.cpc_usd !== null ? `$${kw.cpc_usd.toFixed(2)}` : '-'}
-        </span>
-      ),
-    },
-    {
-      id: 'competition',
-      label: '競合性',
-      width: 82,
-      align: 'center',
-      sortable: true,
-      cell: (kw) => (
-        <span style={{ fontSize: '12px', color: '#52525B' }}>
-          {kw.competition !== null ? kw.competition : '-'}
-        </span>
-      ),
-    },
-    {
-      id: 'url',
-      label: 'URL',
-      width: 90,
-      align: 'center',
-      cell: (kw) =>
-        kw.url ? (
-          <a
-            href={kw.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex p-1 rounded hover:bg-zinc-100 transition"
-            title={kw.url}
-            style={{ color: '#0D9488' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ArrowUpRight className="w-4 h-4" />
-          </a>
-        ) : (
-          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
-        ),
-    },
-  ]
+      </div>
+    </th>
+  )
 
   if (isLoading) {
     return (
@@ -351,264 +336,483 @@ export default function MediaDetailPage() {
             >
               <ArrowLeft className="w-5 h-5 text-zinc-600" />
             </Link>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-[13px] font-medium">
-                {media.name.charAt(0)}
-              </div>
-              <div>
-                <h1 className="text-[15px] font-semibold text-zinc-900">
-                  {media.name}
-                </h1>
-                <div className="flex items-center gap-1 text-[12px] text-zinc-400">
-                  <Globe className="w-3 h-3" />
-                  {media.domain || 'ドメイン未設定'}
-                  {media.domain && (
-                    <a
-                      href={`https://${media.domain}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-1 hover:text-teal-600"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </header>
-
-      {/* Stats Cards */}
-      <div className="px-6 py-4" style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
-        <div className="flex items-center" style={{ gap: '16px' }}>
-          <div
-            className="flex items-center"
-            style={{
-              gap: '12px',
-              background: '#FFFFFF',
-              padding: '16px 20px',
-              borderRadius: '8px',
-              border: '1px solid #E4E4E7',
-            }}
-          >
-            <BarChart2 className="w-5 h-5" style={{ color: '#0D9488' }} />
             <div>
-              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA' }}>KW数</div>
-              <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
-                {formatNumber(keywordStats?.total || 0)}
-              </div>
-            </div>
-          </div>
-          <div
-            className="flex items-center"
-            style={{
-              gap: '12px',
-              background: '#FFFFFF',
-              padding: '16px 20px',
-              borderRadius: '8px',
-              border: '1px solid #E4E4E7',
-            }}
-          >
-            <Users className="w-5 h-5" style={{ color: '#D97706' }} />
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA' }}>月間Vol合計</div>
-              <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
-                {formatCompactNumber(keywordStats?.total_monthly_search_volume)}
-              </div>
-            </div>
-          </div>
-          <div
-            className="flex items-center"
-            style={{
-              gap: '12px',
-              background: '#FFFFFF',
-              padding: '16px 20px',
-              borderRadius: '8px',
-              border: '1px solid #E4E4E7',
-            }}
-          >
-            <TrendingUp className="w-5 h-5" style={{ color: '#EF4444' }} />
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA' }}>推定流入合計</div>
-              <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
-                {formatCompactNumber(keywordStats?.total_estimated_traffic)}
+              <h1 className="text-[15px] font-semibold text-zinc-900">
+                {media.name}
+              </h1>
+              <div className="flex items-center gap-1 text-[12px] text-zinc-400">
+                <Globe className="w-3 h-3" />
+                {media.domain || 'ドメイン未設定'}
+                {media.domain && (
+                  <a
+                    href={`https://${media.domain}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-1 hover:text-teal-600"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
             </div>
           </div>
 
-          {/* 流入経路グラフ */}
-          {media.latest_traffic && (
-            <div
-              className="flex items-center"
-              style={{
-                gap: '12px',
-                background: '#FFFFFF',
-                padding: '16px 20px',
-                borderRadius: '8px',
-                border: '1px solid #E4E4E7',
-              }}
-            >
-              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginRight: '8px' }}>流入経路</div>
-              <div className="flex items-center gap-1">
-                <div className="w-32 h-1.5 bg-zinc-100 rounded-full flex overflow-hidden">
-                  <div className="bg-teal-500" style={{ width: `${media.latest_traffic.search_pct}%` }} title="検索" />
-                  <div className="bg-amber-500" style={{ width: `${media.latest_traffic.direct_pct}%` }} title="直接" />
-                  <div className="bg-indigo-500" style={{ width: `${media.latest_traffic.referral_pct}%` }} title="参照" />
-                  <div className="bg-pink-500" style={{ width: `${media.latest_traffic.display_pct}%` }} title="広告" />
-                  <div className="bg-purple-500" style={{ width: `${media.latest_traffic.social_pct}%` }} title="SNS" />
-                </div>
-                <span style={{ fontSize: '11px', fontWeight: 500, color: '#52525B', marginLeft: '4px' }}>
-                  検索 {media.latest_traffic.search_pct.toFixed(0)}%
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* 意図別構成 */}
-          {intentStats && (
-            <div
-              style={{
-                background: '#FFFFFF',
-                padding: '12px 20px',
-                borderRadius: '8px',
-                border: '1px solid #E4E4E7',
-              }}
-            >
-              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '8px' }}>応募意図別構成</div>
-              <div className="flex items-center gap-4">
-                {/* 横棒グラフ */}
-                <div className="flex items-center gap-2">
-                  <div className="w-40 h-3 bg-zinc-100 rounded-full flex overflow-hidden">
-                    {(() => {
-                      const total = intentStats.A.count + intentStats.B.count + intentStats.C.count
-                      if (total === 0) return null
-                      const aPct = (intentStats.A.count / total) * 100
-                      const bPct = (intentStats.B.count / total) * 100
-                      const cPct = (intentStats.C.count / total) * 100
-                      return (
-                        <>
-                          <div className="bg-rose-500" style={{ width: `${aPct}%` }} title={`応募直前 ${aPct.toFixed(0)}%`} />
-                          <div className="bg-amber-500" style={{ width: `${bPct}%` }} title={`比較検討 ${bPct.toFixed(0)}%`} />
-                          <div className="bg-sky-500" style={{ width: `${cPct}%` }} title={`情報収集 ${cPct.toFixed(0)}%`} />
-                        </>
-                      )
-                    })()}
-                  </div>
-                </div>
-                {/* 凡例と数値 */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-rose-500" />
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#E11D48' }}>応募直前</span>
-                    <span style={{ fontSize: '11px', color: '#52525B' }}>{formatCompactNumber(intentStats.A.traffic)}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#D97706' }}>比較検討</span>
-                    <span style={{ fontSize: '11px', color: '#52525B' }}>{formatCompactNumber(intentStats.B.traffic)}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-sky-500" />
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#0284C7' }}>情報収集</span>
-                    <span style={{ fontSize: '11px', color: '#52525B' }}>{formatCompactNumber(intentStats.C.traffic)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 資料閲覧ボタン（右端） */}
+          {/* 資料閲覧ボタン */}
           <button
             onClick={() => setIsDocumentSidebarOpen(true)}
-            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white text-[13px] font-medium rounded-md hover:bg-teal-700 transition"
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white text-[13px] font-medium rounded-md hover:bg-teal-700 transition"
           >
             <FileText className="w-4 h-4" />
             資料閲覧
           </button>
         </div>
+      </header>
+
+      {/* Stats Cards - SimilarWeb データ */}
+      <div style={{ padding: '12px 24px', background: '#FAFAFA', borderBottom: '1px solid #E4E4E7', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: '12px', width: '100%' }}>
+          {/* 月間訪問数 */}
+          <div
+            style={{
+              flex: 0.7,
+              background: '#FFFFFF',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              border: '1px solid #E4E4E7',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>月間訪問</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
+              {formatNumber(media.monthly_visits)}
+            </div>
+          </div>
+
+          {/* 直帰率 */}
+          <div
+            style={{
+              flex: 0.7,
+              background: '#FFFFFF',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              border: '1px solid #E4E4E7',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>直帰率</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
+              {media.bounce_rate !== null ? `${media.bounce_rate.toFixed(2)}%` : '-'}
+            </div>
+          </div>
+
+          {/* PV/訪問 */}
+          <div
+            style={{
+              flex: 0.7,
+              background: '#FFFFFF',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              border: '1px solid #E4E4E7',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>PV/訪問</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
+              {media.pages_per_visit !== null ? media.pages_per_visit.toFixed(1) : '-'}
+            </div>
+          </div>
+
+          {/* 平均滞在時間 */}
+          <div
+            style={{
+              flex: 0.7,
+              background: '#FFFFFF',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              border: '1px solid #E4E4E7',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>平均滞在</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>
+              {media.avg_visit_duration !== null
+                ? `${Math.floor(media.avg_visit_duration / 60)}:${String(media.avg_visit_duration % 60).padStart(2, '0')}`
+                : '-'}
+            </div>
+          </div>
+
+          {/* 流入経路 */}
+          {media.latest_traffic && (
+            <div
+              style={{
+                flex: 3,
+                background: '#FFFFFF',
+                padding: '12px 16px',
+                borderRadius: '6px',
+                border: '1px solid #E4E4E7',
+              }}
+            >
+              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>流入経路</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#0D9488' }}>
+                    {media.latest_traffic.search_pct.toFixed(2)}%
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#A1A1AA' }}>検索</div>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#F59E0B' }}>
+                    {media.latest_traffic.direct_pct.toFixed(2)}%
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#A1A1AA' }}>直接</div>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#6366F1' }}>
+                    {media.latest_traffic.referral_pct.toFixed(2)}%
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#A1A1AA' }}>参照</div>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#EC4899' }}>
+                    {media.latest_traffic.display_pct.toFixed(2)}%
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#A1A1AA' }}>広告</div>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#06B6D4' }}>
+                    {media.latest_traffic.email_pct.toFixed(2)}%
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#A1A1AA' }}>メール</div>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#A855F7' }}>
+                    {media.latest_traffic.social_pct.toFixed(2)}%
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#A1A1AA' }}>SNS</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="px-6 py-3 bg-white border-b border-zinc-200">
-        <div className="flex items-center gap-4">
-          {/* 検索 */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="キーワードを検索..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setCurrentPage(1)
-                  fetchKeywords()
-                }
-              }}
-              className="w-64 pl-9 pr-3 py-2 border border-zinc-200 rounded-md text-[13px] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
-            />
-          </div>
-
-          <div className="w-px h-6 bg-zinc-200" />
-
-          {/* フィルター */}
-          <KeywordFiltersBar
-            filters={filters}
-            onFiltersChange={(newFilters) => {
-              setFilters(newFilters)
-              setCurrentPage(1)
-            }}
-            showIntentFilter={true}
-            compact
+      <div style={{ padding: '12px 24px', background: '#FFFFFF', borderBottom: '1px solid #E4E4E7', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* キーワードフィルター */}
+          <KeywordFilterDropdown
+            includeKeywords={includeKeywords}
+            excludeKeywords={excludeKeywords}
+            onIncludeChange={(v) => { setIncludeKeywords(v); setCurrentPage(1) }}
+            onExcludeChange={(v) => { setExcludeKeywords(v); setCurrentPage(1) }}
           />
+
+          {/* SEO難易度 */}
+          <FilterDropdown
+            label="SEO難易度"
+            value={seoDifficulty}
+            onChange={(v) => { setSeoDifficulty(v); setCurrentPage(1) }}
+            presets={[
+              { label: '1-33', min: 1, max: 33 },
+              { label: '34-66', min: 34, max: 66 },
+              { label: '67-100', min: 67, max: 100 },
+            ]}
+          />
+
+          {/* 検索順位 */}
+          <FilterDropdown
+            label="検索順位"
+            value={searchRank}
+            onChange={(v) => { setSearchRank(v); setCurrentPage(1) }}
+            presets={[
+              { label: '1-3', min: 1, max: 3 },
+              { label: '1-10', min: 1, max: 10 },
+              { label: '1-20', min: 1, max: 20 },
+              { label: '4-10', min: 4, max: 10 },
+              { label: '11-20', min: 11, max: 20 },
+              { label: '21+', min: 21, max: null },
+            ]}
+          />
+
+          {/* 月間検索数 */}
+          <FilterDropdown
+            label="月間検索数"
+            value={searchVolume}
+            onChange={(v) => { setSearchVolume(v); setCurrentPage(1) }}
+            presets={[
+              { label: '0', min: 0, max: 0 },
+              { label: '1-1000', min: 1, max: 1000 },
+              { label: '1001-10000', min: 1001, max: 10000 },
+              { label: '10001-100000', min: 10001, max: 100000 },
+              { label: '100001+', min: 100001, max: null },
+            ]}
+          />
+
+          {/* CPC ($) */}
+          <FilterDropdown
+            label="CPC ($)"
+            value={cpc}
+            onChange={(v) => { setCpc(v); setCurrentPage(1) }}
+            presets={[
+              { label: '0', min: 0, max: 0 },
+              { label: '0.01-1', min: 0.01, max: 1 },
+              { label: '1.01-10', min: 1.01, max: 10 },
+              { label: '10.01+', min: 10.01, max: null },
+            ]}
+            allowDecimal
+          />
+
+          {/* 競合性 */}
+          <FilterDropdown
+            label="競合性"
+            value={competition}
+            onChange={(v) => { setCompetition(v); setCurrentPage(1) }}
+            presets={[
+              { label: '0', min: 0, max: 0 },
+              { label: '1-33', min: 1, max: 33 },
+              { label: '34-66', min: 34, max: 66 },
+              { label: '67-100', min: 67, max: 100 },
+            ]}
+          />
+
+          {/* 推定流入数 */}
+          <FilterDropdown
+            label="推定流入数"
+            value={estimatedTraffic}
+            onChange={(v) => { setEstimatedTraffic(v); setCurrentPage(1) }}
+            presets={[
+              { label: '0', min: 0, max: 0 },
+              { label: '1-1000', min: 1, max: 1000 },
+              { label: '1001-10000', min: 1001, max: 10000 },
+              { label: '10001+', min: 10001, max: null },
+            ]}
+          />
+
+          {/* リセットボタン */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="flex items-center gap-1.5 px-3 py-2 text-[13px] text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-md transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              リセット
+            </button>
+          )}
         </div>
       </div>
 
       {/* Keywords Table */}
-      <div className="p-6">
-        <SimpleTable<Keyword>
-          data={keywords}
-          getRowKey={(kw) => kw.id}
-          fixedColumn={{
-            width: 360,
-            header: (
-              <div className="flex items-center">
-                <span className="flex-1">キーワード</span>
-                <span style={{ width: '90px', flexShrink: 0, borderLeft: '1px solid #E4E4E7', paddingLeft: '12px' }}>意図</span>
-              </div>
-            ),
-            cell: (kw) => (
-              <div className="flex items-center">
-                <div className="flex-1 min-w-0 pr-3">
-                  <span className="row-primary-text text-sm font-medium text-zinc-900 transition truncate block">
-                    {kw.keyword}
-                  </span>
-                </div>
-                <div style={{ width: '90px', flexShrink: 0, textAlign: 'center', borderLeft: '1px solid #E4E4E7', paddingLeft: '12px' }}>
-                  {kw.intent && INTENT_LABELS[kw.intent] ? (
-                    <span
-                      className={`inline-flex rounded ${INTENT_LABELS[kw.intent].bgColor} ${INTENT_LABELS[kw.intent].color}`}
-                      style={{ padding: '2px 6px', fontSize: '10px', fontWeight: 600, borderRadius: '4px' }}
-                    >
-                      {INTENT_LABELS[kw.intent].label}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
-                  )}
-                </div>
-              </div>
-            ),
+      <div style={{ padding: '24px', width: '100%' }}>
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
+            borderRadius: '8px',
+            overflow: 'hidden',
           }}
-          columns={columns}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          onSort={handleSort}
-          isLoading={isLoadingKeywords}
-          emptyMessage="キーワードが見つかりません"
-          maxHeight="calc(100vh - 340px)"
-        />
+        >
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 340px)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      padding: '12px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#52525B',
+                      whiteSpace: 'nowrap',
+                      background: '#FAFAFA',
+                    }}
+                  >
+                    キーワード
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'center',
+                      padding: '12px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#52525B',
+                      whiteSpace: 'nowrap',
+                      background: '#FAFAFA',
+                    }}
+                  >
+                    検索目的
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'center',
+                      padding: '12px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#52525B',
+                      whiteSpace: 'nowrap',
+                      background: '#FAFAFA',
+                    }}
+                  >
+                    検索段階
+                  </th>
+                  <SortableHeader label="SEO難易度" columnId="seo_difficulty" />
+                  <SortableHeader label="月間検索数" columnId="monthly_search_volume" />
+                  <SortableHeader label="検索順位" columnId="search_rank" />
+                  <SortableHeader label="推定流入数" columnId="estimated_traffic" />
+                  <SortableHeader label="CPC ($)" columnId="cpc_usd" />
+                  <SortableHeader label="競合性" columnId="competition" />
+                  <th
+                    style={{
+                      textAlign: 'center',
+                      padding: '12px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#52525B',
+                      whiteSpace: 'nowrap',
+                      background: '#FAFAFA',
+                    }}
+                  >
+                    URL
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoadingKeywords ? (
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '48px' }}>
+                      <Loader2 style={{ width: 24, height: 24, color: '#0D9488', animation: 'spin 1s linear infinite', display: 'inline-block' }} />
+                      <span style={{ marginLeft: '8px', fontSize: '13px', color: '#52525B' }}>読み込み中...</span>
+                    </td>
+                  </tr>
+                ) : keywords.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '48px', color: '#A1A1AA', fontSize: '13px' }}>
+                      キーワードが見つかりません
+                    </td>
+                  </tr>
+                ) : (
+                  keywords.map((kw, index) => (
+                    <tr
+                      key={kw.id}
+                      style={{
+                        borderBottom: index < keywords.length - 1 ? '1px solid #F4F4F5' : 'none',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#FAFAFA'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                      }}
+                    >
+                      {/* キーワード */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#18181B' }}>
+                          {kw.keyword}
+                        </span>
+                      </td>
+                      {/* 検索目的 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.query_master?.query_type && QUERY_TYPE_LABELS[kw.query_master.query_type] ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              borderRadius: '4px',
+                              background: QUERY_TYPE_LABELS[kw.query_master.query_type].bgColor,
+                              color: QUERY_TYPE_LABELS[kw.query_master.query_type].color,
+                            }}
+                          >
+                            {QUERY_TYPE_LABELS[kw.query_master.query_type].label}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                      {/* 検索段階 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.query_master?.intent && INTENT_LABELS[kw.query_master.intent] ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              borderRadius: '4px',
+                              background: INTENT_LABELS[kw.query_master.intent].bgColor,
+                              color: INTENT_LABELS[kw.query_master.intent].color,
+                            }}
+                          >
+                            {INTENT_LABELS[kw.query_master.intent].label}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                      {/* SEO難易度 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.seo_difficulty !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <div style={{ width: '40px', height: '6px', borderRadius: '3px', overflow: 'hidden', background: '#F4F4F5' }}>
+                              <div
+                                style={{
+                                  height: '100%',
+                                  borderRadius: '3px',
+                                  width: `${kw.seo_difficulty}%`,
+                                  background: kw.seo_difficulty > 70 ? '#EF4444' : kw.seo_difficulty > 40 ? '#F59E0B' : '#22C55E',
+                                }}
+                              />
+                            </div>
+                            <span style={{ fontSize: '12px', color: '#52525B' }}>{kw.seo_difficulty}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                      {/* 月間検索数 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+                        {formatNumber(kw.monthly_search_volume)}
+                      </td>
+                      {/* 検索順位 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '13px', fontWeight: 500, color: '#18181B' }}>
+                        {kw.search_rank || '-'}
+                      </td>
+                      {/* 推定流入数 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '13px', color: '#18181B' }}>
+                        {formatNumber(kw.estimated_traffic)}
+                      </td>
+                      {/* CPC ($) */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', color: '#52525B' }}>
+                        {kw.cpc_usd !== null ? `$${kw.cpc_usd.toFixed(2)}` : '-'}
+                      </td>
+                      {/* 競合性 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', color: '#52525B' }}>
+                        {kw.competition !== null ? kw.competition : '-'}
+                      </td>
+                      {/* URL */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.url ? (
+                          <a
+                            href={kw.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#0D9488' }}
+                            title={kw.url}
+                          >
+                            <ArrowUpRight style={{ width: 16, height: 16 }} />
+                          </a>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

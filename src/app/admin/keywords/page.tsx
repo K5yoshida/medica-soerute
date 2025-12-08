@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Search,
   Filter,
@@ -13,25 +14,26 @@ import {
   ChevronRight,
   Loader2,
   ExternalLink,
+  ArrowLeft,
+  RotateCcw,
 } from 'lucide-react'
 
-// 意図分類のラベルと色
-const INTENT_CONFIG = {
-  branded: { label: '指名検索', color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.1)' },
-  transactional: { label: '応募直前', color: '#10B981', bg: 'rgba(16, 185, 129, 0.1)' },
-  commercial: { label: '比較検討', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.1)' },
-  informational: { label: '情報収集', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)' },
-  b2b: { label: '法人向け', color: '#EC4899', bg: 'rgba(236, 72, 153, 0.1)' },
-  unknown: { label: '未分類', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.1)' },
-} as const
+// 検索段階ラベル（query_master.intent）- 4カテゴリ: branded, transactional, informational, b2b
+const INTENT_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
+  branded: { label: '指名検索', color: '#7C3AED', bgColor: '#EDE9FE' },
+  transactional: { label: '応募意図', color: '#E11D48', bgColor: '#FFE4E6' },
+  informational: { label: '情報収集', color: '#0284C7', bgColor: '#E0F2FE' },
+  b2b: { label: '法人向け', color: '#059669', bgColor: '#D1FAE5' },
+  unknown: { label: '未分類', color: '#71717A', bgColor: '#F4F4F5' },
+}
 
-// クエリタイプ（Do/Know/Go/Buy）のラベルと色
-const QUERY_TYPE_CONFIG = {
-  Do: { label: 'Do', color: '#10B981', bg: 'rgba(16, 185, 129, 0.1)' },
-  Know: { label: 'Know', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)' },
-  Go: { label: 'Go', color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.1)' },
-  Buy: { label: 'Buy', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.1)' },
-} as const
+// 検索目的ラベル（query_master.query_type）- カタログ詳細と同じ
+const QUERY_TYPE_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
+  Do: { label: 'Do', color: '#E11D48', bgColor: '#FFE4E6' },
+  Know: { label: 'Know', color: '#0284C7', bgColor: '#E0F2FE' },
+  Go: { label: 'Go', color: '#7C3AED', bgColor: '#EDE9FE' },
+  Buy: { label: 'Buy', color: '#D97706', bgColor: '#FEF3C7' },
+}
 
 // 分類ソースのラベル
 const SOURCE_CONFIG = {
@@ -41,8 +43,8 @@ const SOURCE_CONFIG = {
   unknown: { label: '不明', color: '#6B7280' },
 } as const
 
-type QueryIntent = keyof typeof INTENT_CONFIG
-type QueryType = keyof typeof QUERY_TYPE_CONFIG
+type QueryIntent = keyof typeof INTENT_LABELS
+type QueryType = keyof typeof QUERY_TYPE_LABELS
 type ClassificationSource = keyof typeof SOURCE_CONFIG
 
 interface Keyword {
@@ -72,7 +74,13 @@ interface Stats {
   by_intent: Record<QueryIntent, number>
 }
 
+function formatNumber(num: number | null | undefined): string {
+  if (num === null || num === undefined) return '-'
+  return num.toLocaleString('ja-JP')
+}
+
 export default function KeywordsPage() {
+  const router = useRouter()
   const [keywords, setKeywords] = useState<Keyword[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [total, setTotal] = useState(0)
@@ -85,7 +93,11 @@ export default function KeywordsPage() {
   const [verifiedFilter, setVerifiedFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
-  const limit = 20
+  const limit = 50
+
+  // ソート状態
+  const [sortBy, setSortBy] = useState('max_monthly_search_volume')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   // 選択状態
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -103,6 +115,23 @@ export default function KeywordsPage() {
   // 検索実行（デバウンス用）
   const [searchTerm, setSearchTerm] = useState('')
 
+  // フィルターがアクティブか判定
+  const hasActiveFilters =
+    search !== '' ||
+    intentFilter !== 'all' ||
+    verifiedFilter !== 'all' ||
+    sourceFilter !== 'all'
+
+  // 全フィルターリセット
+  const handleResetFilters = () => {
+    setSearch('')
+    setSearchTerm('')
+    setIntentFilter('all')
+    setVerifiedFilter('all')
+    setSourceFilter('all')
+    setPage(1)
+  }
+
   // データ取得
   const fetchKeywords = useCallback(async () => {
     setLoading(true)
@@ -110,6 +139,8 @@ export default function KeywordsPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
+        sort_by: sortBy,
+        sort_order: sortOrder,
       })
       if (searchTerm) params.set('search', searchTerm)
       if (intentFilter !== 'all') params.set('intent', intentFilter)
@@ -127,7 +158,7 @@ export default function KeywordsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, searchTerm, intentFilter, verifiedFilter, sourceFilter])
+  }, [page, searchTerm, intentFilter, verifiedFilter, sourceFilter, sortBy, sortOrder])
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true)
@@ -160,6 +191,17 @@ export default function KeywordsPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [search])
+
+  // ソート変更
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortOrder('desc')
+    }
+    setPage(1)
+  }
 
   // 選択切り替え
   const toggleSelect = (id: string) => {
@@ -244,83 +286,166 @@ export default function KeywordsPage() {
 
   const totalPages = Math.ceil(total / limit)
 
-  return (
-    <div className="p-6 max-w-[1400px] mx-auto">
-      {/* ヘッダー */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">キーワードマスター管理</h1>
-        <p className="text-gray-600">検索キーワードの意図分類を管理・検証します</p>
+  // ソート可能なヘッダーセル（カタログ詳細と同じスタイル）
+  const SortableHeader = ({ label, columnId }: { label: string; columnId: string }) => (
+    <th
+      onClick={() => handleSort(columnId)}
+      style={{
+        textAlign: 'center',
+        padding: '12px 8px',
+        fontSize: '12px',
+        fontWeight: 500,
+        color: '#52525B',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        background: '#FAFAFA',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+        <span>{label}</span>
+        <span style={{ fontSize: '10px', color: sortBy === columnId ? '#0D9488' : '#D4D4D8' }}>
+          {sortBy === columnId ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}
+        </span>
       </div>
+    </th>
+  )
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
+      {/* ヘッダー - カタログ詳細と同じスタイル */}
+      <header style={{ background: '#FFFFFF', borderBottom: '1px solid #E4E4E7', padding: '16px 24px', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              onClick={() => router.back()}
+              style={{ padding: '8px', borderRadius: '6px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F4F5' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <ArrowLeft style={{ width: 20, height: 20, color: '#52525B' }} />
+            </button>
+            <div>
+              <h1 style={{ fontSize: '15px', fontWeight: 600, color: '#18181B', margin: 0 }}>
+                キーワードマスター管理
+              </h1>
+              <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0 0' }}>
+                検索キーワードの意図分類を管理・検証します
+              </p>
+            </div>
+          </div>
+
+          {/* 一括検証ボタン */}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => bulkVerify(true)}
+              disabled={bulkVerifying}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                background: '#0D9488',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: bulkVerifying ? 'not-allowed' : 'pointer',
+                opacity: bulkVerifying ? 0.5 : 1,
+              }}
+            >
+              {bulkVerifying ? <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} /> : <CheckCircle style={{ width: 16, height: 16 }} />}
+              {selectedIds.size}件を検証済みに
+            </button>
+          )}
+        </div>
+      </header>
 
       {/* 統計サマリー */}
       {!statsLoading && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">総キーワード数</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.total_keywords.toLocaleString()}</div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">検証済み</div>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.verified_count.toLocaleString()}
-              <span className="text-sm font-normal text-gray-500 ml-2">({stats.verification_rate}%)</span>
+        <div style={{ padding: '12px 24px', background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: '12px' }}>
+            <div style={{ flex: 1, background: '#FFFFFF', padding: '12px 16px', borderRadius: '6px', border: '1px solid #E4E4E7', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>総キーワード数</div>
+              <div style={{ fontSize: '18px', fontWeight: 600, color: '#18181B' }}>{formatNumber(stats.total_keywords)}</div>
             </div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">未検証AI分類</div>
-            <div className="text-2xl font-bold text-purple-600">{stats.unverified_ai_count.toLocaleString()}</div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">分類ソース</div>
-            <div className="flex gap-2 flex-wrap mt-1">
-              {Object.entries(stats.by_source).map(([source, count]) => (
-                <span
-                  key={source}
-                  className="text-xs px-2 py-1 rounded-full"
-                  style={{
-                    color: SOURCE_CONFIG[source as ClassificationSource]?.color,
-                    background: `${SOURCE_CONFIG[source as ClassificationSource]?.color}20`,
-                  }}
-                >
-                  {SOURCE_CONFIG[source as ClassificationSource]?.label}: {count}
-                </span>
-              ))}
+            <div style={{ flex: 1, background: '#FFFFFF', padding: '12px 16px', borderRadius: '6px', border: '1px solid #E4E4E7', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>検証済み</div>
+              <div style={{ fontSize: '18px', fontWeight: 600, color: '#10B981' }}>
+                {formatNumber(stats.verified_count)}
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#71717A', marginLeft: '8px' }}>({stats.verification_rate}%)</span>
+              </div>
+            </div>
+            <div style={{ flex: 1, background: '#FFFFFF', padding: '12px 16px', borderRadius: '6px', border: '1px solid #E4E4E7', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>未検証AI分類</div>
+              <div style={{ fontSize: '18px', fontWeight: 600, color: '#8B5CF6' }}>{formatNumber(stats.unverified_ai_count)}</div>
+            </div>
+            <div style={{ flex: 2, background: '#FFFFFF', padding: '12px 16px', borderRadius: '6px', border: '1px solid #E4E4E7' }}>
+              <div style={{ fontSize: '11px', fontWeight: 500, color: '#A1A1AA', marginBottom: '4px' }}>分類ソース</div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                {Object.entries(stats.by_source).map(([source, count]) => (
+                  <span
+                    key={source}
+                    style={{
+                      fontSize: '12px',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      background: `${SOURCE_CONFIG[source as ClassificationSource]?.color}20`,
+                      color: SOURCE_CONFIG[source as ClassificationSource]?.color,
+                    }}
+                  >
+                    {SOURCE_CONFIG[source as ClassificationSource]?.label}: {count}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* フィルターバー */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-        <div className="flex flex-wrap gap-4 items-center">
+      {/* フィルターバー - カタログ詳細と同じスタイル */}
+      <div style={{ padding: '12px 24px', background: '#FFFFFF', borderBottom: '1px solid #E4E4E7' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* 検索 */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <div style={{ position: 'relative', minWidth: '200px', flex: 1, maxWidth: '300px' }}>
+            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#A1A1AA' }} />
             <input
               type="text"
               placeholder="キーワード検索..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              style={{
+                width: '100%',
+                paddingLeft: '40px',
+                paddingRight: '16px',
+                paddingTop: '8px',
+                paddingBottom: '8px',
+                border: '1px solid #E4E4E7',
+                borderRadius: '6px',
+                fontSize: '13px',
+                outline: 'none',
+              }}
             />
           </div>
 
           {/* 意図フィルター */}
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-400" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Filter style={{ width: 16, height: 16, color: '#A1A1AA' }} />
             <select
               value={intentFilter}
-              onChange={(e) => {
-                setIntentFilter(e.target.value)
-                setPage(1)
+              onChange={(e) => { setIntentFilter(e.target.value); setPage(1) }}
+              style={{
+                border: '1px solid #E4E4E7',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                background: '#FFFFFF',
+                outline: 'none',
               }}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">全ての意図</option>
-              {Object.entries(INTENT_CONFIG).map(([key, config]) => (
-                <option key={key} value={key}>
-                  {config.label}
-                </option>
+              {Object.entries(INTENT_LABELS).map(([key, config]) => (
+                <option key={key} value={key}>{config.label}</option>
               ))}
             </select>
           </div>
@@ -328,11 +453,15 @@ export default function KeywordsPage() {
           {/* 検証状態フィルター */}
           <select
             value={verifiedFilter}
-            onChange={(e) => {
-              setVerifiedFilter(e.target.value)
-              setPage(1)
+            onChange={(e) => { setVerifiedFilter(e.target.value); setPage(1) }}
+            style={{
+              border: '1px solid #E4E4E7',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              fontSize: '13px',
+              background: '#FFFFFF',
+              outline: 'none',
             }}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="all">全ての状態</option>
             <option value="true">検証済み</option>
@@ -342,289 +471,398 @@ export default function KeywordsPage() {
           {/* ソースフィルター */}
           <select
             value={sourceFilter}
-            onChange={(e) => {
-              setSourceFilter(e.target.value)
-              setPage(1)
+            onChange={(e) => { setSourceFilter(e.target.value); setPage(1) }}
+            style={{
+              border: '1px solid #E4E4E7',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              fontSize: '13px',
+              background: '#FFFFFF',
+              outline: 'none',
             }}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="all">全てのソース</option>
             {Object.entries(SOURCE_CONFIG).map(([key, config]) => (
-              <option key={key} value={key}>
-                {config.label}
-              </option>
+              <option key={key} value={key}>{config.label}</option>
             ))}
           </select>
 
-          {/* 一括検証ボタン */}
-          {selectedIds.size > 0 && (
+          {/* リセットボタン */}
+          {hasActiveFilters && (
             <button
-              onClick={() => bulkVerify(true)}
-              disabled={bulkVerifying}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+              onClick={handleResetFilters}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                color: '#52525B',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F4F5' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
             >
-              {bulkVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-              {selectedIds.size}件を検証済みに
+              <RotateCcw style={{ width: 14, height: 14 }} />
+              リセット
             </button>
           )}
         </div>
       </div>
 
-      {/* テーブル */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    checked={keywords.length > 0 && selectedIds.size === keywords.length}
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-300"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  キーワード
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  意図分類
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  タイプ
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ソース
-                </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  検証
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  検索Vol
-                </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600" />
-                  </td>
+      {/* テーブル - カタログ詳細と同じスタイル */}
+      <div style={{ padding: '24px' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 380px)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr style={{ background: '#FAFAFA', borderBottom: '1px solid #E4E4E7' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', background: '#FAFAFA', width: '40px' }}>
+                    <input
+                      type="checkbox"
+                      checked={keywords.length > 0 && selectedIds.size === keywords.length}
+                      onChange={toggleSelectAll}
+                      style={{ borderRadius: '4px', border: '1px solid #D4D4D8' }}
+                    />
+                  </th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
+                    キーワード
+                  </th>
+                  <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
+                    検索目的
+                  </th>
+                  <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
+                    検索段階
+                  </th>
+                  <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
+                    ソース
+                  </th>
+                  <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
+                    検証
+                  </th>
+                  <SortableHeader label="月間検索数" columnId="max_monthly_search_volume" />
+                  <SortableHeader label="CPC ($)" columnId="max_cpc" />
+                  <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
+                    操作
+                  </th>
                 </tr>
-              ) : keywords.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
-                    キーワードが見つかりません
-                  </td>
-                </tr>
-              ) : (
-                keywords.map((keyword) => (
-                  <tr key={keyword.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(keyword.id)}
-                        onChange={() => toggleSelect(keyword.id)}
-                        className="rounded border-gray-300"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={`https://www.google.com/search?q=${encodeURIComponent(keyword.keyword)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group flex items-center gap-1.5 font-medium text-gray-900 hover:text-blue-600 transition-colors"
-                          title="Googleで検索"
-                        >
-                          <span className="group-hover:underline">{keyword.keyword}</span>
-                          <ExternalLink className="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
-                        </a>
-                      </div>
-                      {keyword.intent_reason && (
-                        <div className="text-xs text-gray-500 mt-0.5 truncate max-w-[300px]">
-                          {keyword.intent_reason}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        style={{
-                          color: INTENT_CONFIG[keyword.intent]?.color,
-                          background: INTENT_CONFIG[keyword.intent]?.bg,
-                        }}
-                      >
-                        {INTENT_CONFIG[keyword.intent]?.label || keyword.intent}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {keyword.query_type && QUERY_TYPE_CONFIG[keyword.query_type] ? (
-                        <span
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                          style={{
-                            color: QUERY_TYPE_CONFIG[keyword.query_type].color,
-                            background: QUERY_TYPE_CONFIG[keyword.query_type].bg,
-                          }}
-                        >
-                          {QUERY_TYPE_CONFIG[keyword.query_type].label}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className="text-xs"
-                        style={{ color: SOURCE_CONFIG[keyword.classification_source]?.color }}
-                      >
-                        {SOURCE_CONFIG[keyword.classification_source]?.label || keyword.classification_source}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {keyword.is_verified ? (
-                        <Check className="h-5 w-5 text-green-600 mx-auto" />
-                      ) : (
-                        <AlertCircle className="h-5 w-5 text-gray-300 mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-600">
-                      {keyword.max_monthly_search_volume?.toLocaleString() || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => openEditModal(keyword)}
-                        className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '48px' }}>
+                      <Loader2 style={{ width: 24, height: 24, color: '#0D9488', animation: 'spin 1s linear infinite', display: 'inline-block' }} />
+                      <span style={{ marginLeft: '8px', fontSize: '13px', color: '#52525B' }}>読み込み中...</span>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ページネーション */}
-        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-sm text-gray-500">
-            {total.toLocaleString()}件中 {((page - 1) * limit + 1).toLocaleString()}-
-            {Math.min(page * limit, total).toLocaleString()}件表示
+                ) : keywords.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '48px', color: '#A1A1AA', fontSize: '13px' }}>
+                      キーワードが見つかりません
+                    </td>
+                  </tr>
+                ) : (
+                  keywords.map((kw, index) => (
+                    <tr
+                      key={kw.id}
+                      style={{
+                        borderBottom: index < keywords.length - 1 ? '1px solid #F4F4F5' : 'none',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#FAFAFA' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      {/* チェックボックス */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(kw.id)}
+                          onChange={() => toggleSelect(kw.id)}
+                          style={{ borderRadius: '4px', border: '1px solid #D4D4D8' }}
+                        />
+                      </td>
+                      {/* キーワード */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <a
+                            href={`https://www.google.com/search?q=${encodeURIComponent(kw.keyword)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '13px', fontWeight: 500, color: '#18181B', textDecoration: 'none' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = '#0D9488' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = '#18181B' }}
+                          >
+                            {kw.keyword}
+                          </a>
+                          <ExternalLink style={{ width: 14, height: 14, color: '#A1A1AA' }} />
+                        </div>
+                        {kw.intent_reason && (
+                          <div style={{ fontSize: '11px', color: '#71717A', marginTop: '2px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {kw.intent_reason}
+                          </div>
+                        )}
+                      </td>
+                      {/* 検索目的 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.query_type && QUERY_TYPE_LABELS[kw.query_type] ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              borderRadius: '4px',
+                              background: QUERY_TYPE_LABELS[kw.query_type].bgColor,
+                              color: QUERY_TYPE_LABELS[kw.query_type].color,
+                            }}
+                          >
+                            {QUERY_TYPE_LABELS[kw.query_type].label}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                      {/* 検索段階 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.intent && INTENT_LABELS[kw.intent] ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              borderRadius: '4px',
+                              background: INTENT_LABELS[kw.intent].bgColor,
+                              color: INTENT_LABELS[kw.intent].color,
+                            }}
+                          >
+                            {INTENT_LABELS[kw.intent].label}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
+                        )}
+                      </td>
+                      {/* ソース */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '12px', color: SOURCE_CONFIG[kw.classification_source]?.color }}>
+                          {SOURCE_CONFIG[kw.classification_source]?.label || kw.classification_source}
+                        </span>
+                      </td>
+                      {/* 検証 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        {kw.is_verified ? (
+                          <Check style={{ width: 20, height: 20, color: '#10B981', margin: '0 auto' }} />
+                        ) : (
+                          <AlertCircle style={{ width: 20, height: 20, color: '#D4D4D8', margin: '0 auto' }} />
+                        )}
+                      </td>
+                      {/* 月間検索数 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '13px', fontWeight: 600, color: '#18181B' }}>
+                        {formatNumber(kw.max_monthly_search_volume)}
+                      </td>
+                      {/* CPC */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', color: '#52525B' }}>
+                        {kw.max_cpc !== null ? `$${kw.max_cpc.toFixed(2)}` : '-'}
+                      </td>
+                      {/* 操作 */}
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => openEditModal(kw)}
+                          style={{
+                            padding: '6px',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            color: '#A1A1AA',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F4F5'; e.currentTarget.style.color = '#0D9488' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A1A1AA' }}
+                        >
+                          <Edit2 style={{ width: 16, height: 16 }} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-              className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="text-sm text-gray-600">
-              {page} / {totalPages}
+
+          {/* ページネーション */}
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '13px', color: '#A1A1AA' }}>
+              {((page - 1) * limit + 1).toLocaleString()} - {Math.min(page * limit, total).toLocaleString()} / {formatNumber(total)} 件
             </span>
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={page === totalPages}
-              className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                style={{
+                  padding: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  color: '#52525B',
+                  cursor: page === 1 ? 'not-allowed' : 'pointer',
+                  opacity: page === 1 ? 0.5 : 1,
+                }}
+              >
+                <ChevronLeft style={{ width: 16, height: 16 }} />
+              </button>
+              <span style={{ fontSize: '13px', color: '#52525B', padding: '0 8px' }}>
+                {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages || totalPages === 0}
+                style={{
+                  padding: '8px',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  color: '#52525B',
+                  cursor: page === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer',
+                  opacity: page === totalPages || totalPages === 0 ? 0.5 : 1,
+                }}
+              >
+                <ChevronRight style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* 編集モーダル */}
       {editingKeyword && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold">キーワード編集</h2>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ background: '#FFFFFF', borderRadius: '12px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', width: '100%', maxWidth: '480px', margin: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid #E4E4E7' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#18181B', margin: 0 }}>キーワード編集</h2>
               <button
                 onClick={() => setEditingKeyword(null)}
-                className="p-1 text-gray-400 hover:text-gray-600"
+                style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#A1A1AA' }}
               >
-                <X className="h-5 w-5" />
+                <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">キーワード</label>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`https://www.google.com/search?q=${encodeURIComponent(editingKeyword.keyword)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-gray-900 font-medium hover:text-blue-600 transition-colors group"
-                  >
-                    <span className="group-hover:underline">{editingKeyword.keyword}</span>
-                    <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
-                  </a>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">クリックでGoogle検索結果を確認</p>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '4px' }}>キーワード</label>
+                <a
+                  href={`https://www.google.com/search?q=${encodeURIComponent(editingKeyword.keyword)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 500, color: '#18181B', textDecoration: 'none' }}
+                >
+                  <span>{editingKeyword.keyword}</span>
+                  <ExternalLink style={{ width: 16, height: 16, color: '#A1A1AA' }} />
+                </a>
+                <p style={{ fontSize: '11px', color: '#71717A', marginTop: '4px' }}>クリックでGoogle検索結果を確認</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">意図分類</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '4px' }}>意図分類</label>
                 <select
                   value={editIntent}
                   onChange={(e) => setEditIntent(e.target.value as QueryIntent)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    outline: 'none',
+                  }}
                 >
-                  {Object.entries(INTENT_CONFIG).map(([key, config]) => (
-                    <option key={key} value={key}>
-                      {config.label}
-                    </option>
+                  {Object.entries(INTENT_LABELS).map(([key, config]) => (
+                    <option key={key} value={key}>{config.label}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">分類理由</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#52525B', marginBottom: '4px' }}>分類理由</label>
                 <textarea
                   value={editReason}
                   onChange={(e) => setEditReason(e.target.value)}
                   rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="分類の理由を入力..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    resize: 'vertical',
+                  }}
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input
                   type="checkbox"
                   id="verified"
                   checked={editVerified}
                   onChange={(e) => setEditVerified(e.target.checked)}
-                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  style={{ borderRadius: '4px', border: '1px solid #D4D4D8' }}
                 />
-                <label htmlFor="verified" className="text-sm text-gray-700">
+                <label htmlFor="verified" style={{ fontSize: '13px', color: '#52525B' }}>
                   検証済みとしてマーク
                 </label>
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', borderTop: '1px solid #E4E4E7', background: '#FAFAFA', borderRadius: '0 0 12px 12px' }}>
               <button
                 onClick={() => setEditingKeyword(null)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: '#52525B',
+                  cursor: 'pointer',
+                }}
               >
                 キャンセル
               </button>
               <button
                 onClick={saveEdit}
                 disabled={saving}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  background: '#0D9488',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: '#FFFFFF',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.5 : 1,
+                }}
               >
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving && <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />}
                 保存
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

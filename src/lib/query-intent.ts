@@ -4,15 +4,14 @@
 // ===========================================
 
 /**
- * クエリ意図の種類
- * - branded: 指名検索（サービス名・施設名を直接検索）
- * - transactional: 応募直前（求人・転職など応募意図が明確）
- * - commercial: 比較検討（条件比較、選び方を調べている）
- * - informational: 情報収集（知識・ハウツー・一般情報）
+ * クエリ意図の種類（4カテゴリ + unknown）
+ * - branded: 指名検索（サービス名・媒体名・企業名を直接検索）
+ * - transactional: 応募意図（求人・転職など応募意図が明確）
+ * - informational: 情報収集（知識・ハウツー・一般情報・条件比較含む）
  * - b2b: 法人向け（採用担当者・人事向けの情報）
  * - unknown: 判定不能（AI判定が必要）
  */
-export type QueryIntent = 'branded' | 'transactional' | 'commercial' | 'informational' | 'b2b' | 'unknown'
+export type QueryIntent = 'branded' | 'transactional' | 'informational' | 'b2b' | 'unknown'
 
 /**
  * SEO標準のクエリタイプ（Do/Know/Go/Buy）
@@ -34,45 +33,61 @@ export interface IntentClassification {
 }
 
 /**
- * 既知の求人媒体名リスト
+ * 既知の求人媒体名リスト（業界横断）
  * CSV取り込み時に動的に追加される想定
  */
 const KNOWN_MEDIA_NAMES = [
-  'ジョブメドレー',
-  'jobmedley',
-  'job-medley',
-  'マイナビ',
-  'リクナビ',
-  'indeed',
-  'インディード',
-  'エン転職',
-  'doda',
-  'ナース人材バンク',
-  'レバウェル',
-  'ナースではたらこ',
-  'グッピー',
-  'コメディカルドットコム',
-  'e介護転職',
-  'カイゴジョブ',
-  'きらケア',
-  'かいご畑',
+  // 総合転職サイト
+  'マイナビ', 'マイナビ転職', 'マイナビエージェント',
+  'リクナビ', 'リクナビnext', 'リクルートエージェント',
+  'indeed', 'インディード',
+  'エン転職', 'エン・ジャパン',
+  'doda', 'デューダ', 'パーソルキャリア',
+  'type転職', 'タイプ転職',
+  'ビズリーチ', 'bizreach',
+  'wantedly', 'ウォンテッドリー',
+  'green', 'グリーン',
+  'paiza', 'パイザ',
+  // 派遣・パート・アルバイト
+  'バイトル', 'タウンワーク', 'フロムエー', 'はたらこねっと',
+  'リクナビ派遣', 'エン派遣', 'スタッフサービス',
+  // 医療・介護・福祉系
+  'ジョブメドレー', 'jobmedley', 'job-medley',
+  'ナース人材バンク', 'レバウェル', 'ナースではたらこ',
+  'グッピー', 'コメディカルドットコム',
+  'e介護転職', 'カイゴジョブ', 'きらケア', 'かいご畑',
+  // IT・エンジニア系
+  'レバテック', 'geekly', 'ギークリー', 'findy',
 ]
 
 /**
- * 職種キーワード
+ * 職種キーワード（業界横断で汎用的な職種名）
  */
 const JOB_KEYWORDS = [
+  // IT・エンジニア系
+  'エンジニア', 'プログラマー', 'SE', 'システムエンジニア', 'webエンジニア',
+  'インフラエンジニア', 'データサイエンティスト', 'PM', 'プロジェクトマネージャー',
+  'デザイナー', 'webデザイナー', 'UIデザイナー', 'UXデザイナー',
+  // 営業・販売系
+  '営業', '営業職', 'セールス', '販売', '販売員', '店長', '接客',
+  // 事務・管理系
+  '事務', '一般事務', '経理', '人事', '総務', '秘書', '受付',
+  '管理', '管理職', 'マネージャー',
+  // 製造・技術系
+  '製造', '工場', '技術者', '品質管理', '生産管理', '機械オペレーター',
+  // 医療・介護・福祉系
   '看護師', 'ナース', '准看護師', '正看護師',
   '介護', 'ヘルパー', '介護福祉士', 'ケアマネ', 'ケアマネージャー',
-  '薬剤師', '登録販売者',
-  '保育士', '幼稚園教諭',
+  '薬剤師', '登録販売者', '保育士', '幼稚園教諭',
   '歯科衛生士', '歯科助手', '歯科医師',
   '理学療法士', '作業療法士', '言語聴覚士', 'PT', 'OT', 'ST',
   '医療事務', '調剤事務', '医師', 'ドクター',
-  '管理栄養士', '栄養士',
-  '放射線技師', '臨床検査技師', '臨床工学技士',
-  'あん摩', 'マッサージ', '鍼灸', '柔道整復師',
-  '社会福祉士', '精神保健福祉士',
+  '管理栄養士', '栄養士', '社会福祉士', '精神保健福祉士',
+  // サービス・その他
+  'ドライバー', '運転手', '配送', '物流', '倉庫',
+  '建設', '施工管理', '現場監督', '大工', '電気工事士',
+  '飲食', '調理師', 'シェフ', 'ホールスタッフ',
+  'コンサルタント', 'アナリスト', 'マーケティング', '広報',
 ]
 
 /**
@@ -188,33 +203,33 @@ export function classifyQueryIntent(keyword: string): IntentClassification {
     }
   }
 
-  // 6. 比較検討 - 具体的数値を含む（求職者の条件検討）
+  // 6. 情報収集 - 具体的数値を含む（求職者の条件検討）
   if (/\d+日|\d+万|\d+円/.test(k)) {
     return {
-      intent: 'commercial',
+      intent: 'informational',
       confidence: 'high',
       reason: '具体的な数値条件を含む',
     }
   }
 
-  // 7. 比較検討 - 比較系キーワード（求職者・法人両方あり得る）
+  // 7. 情報収集 - 比較系キーワード（求職者・法人両方あり得る）
   if (/比較|ランキング|おすすめ|オススメ|人気|評判|口コミ|vs/.test(k)) {
     // 「求人媒体 比較」「採用媒体」などはB2Bで先に判定済みなので
-    // ここに来るのは求職者視点の比較検討
+    // ここに来るのは求職者視点の情報収集
     return {
-      intent: 'commercial',
+      intent: 'informational',
       confidence: 'high',
       reason: '比較・評価系キーワードを含む',
     }
   }
 
-  // 8. 職種 × 条件 の組み合わせ判定
+  // 8. 職種 × 条件 の組み合わせ判定 → 情報収集
   const hasJob = JOB_KEYWORDS.some(job => k.includes(job.toLowerCase()))
   const hasCondition = CONDITION_KEYWORDS.some(cond => k.includes(cond.toLowerCase()))
 
   if (hasJob && hasCondition) {
     return {
-      intent: 'commercial',
+      intent: 'informational',
       confidence: 'medium',
       reason: '職種と条件の組み合わせ',
     }
@@ -262,8 +277,7 @@ export function classifyQueryIntents(keywords: string[]): Map<string, IntentClas
  */
 export const INTENT_LABELS: Record<QueryIntent, string> = {
   branded: '指名検索',
-  transactional: '応募直前',
-  commercial: '比較検討',
+  transactional: '応募意図',
   informational: '情報収集',
   b2b: '法人向け',
   unknown: '未分類',
@@ -273,10 +287,9 @@ export const INTENT_LABELS: Record<QueryIntent, string> = {
  * 意図別の説明
  */
 export const INTENT_DESCRIPTIONS: Record<QueryIntent, string> = {
-  branded: 'サービス名や施設名を直接検索している',
+  branded: 'サービス名や媒体名を直接検索している',
   transactional: '求人への応募意欲が高い状態',
-  commercial: '転職条件を比較検討している段階',
-  informational: '一般的な情報や知識を求めている',
+  informational: '一般的な情報や知識を求めている（条件比較含む）',
   b2b: '採用担当者・人事が検索している',
   unknown: 'AI分析が必要',
 }
@@ -418,8 +431,6 @@ export function getQueryTypeFromIntent(intent: QueryIntent): QueryType | null {
       return 'Go'
     case 'transactional':
       return 'Do'
-    case 'commercial':
-      return 'Buy'
     case 'informational':
     case 'b2b':
       return 'Know'
@@ -499,28 +510,25 @@ async function classifyBatchWithClaude(
 
   const keywordList = keywords.map((k, i) => `${i + 1}. ${k}`).join('\n')
 
-  const systemPrompt = `あなたは医療・介護・福祉業界の求人検索クエリを分析する専門家です。
+  const systemPrompt = `あなたは求人・転職関連の検索クエリを分析する専門家です。業界を問わず、あらゆる職種の求人検索キーワードを分析できます。
 
-検索キーワードを以下の5つの意図カテゴリに分類してください：
+検索キーワードを以下の4つの意図カテゴリに分類してください：
 
-1. **branded（指名検索）**: 特定のサービス名・媒体名・施設名を直接検索している
-   例: 「ジョブメドレー」「マイナビ看護師」「○○病院」
+1. **branded（指名検索）**: 特定のサービス名・媒体名・企業名を直接検索している
+   例: 「マイナビ」「リクナビ」「indeed」「○○株式会社」「ジョブメドレー」
 
-2. **transactional（応募直前）**: 求人への応募・転職意図が明確
-   例: 「看護師 求人」「介護士 転職」「薬剤師 募集」
+2. **transactional（応募意図）**: 求人への応募・転職意図が明確
+   例: 「エンジニア 求人」「営業 転職」「事務 募集」「正社員 採用」「看護師 中途採用」
 
-3. **commercial（比較検討）**: 転職条件を比較・検討している段階
-   例: 「看護師 年収 平均」「介護福祉士 年間休日120日」「薬剤師 おすすめ転職サイト」
+3. **informational（情報収集）**: 一般的な情報・知識・ハウツー・条件比較を求めている
+   例: 「エンジニアとは」「営業職 仕事内容」「履歴書 書き方」「年収 平均」「おすすめ転職サイト」「年間休日120日」
 
-4. **informational（情報収集）**: 一般的な情報・知識・ハウツーを求めている
-   例: 「看護師とは」「介護福祉士 資格」「履歴書 書き方」「有給休暇 平均」
-
-5. **b2b（法人向け）**: 採用担当者・人事が検索するキーワード
-   例: 「採用コスト」「最低賃金」「紹介手数料」「助成金」「離職率」「人手不足」「配置基準」
+4. **b2b（法人向け）**: 採用担当者・人事が検索するキーワード
+   例: 「採用コスト」「最低賃金」「紹介手数料」「助成金」「離職率」「人手不足」「採用媒体 比較」
 
 回答は必ず以下のJSON形式で返してください：
 [
-  {"keyword": "キーワード1", "intent": "branded|transactional|commercial|informational|b2b", "reason": "分類理由（20文字以内）"},
+  {"keyword": "キーワード1", "intent": "branded|transactional|informational|b2b", "reason": "分類理由（20文字以内）"},
   ...
 ]`
 
@@ -560,7 +568,7 @@ JSON配列のみを返してください。`
 
     for (const item of classifications) {
       const intent = item.intent as QueryIntent
-      if (['branded', 'transactional', 'commercial', 'informational', 'b2b'].includes(intent)) {
+      if (['branded', 'transactional', 'informational', 'b2b'].includes(intent)) {
         results.set(item.keyword, {
           intent,
           confidence: 'high',

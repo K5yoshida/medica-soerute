@@ -23,8 +23,8 @@ interface StatsResponse {
     by_intent: {
       branded: number
       transactional: number
-      commercial: number
       informational: number
+      b2b: number
       unknown: number
     }
   }
@@ -64,7 +64,7 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
 
     // 全キーワード数を取得
     const { count: totalCount, error: totalError } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
 
     if (totalError) {
@@ -73,7 +73,7 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
 
     // 検証済みキーワード数を取得
     const { count: verifiedCount, error: verifiedError } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('is_verified', true)
 
@@ -83,7 +83,7 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
 
     // 未検証のAI分類キーワード数を取得
     const { count: unverifiedAiCount, error: unverifiedAiError } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('is_verified', false)
       .eq('classification_source', 'ai')
@@ -94,48 +94,48 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
 
     // 分類ソース別集計
     const { count: ruleCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('classification_source', 'rule')
 
     const { count: aiCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('classification_source', 'ai')
 
     const { count: manualCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('classification_source', 'manual')
 
     const { count: unknownSourceCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('classification_source', 'unknown')
 
     // 意図別集計
     const { count: brandedCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('intent', 'branded')
 
     const { count: transactionalCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('intent', 'transactional')
 
-    const { count: commercialCount } = await supabase
-      .from('query_master')
-      .select('*', { count: 'exact', head: true })
-      .eq('intent', 'commercial')
-
     const { count: informationalCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('intent', 'informational')
 
+    const { count: b2bCount } = await supabase
+      .from('keywords')
+      .select('*', { count: 'exact', head: true })
+      .eq('intent', 'b2b')
+
     const { count: unknownIntentCount } = await supabase
-      .from('query_master')
+      .from('keywords')
       .select('*', { count: 'exact', head: true })
       .eq('intent', 'unknown')
 
@@ -158,8 +158,8 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
         by_intent: {
           branded: brandedCount || 0,
           transactional: transactionalCount || 0,
-          commercial: commercialCount || 0,
           informational: informationalCount || 0,
+          b2b: b2bCount || 0,
           unknown: unknownIntentCount || 0,
         },
       },

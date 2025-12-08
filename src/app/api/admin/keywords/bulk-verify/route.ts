@@ -92,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<BulkVerif
 
     // バッチ更新実行
     const { error: updateError, count } = await supabase
-      .from('query_master')
+      .from('keywords')
       .update(updateData)
       .in('id', body.keyword_ids)
 

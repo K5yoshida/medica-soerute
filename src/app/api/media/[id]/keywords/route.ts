@@ -5,10 +5,23 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
-interface KeywordStats {
+interface MediaKeywordWithRelation {
+  id: string
+  keyword_id: string
+  media_id: string
+  ranking_position: number | null
   monthly_search_volume: number | null
   estimated_traffic: number | null
-  intent: string | null
+  cpc: number | null
+  competition_level: number | null
+  seo_difficulty: number | null
+  landing_url: string | null
+  keywords: {
+    id: string
+    keyword: string
+    intent: string | null
+    query_type: string | null
+  } | null
 }
 
 // 媒体別キーワード一覧の取得
@@ -50,7 +63,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
     // ラッコキーワード風フィルターパラメータ
-    const intent = searchParams.get('intent') // A,B,C のカンマ区切り
+    const intent = searchParams.get('intent') // branded,transactional,informational,b2b のカンマ区切り
     const seoDifficultyMin = searchParams.get('seo_difficulty_min')
     const seoDifficultyMax = searchParams.get('seo_difficulty_max')
     const searchVolumeMin = searchParams.get('search_volume_min')
@@ -59,23 +72,16 @@ export async function GET(request: Request, { params }: RouteParams) {
     const rankMax = searchParams.get('rank_max')
     const competitionMin = searchParams.get('competition_min')
     const competitionMax = searchParams.get('competition_max')
+    const estimatedTrafficMin = searchParams.get('estimated_traffic_min')
+    const estimatedTrafficMax = searchParams.get('estimated_traffic_max')
+    const cpcMin = searchParams.get('cpc_min')
+    const cpcMax = searchParams.get('cpc_max')
 
-    // キーワード取得クエリ
+    // キーワード取得クエリ（media_keywordsからkeywordsをリレーションで取得）
     let query = supabase
-      .from('keywords')
-      .select('*', { count: 'exact' })
+      .from('media_keywords')
+      .select('*, keywords(id, keyword, intent, query_type)', { count: 'exact' })
       .eq('media_id', id)
-
-    // テキスト検索
-    if (search) {
-      query = query.ilike('keyword', `%${search}%`)
-    }
-
-    // 応募意図フィルター
-    if (intent) {
-      const intentArray = intent.split(',').map((i) => i.trim().toUpperCase())
-      query = query.in('intent', intentArray)
-    }
 
     // SEO難易度フィルター
     if (seoDifficultyMin) {
@@ -95,28 +101,46 @@ export async function GET(request: Request, { params }: RouteParams) {
 
     // 検索順位フィルター
     if (rankMin) {
-      query = query.gte('search_rank', parseInt(rankMin, 10))
+      query = query.gte('ranking_position', parseInt(rankMin, 10))
     }
     if (rankMax) {
-      query = query.lte('search_rank', parseInt(rankMax, 10))
+      query = query.lte('ranking_position', parseInt(rankMax, 10))
     }
 
     // 競合性フィルター
     if (competitionMin) {
-      query = query.gte('competition', parseInt(competitionMin, 10))
+      query = query.gte('competition_level', parseInt(competitionMin, 10))
     }
     if (competitionMax) {
-      query = query.lte('competition', parseInt(competitionMax, 10))
+      query = query.lte('competition_level', parseInt(competitionMax, 10))
+    }
+
+    // 推定流入数フィルター
+    if (estimatedTrafficMin) {
+      query = query.gte('estimated_traffic', parseInt(estimatedTrafficMin, 10))
+    }
+    if (estimatedTrafficMax) {
+      query = query.lte('estimated_traffic', parseInt(estimatedTrafficMax, 10))
+    }
+
+    // CPCフィルター
+    if (cpcMin) {
+      query = query.gte('cpc', parseFloat(cpcMin))
+    }
+    if (cpcMax) {
+      query = query.lte('cpc', parseFloat(cpcMax))
     }
 
     // ソート
     const ascending = sortOrder === 'asc'
     switch (sortBy) {
       case 'keyword':
-        query = query.order('keyword', { ascending })
+        // リレーションのソートは後処理で行う
+        query = query.order('monthly_search_volume', { ascending: false, nullsFirst: false })
         break
       case 'search_rank':
-        query = query.order('search_rank', { ascending, nullsFirst: false })
+      case 'ranking_position':
+        query = query.order('ranking_position', { ascending, nullsFirst: false })
         break
       case 'estimated_traffic':
         query = query.order('estimated_traffic', { ascending, nullsFirst: false })
@@ -124,8 +148,9 @@ export async function GET(request: Request, { params }: RouteParams) {
       case 'seo_difficulty':
         query = query.order('seo_difficulty', { ascending, nullsFirst: false })
         break
+      case 'cpc':
       case 'cpc_usd':
-        query = query.order('cpc_usd', { ascending, nullsFirst: false })
+        query = query.order('cpc', { ascending, nullsFirst: false })
         break
       case 'monthly_search_volume':
       default:
@@ -136,7 +161,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     // ページネーション
     query = query.range(offset, offset + limit - 1)
 
-    const { data: keywords, error: keywordsError, count } = await query
+    const { data: mediaKeywords, error: keywordsError, count } = await query
 
     if (keywordsError) {
       console.error('Failed to fetch keywords:', keywordsError)
@@ -146,33 +171,83 @@ export async function GET(request: Request, { params }: RouteParams) {
       )
     }
 
+    // フィルタリング（検索とintentはリレーション先のデータを使うため後処理）
+    let filteredKeywords = (mediaKeywords || []) as MediaKeywordWithRelation[]
+
+    // テキスト検索（キーワード名でフィルタ）
+    if (search) {
+      const searchLower = search.toLowerCase()
+      filteredKeywords = filteredKeywords.filter(
+        (mk) => mk.keywords?.keyword?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // 応募意図フィルター
+    if (intent) {
+      const intentArray = intent.split(',').map((i) => i.trim().toLowerCase())
+      filteredKeywords = filteredKeywords.filter(
+        (mk) => mk.keywords?.intent && intentArray.includes(mk.keywords.intent.toLowerCase())
+      )
+    }
+
+    // レスポンス用にフラット化
+    const keywords = filteredKeywords.map((mk) => ({
+      id: mk.id,
+      keyword_id: mk.keyword_id,
+      keyword: mk.keywords?.keyword || '',
+      intent: mk.keywords?.intent || 'unknown',
+      query_type: mk.keywords?.query_type || null,
+      ranking_position: mk.ranking_position,
+      search_rank: mk.ranking_position, // 互換性のため
+      monthly_search_volume: mk.monthly_search_volume,
+      estimated_traffic: mk.estimated_traffic,
+      cpc: mk.cpc,
+      cpc_usd: mk.cpc, // 互換性のため
+      competition_level: mk.competition_level,
+      competition: mk.competition_level, // 互換性のため
+      seo_difficulty: mk.seo_difficulty,
+      landing_url: mk.landing_url,
+    }))
+
     // 統計情報を計算
-    const { data: allKeywords } = await supabase
-      .from('keywords')
-      .select('monthly_search_volume, estimated_traffic, intent')
+    const { data: allMediaKeywords } = await supabase
+      .from('media_keywords')
+      .select('monthly_search_volume, estimated_traffic, keywords(intent)')
       .eq('media_id', id)
 
-    const typedAllKeywords = allKeywords as KeywordStats[] | null
+    type AllKeywordStats = {
+      monthly_search_volume: number | null
+      estimated_traffic: number | null
+      keywords: { intent: string | null } | null
+    }
+    const typedAllKeywords = allMediaKeywords as AllKeywordStats[] | null
 
     // 全体統計
     const stats = {
       total: typedAllKeywords?.length || 0,
-      total_monthly_search_volume: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.monthly_search_volume || 0), 0) || 0,
-      total_estimated_traffic: typedAllKeywords?.reduce((sum: number, k: KeywordStats) => sum + (k.estimated_traffic || 0), 0) || 0,
+      total_monthly_search_volume: typedAllKeywords?.reduce((sum, k) => sum + (k.monthly_search_volume || 0), 0) || 0,
+      total_estimated_traffic: typedAllKeywords?.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0) || 0,
     }
 
-    // 意図別統計
+    // 意図別統計（4カテゴリ: branded, transactional, informational, b2b + unknown）
     const intentStats = {
-      A: { count: 0, volume: 0, traffic: 0 },
-      B: { count: 0, volume: 0, traffic: 0 },
-      C: { count: 0, volume: 0, traffic: 0 },
+      branded: { count: 0, volume: 0, traffic: 0 },
+      transactional: { count: 0, volume: 0, traffic: 0 },
+      informational: { count: 0, volume: 0, traffic: 0 },
+      b2b: { count: 0, volume: 0, traffic: 0 },
+      unknown: { count: 0, volume: 0, traffic: 0 },
     }
 
     typedAllKeywords?.forEach((k) => {
-      if (k.intent === 'A' || k.intent === 'B' || k.intent === 'C') {
-        intentStats[k.intent].count += 1
-        intentStats[k.intent].volume += k.monthly_search_volume || 0
-        intentStats[k.intent].traffic += k.estimated_traffic || 0
+      const intent = k.keywords?.intent as keyof typeof intentStats | null
+      if (intent && intent in intentStats) {
+        intentStats[intent].count += 1
+        intentStats[intent].volume += k.monthly_search_volume || 0
+        intentStats[intent].traffic += k.estimated_traffic || 0
+      } else {
+        intentStats.unknown.count += 1
+        intentStats.unknown.volume += k.monthly_search_volume || 0
+        intentStats.unknown.traffic += k.estimated_traffic || 0
       }
     })
 
@@ -181,7 +256,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       data: {
         media_id: id,
         media_name: media.name,
-        keywords: keywords || [],
+        keywords: keywords,
         stats,
         intent_stats: intentStats,
       },

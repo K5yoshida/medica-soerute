@@ -95,7 +95,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     // キーワード数を取得
     const { count: keywordCount } = await serviceClient
-      .from('media_query_data')
+      .from('media_keywords')
       .select('*', { count: 'exact', head: true })
       .eq('media_id', id)
 

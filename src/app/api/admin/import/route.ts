@@ -261,7 +261,7 @@ async function importRakkoKeywords(
   for (let i = 0; i < queryBatch.length; i += BATCH_SIZE) {
     const batch = queryBatch.slice(i, i + BATCH_SIZE)
     const { error: batchError } = await supabase
-      .from('query_master')
+      .from('keywords')
       .upsert(batch, { onConflict: 'keyword_normalized', ignoreDuplicates: false })
 
     if (batchError) {
@@ -275,25 +275,25 @@ async function importRakkoKeywords(
     }
   }
 
-  // media_idが指定されている場合はmedia_query_dataも作成
+  // media_idが指定されている場合はmedia_keywordsも作成
   if (mediaId && parsedRows.length > 0) {
-    // まずquery_masterからIDを取得
+    // まずkeywordsからIDを取得
     const normalizedKeywords = parsedRows.map((r) => r.normalizedKeyword)
-    const { data: queryIds } = await supabase
-      .from('query_master')
+    const { data: keywordIds } = await supabase
+      .from('keywords')
       .select('id, keyword_normalized')
       .in('keyword_normalized', normalizedKeywords)
 
-    if (queryIds && queryIds.length > 0) {
-      const keywordToId = new Map(queryIds.map((q: { id: string; keyword_normalized: string }) => [q.keyword_normalized, q.id]))
+    if (keywordIds && keywordIds.length > 0) {
+      const keywordToId = new Map(keywordIds.map((q: { id: string; keyword_normalized: string }) => [q.keyword_normalized, q.id]))
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mediaQueryBatch: any[] = []
+      const mediaKeywordsBatch: any[] = []
       for (const row of parsedRows) {
-        const queryId = keywordToId.get(row.normalizedKeyword)
-        if (queryId) {
-          mediaQueryBatch.push({
-            query_id: queryId,
+        const keywordId = keywordToId.get(row.normalizedKeyword)
+        if (keywordId) {
+          mediaKeywordsBatch.push({
+            keyword_id: keywordId,
             media_id: mediaId,
             ranking_position: row.searchRank,
             monthly_search_volume: row.searchVolume,
@@ -307,26 +307,26 @@ async function importRakkoKeywords(
         }
       }
 
-      // media_query_dataにバッチupsert
-      for (let i = 0; i < mediaQueryBatch.length; i += BATCH_SIZE) {
-        const batch = mediaQueryBatch.slice(i, i + BATCH_SIZE)
+      // media_keywordsにバッチupsert
+      for (let i = 0; i < mediaKeywordsBatch.length; i += BATCH_SIZE) {
+        const batch = mediaKeywordsBatch.slice(i, i + BATCH_SIZE)
         const { error: mediaError } = await supabase
-          .from('media_query_data')
-          .upsert(batch, { onConflict: 'media_id,query_id', ignoreDuplicates: false })
+          .from('media_keywords')
+          .upsert(batch, { onConflict: 'media_id,keyword_id', ignoreDuplicates: false })
 
         if (mediaError) {
-          console.warn('media_query_data batch error:', mediaError.message)
+          console.warn('media_keywords batch error:', mediaError.message)
         }
       }
     }
   }
 
-  // 意図分類サマリを集計
+  // 意図分類サマリを集計（4カテゴリ: branded, transactional, informational, b2b + unknown）
   const intentSummary = {
     branded: 0,
     transactional: 0,
-    commercial: 0,
     informational: 0,
+    b2b: 0,
     unknown: 0,
   }
   queryBatch.forEach((q) => {

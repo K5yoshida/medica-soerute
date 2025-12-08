@@ -28,7 +28,7 @@ export async function GET(
 
     // 分析結果を取得（所有者のみアクセス可能）
     const { data: analysisResult, error: fetchError } = await supabase
-      .from('analysis_results')
+      .from('matching_results')
       .select('*')
       .eq('id', analysisId)
       .eq('user_id', user.id)

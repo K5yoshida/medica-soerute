@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
-    const includeInactive = searchParams.get('include_inactive') === 'true'
+    const showInactiveOnly = searchParams.get('show_inactive_only') === 'true'
 
     const serviceClient = createServiceClient()
 
@@ -58,7 +58,10 @@ export async function GET(request: Request) {
       query = query.or(`name.ilike.%${search}%,domain.ilike.%${search}%`)
     }
 
-    if (!includeInactive) {
+    // 非アクティブを表示がチェックされたら非アクティブのみ、そうでなければアクティブのみ
+    if (showInactiveOnly) {
+      query = query.eq('is_active', false)
+    } else {
       query = query.eq('is_active', true)
     }
 
@@ -81,7 +84,7 @@ export async function GET(request: Request) {
     const keywordCounts: Record<string, number> = {}
     if (mediaIds.length > 0) {
       const { data: keywordData } = await serviceClient
-        .from('media_query_data')
+        .from('media_keywords')
         .select('media_id')
         .in('media_id', mediaIds)
 
@@ -194,7 +197,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { name, domain, monthly_visits, is_active } = body
+    const { name, domain: rawDomain, monthly_visits, is_active } = body
 
     // バリデーション
     if (!name) {
@@ -204,13 +207,21 @@ export async function POST(request: Request) {
       )
     }
 
+    // ドメインの正規化（https://, http://, 末尾スラッシュを除去）
+    const normalizedDomain = rawDomain
+      ? rawDomain
+          .replace(/^https?:\/\//i, '')  // https:// または http:// を除去
+          .replace(/\/+$/, '')            // 末尾のスラッシュを除去
+          .trim()
+      : null
+
     const serviceClient = createServiceClient()
 
     // 重複チェック（名前 or ドメイン）
     const { data: existing } = await serviceClient
       .from('media_master')
       .select('id, name, domain')
-      .or(`name.eq.${name}${domain ? `,domain.eq.${domain}` : ''}`)
+      .or(`name.eq.${name}${normalizedDomain ? `,domain.eq.${normalizedDomain}` : ''}`)
       .limit(1)
       .single()
 
@@ -226,10 +237,10 @@ export async function POST(request: Request) {
       .from('media_master')
       .insert({
         name,
-        domain: domain || null,
+        domain: normalizedDomain,
         monthly_visits: monthly_visits || null,
         is_active: is_active !== false,
-        category: 'job_board', // デフォルトカテゴリ
+        category: 'general', // デフォルトカテゴリ（enum: general, nursing, pharmacy, dental, welfare, rehabilitation）
       })
       .select()
       .single()

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { analyzeMediaMatch } from '@/lib/claude/client'
+import { withFallback, getDefaultMediaMatchFallback } from '@/lib/claude/fallback'
 import type { JobRequirements, MediaMaster, User } from '@/types'
 
 export async function POST(request: Request) {
@@ -69,19 +70,34 @@ export async function POST(request: Request) {
       )
     }
 
-    // Claude APIで分析を実行
-    const analysisResult = await analyzeMediaMatch(
-      jobRequirements,
-      mediaList as MediaMaster[]
+    // F-EXT-001: Claude APIで分析を実行（フォールバック付き）
+    const result = await withFallback(
+      () => analyzeMediaMatch(jobRequirements, mediaList as MediaMaster[]),
+      () => getDefaultMediaMatchFallback()
     )
+
+    if (!result.success || !result.data) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'E-EXT-402',
+            message: 'AIサービスが一時的に利用できません。しばらく時間をおいて再度お試しください。',
+          },
+        },
+        { status: 503 }
+      )
+    }
+
+    const analysisResult = result.data
 
     // 分析結果をDBに保存
     const { data: savedResult, error: saveError } = await supabase
-      .from('analysis_results')
+      .from('matching_results')
       .insert({
         user_id: user.id,
         job_requirements: jobRequirements,
-        status: 'completed',
+        status: result.usedFallback ? 'fallback' : 'completed',
         matched_media: analysisResult.matchedMedia,
         analysis_detail: analysisResult.analysisDetail,
       })
@@ -104,12 +120,18 @@ export async function POST(request: Request) {
         analysis_id: savedResult?.id,
         job_type: jobRequirements.jobType,
         matched_count: analysisResult.matchedMedia.length,
+        used_fallback: result.usedFallback,
+        retry_count: result.retryCount,
       },
     })
 
     return NextResponse.json({
       success: true,
       data: analysisResult,
+      meta: {
+        usedFallback: result.usedFallback,
+        fallbackReason: result.fallbackReason,
+      },
     })
   } catch (error) {
     console.error('Analysis error:', error)
@@ -143,7 +165,7 @@ export async function GET() {
     }
 
     const { data, error } = await supabase
-      .from('analysis_results')
+      .from('matching_results')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
