@@ -102,24 +102,25 @@ interface KeywordData {
 }
 
 // Supabase JSクライアントを使った実装
+// 新スキーマ: keywords（キーワードマスター）+ media_keywords（媒体×キーワード紐付け）
 async function executeRankingQuery(
   supabase: Awaited<ReturnType<typeof createClient>>,
   keywordList: string[],
   sortBy: string,
   limit: number
 ): Promise<RankingResult[]> {
-  // Step 1: keywordsテーブルからquery_masterをジョインしてマッチするキーワードを取得
-  // keywords.query_id -> query_master.id の関係
+  // Step 1: media_keywordsテーブルからkeywordsとmedia_masterをジョインしてマッチするキーワードを取得
+  // media_keywords.keyword_id -> keywords.id, media_keywords.media_id -> media_master.id
   let query = supabase
-    .from('keywords')
+    .from('media_keywords')
     .select(`
+      keyword_id,
       media_id,
-      keyword,
       monthly_search_volume,
       estimated_traffic,
-      search_rank,
-      query_id,
-      query_master (
+      ranking_position,
+      keywords!inner (
+        keyword,
         intent
       ),
       media_master!inner (
@@ -132,15 +133,15 @@ async function executeRankingQuery(
     `)
     .eq('media_master.is_active', true)
 
-  // 各キーワードでILIKE検索（部分一致）
+  // 各キーワードでILIKE検索（部分一致）- keywordsテーブルのkeywordカラムに対して
   for (const kw of keywordList) {
-    query = query.ilike('keyword', `%${kw}%`)
+    query = query.ilike('keywords.keyword', `%${kw}%`)
   }
 
-  const { data: keywordsData, error } = await query
+  const { data: mediaKeywordsData, error } = await query
 
-  if (error || !keywordsData) {
-    console.error('Keywords query error:', error)
+  if (error || !mediaKeywordsData) {
+    console.error('Media keywords query error:', error)
     return []
   }
 
@@ -153,16 +154,17 @@ async function executeRankingQuery(
     keywords: KeywordData[]
   }>()
 
-  for (const kw of keywordsData) {
-    const media = kw.media_master as unknown as {
+  for (const mk of mediaKeywordsData) {
+    const media = mk.media_master as unknown as {
       id: string
       name: string
       domain: string | null
       monthly_visits: number | null
     }
-    // query_masterからintentを取得（存在しない場合はunknown）
-    const queryMaster = kw.query_master as unknown as { intent: string } | null
-    const intent = queryMaster?.intent || 'unknown'
+    // keywordsテーブルからintentを取得
+    const keywordData = mk.keywords as unknown as { keyword: string; intent: string } | null
+    const intent = keywordData?.intent || 'unknown'
+    const keyword = keywordData?.keyword || ''
 
     if (!mediaMap.has(media.id)) {
       mediaMap.set(media.id, {
@@ -174,11 +176,11 @@ async function executeRankingQuery(
       })
     }
     mediaMap.get(media.id)!.keywords.push({
-      media_id: kw.media_id,
-      keyword: kw.keyword,
-      monthly_search_volume: kw.monthly_search_volume,
-      estimated_traffic: kw.estimated_traffic,
-      search_rank: kw.search_rank,
+      media_id: mk.media_id,
+      keyword: keyword,
+      monthly_search_volume: mk.monthly_search_volume,
+      estimated_traffic: mk.estimated_traffic,
+      search_rank: mk.ranking_position,
       intent: intent,
     })
   }

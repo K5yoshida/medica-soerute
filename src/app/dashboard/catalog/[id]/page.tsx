@@ -41,18 +41,22 @@ interface TrafficData {
 
 interface Keyword {
   id: string
+  keyword_id?: string
   keyword: string
   monthly_search_volume: number | null
   search_rank: number | null
+  ranking_position?: number | null
   estimated_traffic: number | null
   seo_difficulty: number | null
   cpc_usd: number | null
+  cpc?: number | null
   competition: number | null
+  competition_level?: number | null
   url: string | null
-  query_master: {
-    intent: string | null
-    query_type: string | null
-  } | null
+  landing_url?: string | null
+  // 新スキーマ: intentとquery_typeは直接プロパティとして返される
+  intent: string | null
+  query_type: string | null
 }
 
 interface KeywordStats {
@@ -73,7 +77,7 @@ interface IntentStats {
   C: IntentStat
 }
 
-// 検索目的ラベル（query_master.query_type）
+// 検索目的ラベル（keywords.query_type）
 const QUERY_TYPE_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
   Do: { label: 'Do', color: '#E11D48', bgColor: '#FFE4E6' },
   Know: { label: 'Know', color: '#0284C7', bgColor: '#E0F2FE' },
@@ -81,7 +85,7 @@ const QUERY_TYPE_LABELS: Record<string, { label: string; color: string; bgColor:
   Buy: { label: 'Buy', color: '#D97706', bgColor: '#FEF3C7' },
 }
 
-// 検索段階ラベル（query_master.intent）- 4カテゴリ: branded, transactional, informational, b2b
+// 検索段階ラベル（keywords.intent）- 4カテゴリ: branded, transactional, informational, b2b
 const INTENT_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
   branded: { label: '指名検索', color: '#7C3AED', bgColor: '#EDE9FE' },
   transactional: { label: '応募意図', color: '#E11D48', bgColor: '#FFE4E6' },
@@ -712,7 +716,7 @@ export default function MediaDetailPage() {
                       </td>
                       {/* 検索目的 */}
                       <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                        {kw.query_master?.query_type && QUERY_TYPE_LABELS[kw.query_master.query_type] ? (
+                        {kw.query_type && QUERY_TYPE_LABELS[kw.query_type] ? (
                           <span
                             style={{
                               display: 'inline-block',
@@ -720,11 +724,11 @@ export default function MediaDetailPage() {
                               fontSize: '11px',
                               fontWeight: 600,
                               borderRadius: '4px',
-                              background: QUERY_TYPE_LABELS[kw.query_master.query_type].bgColor,
-                              color: QUERY_TYPE_LABELS[kw.query_master.query_type].color,
+                              background: QUERY_TYPE_LABELS[kw.query_type].bgColor,
+                              color: QUERY_TYPE_LABELS[kw.query_type].color,
                             }}
                           >
-                            {QUERY_TYPE_LABELS[kw.query_master.query_type].label}
+                            {QUERY_TYPE_LABELS[kw.query_type].label}
                           </span>
                         ) : (
                           <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
@@ -732,7 +736,7 @@ export default function MediaDetailPage() {
                       </td>
                       {/* 検索段階 */}
                       <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                        {kw.query_master?.intent && INTENT_LABELS[kw.query_master.intent] ? (
+                        {kw.intent && INTENT_LABELS[kw.intent] ? (
                           <span
                             style={{
                               display: 'inline-block',
@@ -740,11 +744,11 @@ export default function MediaDetailPage() {
                               fontSize: '11px',
                               fontWeight: 600,
                               borderRadius: '4px',
-                              background: INTENT_LABELS[kw.query_master.intent].bgColor,
-                              color: INTENT_LABELS[kw.query_master.intent].color,
+                              background: INTENT_LABELS[kw.intent].bgColor,
+                              color: INTENT_LABELS[kw.intent].color,
                             }}
                           >
-                            {INTENT_LABELS[kw.query_master.intent].label}
+                            {INTENT_LABELS[kw.intent].label}
                           </span>
                         ) : (
                           <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
