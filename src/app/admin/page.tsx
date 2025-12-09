@@ -26,6 +26,9 @@ interface DashboardStats {
   mrr: number
   totalMedia: number
   totalKeywords: number
+  userChange: number
+  paidUserChange: number
+  mrrChange: number
   recentLogins: Array<{
     id: string
     email: string
@@ -55,22 +58,21 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // モックデータ（API実装前）
-  const mockStats: DashboardStats = {
-    totalUsers: 156,
-    activeUsers: 42,
-    paidUsers: 28,
-    mrr: 548000,
-    totalMedia: 15,
-    totalKeywords: 12450,
-    recentLogins: [
-      { id: '1', email: 'tanaka@example.com', loginAt: '2分前' },
-      { id: '2', email: 'suzuki@example.com', loginAt: '15分前' },
-      { id: '3', email: 'yamada@example.com', loginAt: '1時間前' },
-    ],
+  // フォールバック用デフォルト値（APIエラー時のみ使用）
+  const defaultStats: DashboardStats = {
+    totalUsers: 0,
+    activeUsers: 0,
+    paidUsers: 0,
+    mrr: 0,
+    totalMedia: 0,
+    totalKeywords: 0,
+    userChange: 0,
+    paidUserChange: 0,
+    mrrChange: 0,
+    recentLogins: [],
   }
 
-  const displayStats = stats || mockStats
+  const displayStats = stats || defaultStats
 
   return (
     <>
@@ -126,7 +128,7 @@ export default function AdminDashboardPage() {
             label="総ユーザー数"
             value={displayStats.totalUsers}
             suffix="人"
-            change={+12}
+            change={displayStats.userChange}
           />
           <KPICard
             icon={<Activity className="h-5 w-5" />}
@@ -144,7 +146,7 @@ export default function AdminDashboardPage() {
             label="有料ユーザー"
             value={displayStats.paidUsers}
             suffix="人"
-            change={+3}
+            change={displayStats.paidUserChange}
           />
           <KPICard
             icon={<TrendingUp className="h-5 w-5" />}
@@ -152,7 +154,7 @@ export default function AdminDashboardPage() {
             iconColor="#F59E0B"
             label="MRR"
             value={`¥${displayStats.mrr.toLocaleString()}`}
-            change={+8.5}
+            change={displayStats.mrrChange}
             changeType="percent"
           />
         </div>

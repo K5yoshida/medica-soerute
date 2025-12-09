@@ -11,6 +11,7 @@ import {
   X,
   Folder,
   Download,
+  LayoutGrid,
 } from 'lucide-react'
 
 /**
@@ -30,7 +31,7 @@ import {
  * - O (Owned): #10B981 (green)
  */
 
-type ViewMode = 'peso' | 'funnel' | 'conversion' | 'journey'
+type ViewMode = 'peso' | 'funnel' | 'conversion' | 'journey' | 'matrix'
 
 interface PESOCategory {
   key: string
@@ -136,10 +137,9 @@ const initialPesoData: PESOCategory[] = [
     color: '#3B82F6',
     bgLight: 'rgba(59,130,246,0.1)',
     tags: [
-      { id: 'indeed', label: 'Indeed', selected: true },
-      { id: 'jobmedley', label: 'ジョブメドレー', selected: true },
-      { id: 'mynavi', label: 'マイナビ', selected: true },
-      { id: 'listing', label: 'リスティング広告', selected: false },
+      { id: 'mass_ads', label: 'マス広告', selected: false },
+      { id: 'display_video', label: 'ディスプレイ/動画広告', selected: false },
+      { id: 'search_ads', label: '検索連動型広告など', selected: false },
     ],
   },
   {
@@ -149,9 +149,9 @@ const initialPesoData: PESOCategory[] = [
     color: '#F59E0B',
     bgLight: 'rgba(245,158,11,0.1)',
     tags: [
-      { id: 'google_review', label: 'Google口コミ', selected: true },
-      { id: 'tenshoku', label: '転職会議', selected: true },
-      { id: 'openwork', label: 'OpenWork', selected: false },
+      { id: 'broad_pr', label: '広義のPR', selected: false },
+      { id: 'narrow_pr', label: '狭義のPR（パブリシティ）', selected: false },
+      { id: 'strategic_pr', label: '戦略PRなど', selected: false },
     ],
   },
   {
@@ -161,13 +161,9 @@ const initialPesoData: PESOCategory[] = [
     color: '#10B981',
     bgLight: 'rgba(16,185,129,0.1)',
     tags: [
-      { id: 'career_site', label: '採用サイト', selected: true },
-      { id: 'instagram', label: '公式Instagram', selected: true },
-      { id: 'google_business', label: 'Googleビジネス', selected: true },
-      { id: 'blog', label: '採用ブログ', selected: false },
-      { id: 'form', label: '応募フォーム', selected: true },
-      { id: 'tel', label: '電話問合せ', selected: true },
-      { id: 'favorite', label: 'お気に入り機能', selected: true },
+      { id: 'corporate_site', label: 'コーポレートサイト', selected: false },
+      { id: 'brand_site', label: 'ブランドサイト', selected: false },
+      { id: 'content_site', label: 'コンテンツサイトなど', selected: false },
     ],
   },
   {
@@ -177,9 +173,9 @@ const initialPesoData: PESOCategory[] = [
     color: '#EC4899',
     bgLight: 'rgba(236,72,153,0.1)',
     tags: [
-      { id: 'insta_repost', label: 'Instagramリポスト', selected: false },
-      { id: 'twitter', label: 'X（Twitter）での言及', selected: false },
-      { id: 'line', label: 'LINEシェア', selected: false },
+      { id: 'sns', label: 'SNS', selected: false },
+      { id: 'review_site', label: 'クチコミ（レビュー）サイト', selected: false },
+      { id: 'video_site', label: '動画共有サイトなど', selected: false },
     ],
   },
 ]
@@ -214,7 +210,7 @@ export default function PESOPage() {
     prefecture: '',
   })
 
-  const toggleTag = (categoryKey: string, tagId: string) => {
+  const _toggleTag = (categoryKey: string, tagId: string) => {
     setPesoData((prev) =>
       prev.map((category) =>
         category.key === categoryKey
@@ -445,6 +441,7 @@ export default function PESOPage() {
     { id: 'funnel', label: 'ファネル切り口', icon: Filter },
     { id: 'conversion', label: 'Imp→PV→CV', icon: Zap },
     { id: 'journey', label: '求職者の動き', icon: Users },
+    { id: 'matrix', label: 'マーケティングマトリクス', icon: LayoutGrid },
   ]
 
   // Arrange categories in the order: Paid (top-left), Earned (top-right), Owned (bottom-left), Shared (bottom-right)
@@ -667,12 +664,15 @@ export default function PESOPage() {
               </span>
             </div>
 
-            {/* 2x2 Grid */}
+            {/* 2x2 Grid - 100% height */}
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
+                gridTemplateRows: 'repeat(2, 1fr)',
                 gap: '16px',
+                height: 'calc(100vh - 280px)',
+                minHeight: '400px',
               }}
             >
               {orderedCategories.map((category) => (
@@ -682,11 +682,13 @@ export default function PESOPage() {
                     background: '#FFFFFF',
                     border: '1px solid #E4E4E7',
                     borderRadius: '8px',
-                    padding: '20px',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
                   {/* Category header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
                     <div
                       style={{
                         width: 36,
@@ -711,28 +713,22 @@ export default function PESOPage() {
                     </div>
                   </div>
 
-                  {/* Tags */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {/* Bullet list */}
+                  <ul style={{ listStyle: 'disc', paddingLeft: '20px', margin: 0, flex: 1 }}>
                     {category.tags.map((tag) => (
-                      <button
+                      <li
                         key={tag.id}
-                        onClick={() => toggleTag(category.key, tag.id)}
                         style={{
-                          padding: '6px 14px',
-                          border: tag.selected ? `1px solid ${category.color}` : '1px solid #E4E4E7',
-                          borderRadius: '6px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: tag.selected ? '#FFFFFF' : '#FFFFFF',
-                          color: tag.selected ? category.color : '#A1A1AA',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
+                          fontSize: '14px',
+                          color: '#52525B',
+                          lineHeight: 1.8,
+                          marginBottom: '4px',
                         }}
                       >
                         {tag.label}
-                      </button>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               ))}
             </div>
@@ -884,6 +880,238 @@ export default function PESOPage() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Marketing Matrix View - PESO × ファネル統合 */}
+        {viewMode === 'matrix' && (
+          <div style={{ height: 'calc(100vh - 280px)', minHeight: '500px', position: 'relative' }}>
+            {/* 軸ラベル - 左側 */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '-60px',
+                top: '50%',
+                transform: 'translateY(-50%) rotate(-90deg)',
+                fontSize: '12px',
+                color: '#A1A1AA',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              広く浅く ← → 狭く深く
+            </div>
+
+            {/* 軸ラベル - 上部 */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '-30px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                fontSize: '12px',
+                color: '#A1A1AA',
+              }}
+            >
+              種まき（投資対効果）
+            </div>
+
+            {/* 軸ラベル - 下部 */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-30px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                fontSize: '12px',
+                color: '#A1A1AA',
+              }}
+            >
+              収穫（費用対効果）
+            </div>
+
+            {/* ダイヤモンド型グリッド */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateRows: '1fr 1fr 1fr',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                height: '100%',
+                padding: '20px 40px',
+              }}
+            >
+              {/* 認知施策 - 上部全幅 */}
+              <div
+                style={{
+                  gridColumn: '1 / 3',
+                  background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(139,92,246,0.08) 100%)',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    認
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#18181B' }}>認知施策</div>
+                    <div style={{ fontSize: '12px', color: '#A1A1AA' }}>広く浅く・潜在顧客へのリーチ</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', flex: 1 }}>
+                  <PESOChip color="#3B82F6" label="P" items={['マス広告', '求人媒体掲載', 'ディスプレイ広告']} />
+                  <PESOChip color="#F59E0B" label="E" items={['プレスリリース', 'メディア露出', '業界イベント登壇']} />
+                  <PESOChip color="#EC4899" label="S" items={['SNS拡散', '社員シェア', 'バイラルコンテンツ']} />
+                  <PESOChip color="#10B981" label="O" items={['採用ブログ', 'コンテンツマーケ', '企業PR動画']} />
+                </div>
+              </div>
+
+              {/* 育成施策 - 左中 */}
+              <div
+                style={{
+                  background: 'rgba(16,185,129,0.08)',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '8px',
+                      background: '#10B981',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    育
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>育成施策</div>
+                    <div style={{ fontSize: '11px', color: '#A1A1AA' }}>明日の売上づくり</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#71717A', marginBottom: '8px', padding: '6px 8px', background: 'rgba(16,185,129,0.1)', borderRadius: '4px' }}>
+                  潜在顧客の育成・投資対効果重視
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                  <PESOChipSmall color="#3B82F6" label="P" text="リマーケティング広告" />
+                  <PESOChipSmall color="#F59E0B" label="E" text="社員インタビュー記事" />
+                  <PESOChipSmall color="#EC4899" label="S" text="SNS継続運用" />
+                  <PESOChipSmall color="#10B981" label="O" text="メルマガ・ナーチャリング" />
+                </div>
+              </div>
+
+              {/* 獲得施策 - 右中 */}
+              <div
+                style={{
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '8px',
+                      background: '#F59E0B',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    獲
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#18181B' }}>獲得施策</div>
+                    <div style={{ fontSize: '11px', color: '#A1A1AA' }}>今日の売上づくり</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#71717A', marginBottom: '8px', padding: '6px 8px', background: 'rgba(245,158,11,0.1)', borderRadius: '4px' }}>
+                  顕在顧客の刈り取り・効率性重視
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                  <PESOChipSmall color="#3B82F6" label="P" text="検索連動型広告" />
+                  <PESOChipSmall color="#F59E0B" label="E" text="口コミサイト評価" />
+                  <PESOChipSmall color="#EC4899" label="S" text="応募者の口コミ拡散" />
+                  <PESOChipSmall color="#10B981" label="O" text="採用LP・エントリーフォーム" />
+                </div>
+              </div>
+
+              {/* CRM - 下部全幅 */}
+              <div
+                style={{
+                  gridColumn: '1 / 3',
+                  background: 'linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(236,72,153,0.08) 100%)',
+                  border: '1px solid #E4E4E7',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    CRM
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#18181B' }}>CRM（関係性維持）</div>
+                    <div style={{ fontSize: '12px', color: '#A1A1AA' }}>狭く深く・既存接点の活用</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', flex: 1 }}>
+                  <PESOChip color="#3B82F6" label="P" items={['タレントプール広告', 'リターゲティング']} />
+                  <PESOChip color="#F59E0B" label="E" items={['リファラル採用', '従業員紹介']} />
+                  <PESOChip color="#EC4899" label="S" items={['内定者コミュニティ', 'OB/OGネットワーク']} />
+                  <PESOChip color="#10B981" label="O" items={['採用メルマガ', 'イベント案内', 'タレントプール']} />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1791,5 +2019,103 @@ export default function PESOPage() {
         </div>
       )}
     </>
+  )
+}
+
+// PESO Chip component for matrix view
+function PESOChip({ color, label, items }: { color: string; label: string; items: string[] }) {
+  return (
+    <div
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #E4E4E7',
+        borderRadius: '8px',
+        padding: '12px',
+        borderLeft: `3px solid ${color}`,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginBottom: '8px',
+        }}
+      >
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: '4px',
+            background: color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontSize: '11px',
+            fontWeight: 700,
+          }}
+        >
+          {label}
+        </div>
+        <span style={{ fontSize: '11px', fontWeight: 600, color }}>
+          {label === 'P' ? 'Paid' : label === 'E' ? 'Earned' : label === 'S' ? 'Shared' : 'Owned'}
+        </span>
+      </div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {items.map((item, idx) => (
+          <li
+            key={idx}
+            style={{
+              fontSize: '11px',
+              color: '#52525B',
+              lineHeight: 1.6,
+              paddingLeft: '8px',
+              position: 'relative',
+            }}
+          >
+            <span style={{ position: 'absolute', left: 0, color: '#A1A1AA' }}>•</span>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// Small PESO Chip for compact display
+function PESOChipSmall({ color, label, text }: { color: string; label: string; text: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '6px 10px',
+        background: '#FFFFFF',
+        border: '1px solid #E4E4E7',
+        borderRadius: '6px',
+        borderLeft: `3px solid ${color}`,
+      }}
+    >
+      <div
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '4px',
+          background: color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#FFFFFF',
+          fontSize: '10px',
+          fontWeight: 700,
+          flexShrink: 0,
+        }}
+      >
+        {label}
+      </div>
+      <span style={{ fontSize: '11px', color: '#52525B' }}>{text}</span>
+    </div>
   )
 }
