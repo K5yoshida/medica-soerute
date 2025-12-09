@@ -425,7 +425,7 @@ JSON配列のみを返してください。`
         results.set(item.keyword, {
           intent,
           confidence: 'high',
-          reason: item.reason,
+          reason: `[SERP] ${item.reason}`,  // Web検索でSERP確認済みであることを明示
           serpVerified: true,
         })
       }
@@ -472,7 +472,7 @@ JSON配列のみを返してください。`
         results.set(keyword, {
           ...classification,
           serpVerified: false,
-          reason: `[フォールバック] ${classification.reason}`,
+          reason: `[AI分類] ${classification.reason}`,  // Web検索なしのAI分類であることを明示
         })
       })
     } catch (fallbackError) {
