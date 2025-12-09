@@ -15,7 +15,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { DocumentSidebar } from '@/components/catalog/document-sidebar'
-import { FilterDropdown, KeywordFilterDropdown } from '@/components/catalog/rakko-filter-dropdown'
+import { FilterDropdown, KeywordFilterDropdown, MultiSelectFilterDropdown } from '@/components/catalog/rakko-filter-dropdown'
 
 interface MediaDetail {
   id: string
@@ -132,6 +132,8 @@ export default function MediaDetailPage() {
   const [estimatedTraffic, setEstimatedTraffic] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
   const [cpc, setCpc] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
   const [competition, setCompetition] = useState<{ min: number | null; max: number | null }>({ min: null, max: null })
+  const [selectedQueryTypes, setSelectedQueryTypes] = useState<string[]>([])
+  const [selectedIntents, setSelectedIntents] = useState<string[]>([])
 
   // フィルターがアクティブか判定
   const hasActiveFilters =
@@ -142,7 +144,9 @@ export default function MediaDetailPage() {
     searchRank.min !== null || searchRank.max !== null ||
     estimatedTraffic.min !== null || estimatedTraffic.max !== null ||
     cpc.min !== null || cpc.max !== null ||
-    competition.min !== null || competition.max !== null
+    competition.min !== null || competition.max !== null ||
+    selectedQueryTypes.length > 0 ||
+    selectedIntents.length > 0
 
   // 全フィルターリセット
   const handleResetFilters = () => {
@@ -154,6 +158,8 @@ export default function MediaDetailPage() {
     setEstimatedTraffic({ min: null, max: null })
     setCpc({ min: null, max: null })
     setCompetition({ min: null, max: null })
+    setSelectedQueryTypes([])
+    setSelectedIntents([])
     setCurrentPage(1)
   }
 
@@ -204,6 +210,15 @@ export default function MediaDetailPage() {
         params.set('search', searchQuery)
       }
 
+      // キーワードフィルター「含む」「除外」をAPIに送信
+      // API側でDBレベルでフィルタし、正しい件数が計算される
+      if (includeKeywords) {
+        params.set('search', includeKeywords.trim())
+      }
+      if (excludeKeywords) {
+        params.set('exclude', excludeKeywords.trim())
+      }
+
       // フィルター適用
       if (seoDifficulty.min !== null) params.set('seo_difficulty_min', String(seoDifficulty.min))
       if (seoDifficulty.max !== null) params.set('seo_difficulty_max', String(seoDifficulty.max))
@@ -218,6 +233,10 @@ export default function MediaDetailPage() {
       if (competition.min !== null) params.set('competition_min', String(competition.min))
       if (competition.max !== null) params.set('competition_max', String(competition.max))
 
+      // 検索目的・検索段階フィルター
+      if (selectedQueryTypes.length > 0) params.set('query_type', selectedQueryTypes.join(','))
+      if (selectedIntents.length > 0) params.set('intent', selectedIntents.join(','))
+
       const res = await fetch(`/api/media/${id}/keywords?${params.toString()}`)
       const data = await res.json()
 
@@ -225,26 +244,8 @@ export default function MediaDetailPage() {
         throw new Error(data.error?.message || 'キーワードの取得に失敗しました')
       }
 
-      // キーワードフィルターはフロントエンドで適用
-      let filteredKeywords = data.data?.keywords || []
-      if (includeKeywords) {
-        const includes = includeKeywords.split(/[\s\n]+/).filter(k => k.trim())
-        if (includes.length > 0) {
-          filteredKeywords = filteredKeywords.filter((kw: Keyword) =>
-            includes.some(inc => kw.keyword.toLowerCase().includes(inc.toLowerCase()))
-          )
-        }
-      }
-      if (excludeKeywords) {
-        const excludes = excludeKeywords.split(/[\s\n]+/).filter(k => k.trim())
-        if (excludes.length > 0) {
-          filteredKeywords = filteredKeywords.filter((kw: Keyword) =>
-            !excludes.some(exc => kw.keyword.toLowerCase().includes(exc.toLowerCase()))
-          )
-        }
-      }
-
-      setKeywords(filteredKeywords)
+      // 全てのキーワードフィルターはAPI側で処理済み（search, exclude, intent, query_type）
+      setKeywords(data.data?.keywords || [])
       setKeywordStats(data.data?.stats || null)
       setIntentStats(data.data?.intent_stats || null)
       setTotalCount(data.pagination?.total || 0)
@@ -253,7 +254,7 @@ export default function MediaDetailPage() {
     } finally {
       setIsLoadingKeywords(false)
     }
-  }, [id, currentPage, sortBy, sortOrder, searchQuery, seoDifficulty, searchVolume, searchRank, estimatedTraffic, cpc, competition, includeKeywords, excludeKeywords])
+  }, [id, currentPage, sortBy, sortOrder, searchQuery, seoDifficulty, searchVolume, searchRank, estimatedTraffic, cpc, competition, includeKeywords, excludeKeywords, selectedQueryTypes, selectedIntents])
 
   useEffect(() => {
     fetchMedia()
@@ -509,6 +510,32 @@ export default function MediaDetailPage() {
             excludeKeywords={excludeKeywords}
             onIncludeChange={(v) => { setIncludeKeywords(v); setCurrentPage(1) }}
             onExcludeChange={(v) => { setExcludeKeywords(v); setCurrentPage(1) }}
+          />
+
+          {/* 検索目的フィルター */}
+          <MultiSelectFilterDropdown
+            label="検索目的"
+            options={Object.entries(QUERY_TYPE_LABELS).map(([value, { label, color, bgColor }]) => ({
+              value,
+              label,
+              color,
+              bgColor,
+            }))}
+            selectedValues={selectedQueryTypes}
+            onChange={(values) => { setSelectedQueryTypes(values); setCurrentPage(1) }}
+          />
+
+          {/* 検索段階フィルター */}
+          <MultiSelectFilterDropdown
+            label="検索段階"
+            options={Object.entries(INTENT_LABELS).map(([value, { label, color, bgColor }]) => ({
+              value,
+              label,
+              color,
+              bgColor,
+            }))}
+            selectedValues={selectedIntents}
+            onChange={(values) => { setSelectedIntents(values); setCurrentPage(1) }}
           />
 
           {/* SEO難易度 */}

@@ -3,6 +3,9 @@
   "framework": "nextjs",
   "regions": ["hnd1"],
   "functions": {
+    "src/app/api/inngest/route.ts": {
+      "maxDuration": 300
+    },
     "src/app/api/admin/import/route.ts": {
       "maxDuration": 60
     },

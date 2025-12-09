@@ -57,6 +57,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
+    const exclude = searchParams.get('exclude') // 除外キーワード
     const sortBy = searchParams.get('sort_by') || 'monthly_search_volume'
     const sortOrder = searchParams.get('sort_order') || 'desc'
     const limit = parseInt(searchParams.get('limit') || '50', 10)
@@ -64,6 +65,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
     // ラッコキーワード風フィルターパラメータ
     const intent = searchParams.get('intent') // branded,transactional,informational,b2b のカンマ区切り
+    const queryType = searchParams.get('query_type') // Do,Know,Go,Buy のカンマ区切り
     const seoDifficultyMin = searchParams.get('seo_difficulty_min')
     const seoDifficultyMax = searchParams.get('seo_difficulty_max')
     const searchVolumeMin = searchParams.get('search_volume_min')
@@ -77,11 +79,93 @@ export async function GET(request: Request, { params }: RouteParams) {
     const cpcMin = searchParams.get('cpc_min')
     const cpcMax = searchParams.get('cpc_max')
 
+    // キーワード関連フィルタ（search, exclude, intent, queryType）がある場合、
+    // 先にkeywordsテーブルでフィルタしてIDを取得（DBレベルでのフィルタリング）
+    let matchingKeywordIds: string[] | null = null
+    const hasKeywordFilter = search || exclude || intent || queryType
+
+    if (hasKeywordFilter) {
+      const { data: allKeywords, error: keywordError } = await supabase
+        .from('keywords')
+        .select('id, keyword, intent, query_type')
+
+      if (keywordError) {
+        console.error('Failed to fetch keywords:', keywordError)
+        return NextResponse.json(
+          { success: false, error: { code: 'DB_ERROR', message: 'キーワード検索に失敗しました' } },
+          { status: 500 }
+        )
+      }
+
+      type KeywordRecord = { id: string; keyword: string | null; intent: string | null; query_type: string | null }
+      let filteredKeywordRecords = (allKeywords || []) as KeywordRecord[]
+
+      // 検索フィルタ（部分一致）
+      if (search) {
+        const searchLower = search.toLowerCase()
+        filteredKeywordRecords = filteredKeywordRecords.filter(
+          (k) => k.keyword?.toLowerCase().includes(searchLower)
+        )
+      }
+
+      // 除外フィルタ
+      if (exclude) {
+        const excludeLower = exclude.toLowerCase()
+        filteredKeywordRecords = filteredKeywordRecords.filter(
+          (k) => !k.keyword?.toLowerCase().includes(excludeLower)
+        )
+      }
+
+      // intentフィルタ（検索段階）
+      if (intent) {
+        const intentArray = intent.split(',').map((i) => i.trim().toLowerCase())
+        filteredKeywordRecords = filteredKeywordRecords.filter(
+          (k) => k.intent && intentArray.includes(k.intent.toLowerCase())
+        )
+      }
+
+      // queryTypeフィルタ（検索目的）
+      if (queryType) {
+        const queryTypeArray = queryType.split(',').map((q) => q.trim())
+        filteredKeywordRecords = filteredKeywordRecords.filter(
+          (k) => k.query_type && queryTypeArray.includes(k.query_type)
+        )
+      }
+
+      matchingKeywordIds = filteredKeywordRecords.map((k) => k.id)
+
+      // マッチするキーワードがない場合は空の結果を返す
+      if (matchingKeywordIds.length === 0) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            media_id: id,
+            media_name: media.name,
+            keywords: [],
+            stats: { total: 0, total_monthly_search_volume: 0, total_estimated_traffic: 0 },
+            intent_stats: {
+              branded: { count: 0, volume: 0, traffic: 0 },
+              transactional: { count: 0, volume: 0, traffic: 0 },
+              informational: { count: 0, volume: 0, traffic: 0 },
+              b2b: { count: 0, volume: 0, traffic: 0 },
+              unknown: { count: 0, volume: 0, traffic: 0 },
+            },
+          },
+          pagination: { total: 0, limit, offset, unfiltered_total: 0 },
+        })
+      }
+    }
+
     // キーワード取得クエリ（media_keywordsからkeywordsをリレーションで取得）
     let query = supabase
       .from('media_keywords')
       .select('*, keywords(id, keyword, intent, query_type)', { count: 'exact' })
       .eq('media_id', id)
+
+    // 検索フィルタがある場合、マッチするkeyword_idでフィルタ
+    if (matchingKeywordIds !== null) {
+      query = query.in('keyword_id', matchingKeywordIds)
+    }
 
     // SEO難易度フィルター
     if (seoDifficultyMin) {
@@ -171,24 +255,8 @@ export async function GET(request: Request, { params }: RouteParams) {
       )
     }
 
-    // フィルタリング（検索とintentはリレーション先のデータを使うため後処理）
-    let filteredKeywords = (mediaKeywords || []) as MediaKeywordWithRelation[]
-
-    // テキスト検索（キーワード名でフィルタ）
-    if (search) {
-      const searchLower = search.toLowerCase()
-      filteredKeywords = filteredKeywords.filter(
-        (mk) => mk.keywords?.keyword?.toLowerCase().includes(searchLower)
-      )
-    }
-
-    // 応募意図フィルター
-    if (intent) {
-      const intentArray = intent.split(',').map((i) => i.trim().toLowerCase())
-      filteredKeywords = filteredKeywords.filter(
-        (mk) => mk.keywords?.intent && intentArray.includes(mk.keywords.intent.toLowerCase())
-      )
-    }
+    // 全てのフィルタはDBレベルで処理済み（search, exclude, intent, 数値フィルタ）
+    const filteredKeywords = (mediaKeywords || []) as MediaKeywordWithRelation[]
 
     // レスポンス用にフラット化
     const keywords = filteredKeywords.map((mk) => ({
@@ -251,6 +319,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       }
     })
 
+    // 全てのフィルタはDBレベルで処理済みなので、countが正確な件数
     return NextResponse.json({
       success: true,
       data: {
@@ -264,6 +333,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         total: count || 0,
         limit,
         offset,
+        unfiltered_total: count || 0,
       },
     })
   } catch (error) {

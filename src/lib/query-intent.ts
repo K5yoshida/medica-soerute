@@ -1,24 +1,28 @@
 // ===========================================
 // Query Intent Classification
 // クエリ（検索キーワード）の意図を分類するロジック
+//
+// 設計原則:
+// 1. ハードコードを完全排除
+// 2. ルールは「確実に判定できるもの」のみ
+// 3. それ以外は全てAI判定（Web検索で実際のSERPを確認）
+// 4. 媒体名リストに依存しない
+// 5. 実際のGoogle検索結果（SERP）を見て判断 = 永続的に正しい判定
 // ===========================================
 
+import Anthropic from '@anthropic-ai/sdk'
+
 /**
- * クエリ意図の種類（4カテゴリ + unknown）
+ * クエリ意図の種類（4カテゴリ）
  * - branded: 指名検索（サービス名・媒体名・企業名を直接検索）
  * - transactional: 応募意図（求人・転職など応募意図が明確）
  * - informational: 情報収集（知識・ハウツー・一般情報・条件比較含む）
  * - b2b: 法人向け（採用担当者・人事向けの情報）
- * - unknown: 判定不能（AI判定が必要）
  */
-export type QueryIntent = 'branded' | 'transactional' | 'informational' | 'b2b' | 'unknown'
+export type QueryIntent = 'branded' | 'transactional' | 'informational' | 'b2b'
 
 /**
  * SEO標準のクエリタイプ（Do/Know/Go/Buy）
- * - Do: 行動したい（応募、登録など）
- * - Know: 知りたい（情報収集）
- * - Go: 特定サイトへ行きたい（指名検索）
- * - Buy: 購入/比較検討したい
  */
 export type QueryType = 'Do' | 'Know' | 'Go' | 'Buy'
 
@@ -30,239 +34,103 @@ export interface IntentClassification {
   confidence: 'high' | 'medium' | 'low'
   reason: string
   queryType?: QueryType
+  serpVerified?: boolean  // SERP検証済みフラグ
 }
 
 /**
- * 既知の求人媒体名リスト（業界横断）
- * CSV取り込み時に動的に追加される想定
+ * ルールベース分類の結果（AI判定が必要かどうかを含む）
  */
-const KNOWN_MEDIA_NAMES = [
-  // 総合転職サイト
-  'マイナビ', 'マイナビ転職', 'マイナビエージェント',
-  'リクナビ', 'リクナビnext', 'リクルートエージェント',
-  'indeed', 'インディード',
-  'エン転職', 'エン・ジャパン',
-  'doda', 'デューダ', 'パーソルキャリア',
-  'type転職', 'タイプ転職',
-  'ビズリーチ', 'bizreach',
-  'wantedly', 'ウォンテッドリー',
-  'green', 'グリーン',
-  'paiza', 'パイザ',
-  // 派遣・パート・アルバイト
-  'バイトル', 'タウンワーク', 'フロムエー', 'はたらこねっと',
-  'リクナビ派遣', 'エン派遣', 'スタッフサービス',
-  // 医療・介護・福祉系
-  'ジョブメドレー', 'jobmedley', 'job-medley',
-  'ナース人材バンク', 'レバウェル', 'ナースではたらこ',
-  'グッピー', 'コメディカルドットコム',
-  'e介護転職', 'カイゴジョブ', 'きらケア', 'かいご畑',
-  // IT・エンジニア系
-  'レバテック', 'geekly', 'ギークリー', 'findy',
-]
+interface RuleBasedResult {
+  classification: IntentClassification | null  // nullならAI判定が必要
+  needsAI: boolean
+}
 
 /**
- * 職種キーワード（業界横断で汎用的な職種名）
+ * 確実にルールで判定できるパターンのみ分類
+ *
+ * ルール判定対象:
+ * - 「求人」「転職」「募集」を含む → transactional
+ * - 「採用」+ B2Bワード → b2b
+ *
+ * それ以外（branded含む）は全てAI + SERP検証
  */
-const JOB_KEYWORDS = [
-  // IT・エンジニア系
-  'エンジニア', 'プログラマー', 'SE', 'システムエンジニア', 'webエンジニア',
-  'インフラエンジニア', 'データサイエンティスト', 'PM', 'プロジェクトマネージャー',
-  'デザイナー', 'webデザイナー', 'UIデザイナー', 'UXデザイナー',
-  // 営業・販売系
-  '営業', '営業職', 'セールス', '販売', '販売員', '店長', '接客',
-  // 事務・管理系
-  '事務', '一般事務', '経理', '人事', '総務', '秘書', '受付',
-  '管理', '管理職', 'マネージャー',
-  // 製造・技術系
-  '製造', '工場', '技術者', '品質管理', '生産管理', '機械オペレーター',
-  // 医療・介護・福祉系
-  '看護師', 'ナース', '准看護師', '正看護師',
-  '介護', 'ヘルパー', '介護福祉士', 'ケアマネ', 'ケアマネージャー',
-  '薬剤師', '登録販売者', '保育士', '幼稚園教諭',
-  '歯科衛生士', '歯科助手', '歯科医師',
-  '理学療法士', '作業療法士', '言語聴覚士', 'PT', 'OT', 'ST',
-  '医療事務', '調剤事務', '医師', 'ドクター',
-  '管理栄養士', '栄養士', '社会福祉士', '精神保健福祉士',
-  // サービス・その他
-  'ドライバー', '運転手', '配送', '物流', '倉庫',
-  '建設', '施工管理', '現場監督', '大工', '電気工事士',
-  '飲食', '調理師', 'シェフ', 'ホールスタッフ',
-  'コンサルタント', 'アナリスト', 'マーケティング', '広報',
-]
-
-/**
- * 条件キーワード（求職者向け）
- */
-const CONDITION_KEYWORDS = [
-  '年収', '給料', '給与', '月給', '時給', '賞与', 'ボーナス',
-  '年間休日', '休日', '休み', '有給', '週休',
-  '残業', '夜勤', '日勤', 'オンコール',
-  '福利厚生', '社会保険', '退職金',
-]
-
-/**
- * 法人向け（B2B）キーワード
- * 採用担当者・人事が検索するキーワード
- */
-const B2B_KEYWORDS = [
-  // 採用コスト・費用関連
-  '採用コスト', '採用費用', '採用単価', '紹介手数料', '紹介料',
-  '求人広告 費用', '求人広告 料金', '採用予算', '採用費',
-  // 法規制・労務関連
-  '最低賃金', '労働基準法', '労基法', '雇用契約', '労働契約',
-  '雇用保険', '労災保険', '社会保険料', '36協定',
-  '配置基準', '人員配置', '人員基準',
-  // 助成金・補助金
-  '助成金', '補助金', 'キャリアアップ助成金', '雇用調整助成金',
-  'トライアル雇用', '特定求職者雇用開発助成金',
-  // 採用・人事戦略
-  '採用計画', '採用戦略', '人材確保', '人材不足', '人手不足',
-  '定着率', '離職率', '採用難', '人材獲得',
-  '採用成功率', '採用効率', 'ダイレクトリクルーティング',
-  // 求人媒体選定（法人視点）
-  '求人媒体 比較', '求人サイト 比較', '人材紹介 比較',
-  '求人媒体 選び方', '採用媒体', '採用チャネル',
-  // 人事・労務管理
-  '人事評価', '給与計算', '勤怠管理', 'シフト管理',
-  '採用管理', 'ATS', '応募者管理',
-]
-
-/**
- * 法人向け確定キーワード（これが含まれていれば確実にB2B）
- */
-const B2B_STRONG_KEYWORDS = [
-  '採用コスト', '採用単価', '紹介手数料', '採用予算',
-  '配置基準', '人員配置', '36協定', '助成金', '補助金',
-  '採用計画', '採用戦略', '定着率', '離職率',
-  '採用媒体', '採用チャネル', 'ATS', '応募者管理',
-]
-
-/**
- * クエリ意図を分類する
- * ルールベースで高速に判定し、判定不能な場合はunknownを返す
- */
-export function classifyQueryIntent(keyword: string): IntentClassification {
+function classifyByRule(keyword: string): RuleBasedResult {
   const k = keyword.toLowerCase().trim()
 
   // 空文字チェック
   if (!k) {
-    return { intent: 'unknown', confidence: 'low', reason: '空のキーワード' }
+    return {
+      classification: { intent: 'informational', confidence: 'low', reason: '空のキーワード' },
+      needsAI: false,
+    }
   }
 
-  // 1. 法人向け（B2B）- 強いキーワードを最優先でチェック
-  for (const b2bKeyword of B2B_STRONG_KEYWORDS) {
-    if (k.includes(b2bKeyword.toLowerCase())) {
-      return {
-        intent: 'b2b',
+  // ===========================================
+  // 1. 応募意図チェック（確実なパターン）
+  // ===========================================
+  if (/求人|転職|募集/.test(k)) {
+    return {
+      classification: {
+        intent: 'transactional',
         confidence: 'high',
-        reason: `法人向けキーワード「${b2bKeyword}」を含む`,
-      }
+        reason: '求人・転職関連キーワードを含む',
+      },
+      needsAI: false,
     }
   }
 
-  // 2. 法人向け（B2B）- 通常のB2Bキーワード
-  for (const b2bKeyword of B2B_KEYWORDS) {
-    if (k.includes(b2bKeyword.toLowerCase())) {
+  // ===========================================
+  // 2. B2Bチェック（確実なパターン）
+  // ===========================================
+  // 「採用」+ 明確なB2Bワードの組み合わせ
+  if (/採用/.test(k)) {
+    const b2bModifiers = ['費用', '管理', '担当', 'ログイン', '辞退', '代行', 'コスト', '単価', '掲載', '料金']
+    const hasB2BModifier = b2bModifiers.some(mod => k.includes(mod))
+    if (hasB2BModifier) {
       return {
-        intent: 'b2b',
-        confidence: 'medium',
-        reason: `採用担当向けキーワード「${b2bKeyword}」を含む`,
+        classification: {
+          intent: 'b2b',
+          confidence: 'high',
+          reason: '採用 + 法人向けワードの組み合わせ',
+        },
+        needsAI: false,
       }
     }
   }
 
-  // 3. 指名検索 - 媒体名を含む
-  for (const mediaName of KNOWN_MEDIA_NAMES) {
-    if (k.includes(mediaName.toLowerCase())) {
-      return {
-        intent: 'branded',
-        confidence: 'high',
-        reason: `媒体名「${mediaName}」を含む`,
-      }
-    }
-  }
-
-  // 4. 応募直前 - 求人意図が明確（求職者視点）
-  // 注: 「採用」は法人視点で使われることも多いが、「求人」「転職」「応募」は求職者視点
-  if (/求人|転職|募集|応募|中途採用/.test(k)) {
-    // 「採用」単体は法人視点の可能性があるので除外し、
-    // 「中途採用」のような求職者視点の場合のみマッチ
-    return {
-      intent: 'transactional',
-      confidence: 'high',
-      reason: '求人・転職関連キーワードを含む',
-    }
-  }
-
-  // 5. 情報収集 - ハウツー/解説/一般知識（優先度高）
-  if (/とは$|とは\s|書き方|意味|方法|やり方|平均|相場|違いは/.test(k)) {
-    return {
-      intent: 'informational',
-      confidence: 'high',
-      reason: '解説・ハウツー系キーワードを含む',
-    }
-  }
-
-  // 6. 情報収集 - 具体的数値を含む（求職者の条件検討）
-  if (/\d+日|\d+万|\d+円/.test(k)) {
-    return {
-      intent: 'informational',
-      confidence: 'high',
-      reason: '具体的な数値条件を含む',
-    }
-  }
-
-  // 7. 情報収集 - 比較系キーワード（求職者・法人両方あり得る）
-  if (/比較|ランキング|おすすめ|オススメ|人気|評判|口コミ|vs/.test(k)) {
-    // 「求人媒体 比較」「採用媒体」などはB2Bで先に判定済みなので
-    // ここに来るのは求職者視点の情報収集
-    return {
-      intent: 'informational',
-      confidence: 'high',
-      reason: '比較・評価系キーワードを含む',
-    }
-  }
-
-  // 8. 職種 × 条件 の組み合わせ判定 → 情報収集
-  const hasJob = JOB_KEYWORDS.some(job => k.includes(job.toLowerCase()))
-  const hasCondition = CONDITION_KEYWORDS.some(cond => k.includes(cond.toLowerCase()))
-
-  if (hasJob && hasCondition) {
-    return {
-      intent: 'informational',
-      confidence: 'medium',
-      reason: '職種と条件の組み合わせ',
-    }
-  }
-
-  // 9. 条件キーワード単体 → 情報収集
-  if (hasCondition && !hasJob) {
-    return {
-      intent: 'informational',
-      confidence: 'medium',
-      reason: '条件キーワード単体（一般情報）',
-    }
-  }
-
-  // 10. 職種キーワード単体 → 判定不能（求人か情報か不明）
-  if (hasJob && !hasCondition) {
-    return {
-      intent: 'unknown',
-      confidence: 'low',
-      reason: '職種キーワード単体（意図不明）',
-    }
-  }
-
-  // 判定不能
+  // ===========================================
+  // 3. それ以外は全てAI + SERP検証が必要
+  // branded判定も含めて実際の検索結果で判断
+  // ===========================================
   return {
-    intent: 'unknown',
-    confidence: 'low',
-    reason: 'ルールベースで判定不能',
+    classification: null,
+    needsAI: true,
   }
 }
 
 /**
- * バッチ処理用：複数キーワードを一括分類
+ * クエリ意図を分類する（同期版・ルールベースのみ）
+ * AI判定が必要な場合はinformationalをデフォルトで返す
+ *
+ * バッチ処理ではclassifyWithHybrid()を使用すること
+ */
+export function classifyQueryIntent(keyword: string): IntentClassification {
+  const result = classifyByRule(keyword)
+
+  if (result.classification) {
+    return result.classification
+  }
+
+  // AI判定が必要だがここでは呼べない → デフォルト返却
+  return {
+    intent: 'informational',
+    confidence: 'low',
+    reason: 'AI判定が必要',
+  }
+}
+
+/**
+ * バッチ処理用：複数キーワードを一括分類（ルールのみ）
  */
 export function classifyQueryIntents(keywords: string[]): Map<string, IntentClassification> {
   const results = new Map<string, IntentClassification>()
@@ -280,7 +148,6 @@ export const INTENT_LABELS: Record<QueryIntent, string> = {
   transactional: '応募意図',
   informational: '情報収集',
   b2b: '法人向け',
-  unknown: '未分類',
 }
 
 /**
@@ -291,7 +158,6 @@ export const INTENT_DESCRIPTIONS: Record<QueryIntent, string> = {
   transactional: '求人への応募意欲が高い状態',
   informational: '一般的な情報や知識を求めている（条件比較含む）',
   b2b: '採用担当者・人事が検索している',
-  unknown: 'AI分析が必要',
 }
 
 /**
@@ -315,47 +181,19 @@ export const QUERY_TYPE_DESCRIPTIONS: Record<QueryType, string> = {
 }
 
 /**
- * SEOクエリタイプを独立して分類する（intentとは別軸）
- *
- * Do: 行動系（登録、応募、申し込みなど）
- * Know: 情報系（〜とは、年収、資格、方法など）
- * Go: 指名系（特定サイト・施設名）
- * Buy: 比較選定系（おすすめ、ランキング、比較など）
+ * SEOクエリタイプを分類する
  */
 export function classifyQueryType(keyword: string): QueryType {
   const k = keyword.toLowerCase().trim()
 
   if (!k) {
-    return 'Know' // デフォルト
-  }
-
-  // ===========================================
-  // Go: 特定サイト・施設・サービスに行きたい
-  // ===========================================
-
-  // 媒体名・サービス名を含む場合
-  for (const mediaName of KNOWN_MEDIA_NAMES) {
-    if (k.includes(mediaName.toLowerCase())) {
-      return 'Go'
-    }
-  }
-
-  // 施設名パターン（〜病院、〜クリニック、〜薬局など）
-  if (/病院|クリニック|薬局|施設|センター|ホーム|園$/.test(k)) {
-    // ただし「病院 求人」などは除外（情報収集的）
-    if (!/求人|転職|募集|年収|給料/.test(k)) {
-      return 'Go'
-    }
+    return 'Know'
   }
 
   // ログイン、マイページなど明確な移動意図
   if (/ログイン|マイページ|会員登録|公式/.test(k)) {
     return 'Go'
   }
-
-  // ===========================================
-  // Do: 行動したい（応募、登録、申し込みなど）
-  // ===========================================
 
   // 行動系キーワード
   if (/応募|登録|申し込み|申込|エントリー|面接|履歴書|職務経歴書/.test(k)) {
@@ -367,10 +205,6 @@ export function classifyQueryType(keyword: string): QueryType {
     return 'Do'
   }
 
-  // ===========================================
-  // Buy: 比較選定したい（おすすめ、ランキングなど）
-  // ===========================================
-
   // 比較・選定キーワード
   if (/おすすめ|オススメ|ランキング|比較|vs|選び方|選ぶ|人気|評判|口コミ|レビュー/.test(k)) {
     return 'Buy'
@@ -381,12 +215,8 @@ export function classifyQueryType(keyword: string): QueryType {
     return 'Buy'
   }
 
-  // ===========================================
-  // Know: 情報を知りたい（デフォルト）
-  // ===========================================
-
   // 明確な情報収集キーワード
-  if (/とは|とは$|意味|方法|やり方|仕方|違い|メリット|デメリット/.test(k)) {
+  if (/とは|意味|方法|やり方|仕方|違い|メリット|デメリット/.test(k)) {
     return 'Know'
   }
 
@@ -397,13 +227,6 @@ export function classifyQueryType(keyword: string): QueryType {
 
   // 年収、給料、条件などの情報系
   if (/年収|給料|給与|月給|時給|平均|相場|資格|条件|休日|残業|夜勤/.test(k)) {
-    return 'Know'
-  }
-
-  // 求人・転職だけでは行動に直結しない（情報収集段階）
-  if (/求人|転職|募集|採用/.test(k)) {
-    // 「求人 おすすめ」はBuyで先にマッチ済み
-    // 「求人」単体や「看護師 求人」は情報収集
     return 'Know'
   }
 
@@ -434,46 +257,35 @@ export function getQueryTypeFromIntent(intent: QueryIntent): QueryType | null {
     case 'informational':
     case 'b2b':
       return 'Know'
-    case 'unknown':
-      return null
   }
 }
 
-/**
- * 媒体名を追加する（動的に拡張可能）
- */
-export function addMediaName(name: string): void {
-  if (!KNOWN_MEDIA_NAMES.includes(name.toLowerCase())) {
-    KNOWN_MEDIA_NAMES.push(name.toLowerCase())
-  }
-}
-
-/**
- * 現在の媒体名リストを取得
- */
-export function getMediaNames(): string[] {
-  return [...KNOWN_MEDIA_NAMES]
-}
-
 // ===========================================
-// Claude API を使った高精度分類
+// Claude API + Web検索を使った分類
 // ===========================================
-
-import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
 /**
- * Claude APIを使ってキーワードの意図を分類する
- * コスト効率のため、バッチで一括処理（並列実行で高速化）
+ * Claude APIをWeb検索付きで呼び出してキーワードを分類する
+ *
+ * 処理フロー:
+ * 1. キーワードをGoogleで検索（Web検索ツール使用）
+ * 2. SERPの上位結果を確認
+ * 3. 特定のサービス/企業の公式サイトが上位を占めているか確認
+ * 4. 占めていればbranded、それ以外は内容に応じて分類
+ *
+ * これにより「グリーン歯科」vs「グリーン（転職サイト）」の判別が可能
  */
-export async function classifyWithClaude(
+export async function classifyWithWebSearch(
   keywords: string[],
-  batchSize: number = 100
+  batchSize: number = 20  // Web検索はコストがかかるため小バッチ
 ): Promise<Map<string, IntentClassification>> {
   const results = new Map<string, IntentClassification>()
+
+  if (keywords.length === 0) return results
 
   // バッチに分割
   const batches: string[][] = []
@@ -481,7 +293,199 @@ export async function classifyWithClaude(
     batches.push(keywords.slice(i, i + batchSize))
   }
 
-  // 最大3バッチを並列で処理（API制限を考慮）
+  // 順次処理（Web検索のレート制限を考慮）
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]
+    console.log(`[classifyWithWebSearch] Batch ${i + 1}/${batches.length}: ${batch.length}件`)
+
+    const batchResults = await classifyBatchWithWebSearch(batch)
+
+    batchResults.forEach((classification, keyword) => {
+      results.set(keyword, classification)
+    })
+
+    // レート制限対策: バッチ間で少し待機
+    if (i < batches.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+  }
+
+  return results
+}
+
+/**
+ * バッチ単位でClaude API + Web検索を呼び出す
+ */
+async function classifyBatchWithWebSearch(
+  keywords: string[]
+): Promise<Map<string, IntentClassification>> {
+  const results = new Map<string, IntentClassification>()
+
+  if (keywords.length === 0) return results
+
+  const keywordList = keywords.map((k, i) => `${i + 1}. ${k}`).join('\n')
+
+  const systemPrompt = `あなたは求人・転職関連の検索クエリを分析する専門家です。
+Web検索ツールを使って実際のGoogle検索結果（SERP）を確認し、キーワードの意図を正確に分類してください。
+
+## 分類カテゴリ
+
+### 1. branded（指名検索）
+特定のサービス名・媒体名・企業名・施設名を直接検索している。
+
+**判定方法**: Web検索で確認し、SERPの上位3件が同一サービス/企業の公式ページで占められている場合。
+
+例:
+- 「ジョブメドレー」→ SERPにジョブメドレー公式が並ぶ → branded
+- 「マイナビ看護師」→ SERPにマイナビ看護師公式が並ぶ → branded
+- 「聖路加国際病院」→ SERPに病院公式サイトが並ぶ → branded
+
+**重要**:
+- 「グリーン歯科」→ SERPに各地の「〇〇グリーン歯科」が並ぶ → informational（一般名詞として使われている）
+- 「Green 転職」→ SERPにGreen（転職サイト）公式が並ぶ → branded
+
+### 2. transactional（応募意図）
+求人への応募・転職意図が明確。
+- 「〇〇 求人」「〇〇 転職」「〇〇 募集」
+- 応募行動に直結するキーワード
+
+### 3. informational（情報収集）
+一般的な情報・知識・ハウツー・条件比較を求めている。
+- 職種の説明、条件・待遇、ハウツー、比較・おすすめ
+- 一般的な職種名単体（応募意図なし）
+- SERPに多様なサイトが並ぶ（特定サービスが独占していない）
+
+### 4. b2b（法人向け）
+採用担当者・人事が検索するキーワード。
+- 採用コスト・費用、採用管理・システム、人材紹介手数料
+
+## 作業手順
+
+1. 各キーワードについて、Web検索ツールで実際に検索
+2. SERPの上位結果を確認
+3. 上位が特定サービス/企業の公式で独占されているか確認
+4. 独占されていればbranded、そうでなければ内容に応じて分類
+
+## 出力形式
+
+必ず以下のJSON形式で返してください：
+[
+  {"keyword": "キーワード1", "intent": "branded|transactional|informational|b2b", "reason": "分類理由（SERP確認結果を含む、30文字以内）"},
+  ...
+]`
+
+  const userPrompt = `以下の${keywords.length}件のキーワードを、Web検索で実際のSERPを確認して分類してください。
+
+キーワード:
+${keywordList}
+
+各キーワードをWeb検索し、SERPの上位結果に基づいて正確に分類してください。
+JSON配列のみを返してください。`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 4096,
+      messages: [
+        { role: 'user', content: userPrompt }
+      ],
+      system: systemPrompt,
+      tools: [{
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: Math.min(keywords.length, 30),  // 1キーワードあたり最大1回のWeb検索（バッチ30件なら最大30回）
+      }],
+    })
+
+    // レスポンスからテキストを取得
+    // Web検索ツールを使用した場合、contentは複数のブロックになる可能性がある
+    let responseText = ''
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        responseText += block.text
+      }
+    }
+
+    // JSONをパース
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) {
+      console.error('[classifyBatchWithWebSearch] JSON not found in response:', responseText.slice(0, 500))
+      throw new Error('JSON not found in response')
+    }
+
+    const classifications = JSON.parse(jsonMatch[0]) as Array<{
+      keyword: string
+      intent: string
+      reason: string
+    }>
+
+    for (const item of classifications) {
+      const intent = item.intent as QueryIntent
+      if (['branded', 'transactional', 'informational', 'b2b'].includes(intent)) {
+        results.set(item.keyword, {
+          intent,
+          confidence: 'high',
+          reason: item.reason,
+          serpVerified: true,
+        })
+      }
+    }
+
+    // 分類されなかったキーワードにデフォルト値を設定
+    for (const keyword of keywords) {
+      if (!results.has(keyword)) {
+        results.set(keyword, {
+          intent: 'informational',
+          confidence: 'low',
+          reason: 'AI分類失敗',
+          serpVerified: false,
+        })
+      }
+    }
+
+    // 使用状況をログ
+    if (response.usage) {
+      const serverToolUse = (response.usage as { server_tool_use?: { web_search_requests?: number } }).server_tool_use
+      console.log(`[classifyBatchWithWebSearch] Web検索回数: ${serverToolUse?.web_search_requests || 0}`)
+    }
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[classifyBatchWithWebSearch] Error:', errorMessage)
+
+    // エラー時はすべてinformationalに
+    for (const keyword of keywords) {
+      results.set(keyword, {
+        intent: 'informational',
+        confidence: 'low',
+        reason: `分類エラー: ${errorMessage.slice(0, 30)}`,
+        serpVerified: false,
+      })
+    }
+  }
+
+  return results
+}
+
+/**
+ * Web検索なしのClaude API呼び出し（コスト節約用）
+ * ルールで確定できないがWeb検索までは不要な場合に使用
+ */
+export async function classifyWithClaude(
+  keywords: string[],
+  batchSize: number = 100
+): Promise<Map<string, IntentClassification>> {
+  const results = new Map<string, IntentClassification>()
+
+  if (keywords.length === 0) return results
+
+  // バッチに分割
+  const batches: string[][] = []
+  for (let i = 0; i < keywords.length; i += batchSize) {
+    batches.push(keywords.slice(i, i + batchSize))
+  }
+
+  // 最大3バッチを並列で処理
   const PARALLEL_LIMIT = 3
   for (let i = 0; i < batches.length; i += PARALLEL_LIMIT) {
     const parallelBatches = batches.slice(i, i + PARALLEL_LIMIT)
@@ -499,7 +503,7 @@ export async function classifyWithClaude(
 }
 
 /**
- * バッチ単位でClaude APIを呼び出す
+ * バッチ単位でClaude APIを呼び出す（Web検索なし）
  */
 async function classifyBatchWithClaude(
   keywords: string[]
@@ -510,21 +514,27 @@ async function classifyBatchWithClaude(
 
   const keywordList = keywords.map((k, i) => `${i + 1}. ${k}`).join('\n')
 
-  const systemPrompt = `あなたは求人・転職関連の検索クエリを分析する専門家です。業界を問わず、あらゆる職種の求人検索キーワードを分析できます。
+  const systemPrompt = `あなたは求人・転職関連の検索クエリを分析する専門家です。
+医療・介護・福祉業界を中心に、あらゆる職種の求人検索キーワードを分析できます。
 
 検索キーワードを以下の4つの意図カテゴリに分類してください：
 
-1. **branded（指名検索）**: 特定のサービス名・媒体名・企業名を直接検索している
-   例: 「マイナビ」「リクナビ」「indeed」「○○株式会社」「ジョブメドレー」
+## 1. branded（指名検索）
+特定のサービス名・媒体名・企業名・施設名を直接検索している。
+- 求人媒体: マイナビ、リクナビ、Indeed、ジョブメドレー、ナース人材バンク等
+- 企業名: ○○株式会社、○○法人、○○グループ等
+- 施設名: ○○病院、○○クリニック等（具体的な固有名詞）
 
-2. **transactional（応募意図）**: 求人への応募・転職意図が明確
-   例: 「エンジニア 求人」「営業 転職」「事務 募集」「正社員 採用」「看護師 中途採用」
+**重要**: 一般名詞（「病院」「クリニック」単体）はbrandedではない。
 
-3. **informational（情報収集）**: 一般的な情報・知識・ハウツー・条件比較を求めている
-   例: 「エンジニアとは」「営業職 仕事内容」「履歴書 書き方」「年収 平均」「おすすめ転職サイト」「年間休日120日」
+## 2. transactional（応募意図）
+求人への応募・転職意図が明確。
 
-4. **b2b（法人向け）**: 採用担当者・人事が検索するキーワード
-   例: 「採用コスト」「最低賃金」「紹介手数料」「助成金」「離職率」「人手不足」「採用媒体 比較」
+## 3. informational（情報収集）
+一般的な情報・知識・ハウツー・条件比較を求めている。
+
+## 4. b2b（法人向け）
+採用担当者・人事が検索するキーワード。
 
 回答は必ず以下のJSON形式で返してください：
 [
@@ -532,7 +542,7 @@ async function classifyBatchWithClaude(
   ...
 ]`
 
-  const userPrompt = `以下のキーワードを分類してください：
+  const userPrompt = `以下の${keywords.length}件のキーワードを分類してください：
 
 ${keywordList}
 
@@ -548,13 +558,11 @@ JSON配列のみを返してください。`
       system: systemPrompt,
     })
 
-    // レスポンスからテキストを取得
     const content = response.content[0]
     if (content.type !== 'text') {
       throw new Error('Unexpected response type')
     }
 
-    // JSONをパース
     const jsonMatch = content.text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) {
       throw new Error('JSON not found in response')
@@ -573,30 +581,31 @@ JSON配列のみを返してください。`
           intent,
           confidence: 'high',
           reason: item.reason,
+          serpVerified: false,
         })
       }
     }
 
-    // 分類されなかったキーワードにデフォルト値を設定
     for (const keyword of keywords) {
       if (!results.has(keyword)) {
         results.set(keyword, {
-          intent: 'unknown',
+          intent: 'informational',
           confidence: 'low',
           reason: 'AI分類失敗',
+          serpVerified: false,
         })
       }
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('Claude API error:', errorMessage)
-    console.error('Full error:', error)
-    // エラー時はすべてunknownに（エラー内容を記録）
+    console.error('[classifyBatchWithClaude] Error:', errorMessage)
+
     for (const keyword of keywords) {
       results.set(keyword, {
-        intent: 'unknown',
+        intent: 'informational',
         confidence: 'low',
-        reason: `AI分類エラー: ${errorMessage.slice(0, 50)}`,
+        reason: `分類エラー: ${errorMessage.slice(0, 30)}`,
+        serpVerified: false,
       })
     }
   }
@@ -605,37 +614,88 @@ JSON配列のみを返してください。`
 }
 
 /**
- * ハイブリッド分類：ルールベース → 未分類のみAI分類
- * コスト効率と精度のバランスを取る
+ * ハイブリッド分類：ルールベース → AI + SERP検証
+ *
+ * フロー:
+ * 1. 全キーワードをルールでチェック
+ * 2. 「求人」「転職」「募集」を含む → transactional確定
+ * 3. 「採用」+ B2Bワード → b2b確定
+ * 4. それ以外はAI + Web検索でSERPを確認して分類
+ *    - branded候補は実際のSERPで検証
+ *    - 特定サービスが上位を独占していればbranded確定
  */
 export async function classifyWithHybrid(
   keywords: string[]
 ): Promise<Map<string, IntentClassification>> {
   const results = new Map<string, IntentClassification>()
-  const unknownKeywords: string[] = []
+  const needAIKeywords: string[] = []
 
   // まずルールベースで分類
   for (const keyword of keywords) {
-    const result = classifyQueryIntent(keyword)
-    results.set(keyword, result)
+    const ruleResult = classifyByRule(keyword)
 
-    // unknownのものはAI分類対象に
-    if (result.intent === 'unknown') {
-      unknownKeywords.push(keyword)
+    if (ruleResult.classification && !ruleResult.needsAI) {
+      // ルールで確定
+      results.set(keyword, ruleResult.classification)
+    } else {
+      // AI + SERP検証が必要
+      needAIKeywords.push(keyword)
     }
   }
 
-  // 未分類が多い場合のみAI分類を実行
-  if (unknownKeywords.length > 0) {
-    console.log(`AI分類対象: ${unknownKeywords.length}件`)
+  console.log(`[classifyWithHybrid] ルール確定: ${results.size}件, AI+SERP検証必要: ${needAIKeywords.length}件`)
 
-    const aiResults = await classifyWithClaude(unknownKeywords)
+  // AI + Web検索でSERPを確認して分類
+  if (needAIKeywords.length > 0) {
+    const aiResults = await classifyWithWebSearch(needAIKeywords)
 
-    // AI結果で上書き
     aiResults.forEach((classification, keyword) => {
       results.set(keyword, classification)
     })
   }
 
   return results
+}
+
+// ===========================================
+// 後方互換性のための非推奨関数
+// ===========================================
+
+/**
+ * @deprecated 媒体名リストは使用しない設計に変更
+ */
+export function loadMediaNames(): Promise<never[]> {
+  console.warn('loadMediaNames is deprecated. Media name detection is now handled by AI + Web Search.')
+  return Promise.resolve([])
+}
+
+/**
+ * @deprecated 媒体名リストは使用しない設計に変更
+ */
+export function getMediaNamesSync(): never[] {
+  console.warn('getMediaNamesSync is deprecated. Media name detection is now handled by AI + Web Search.')
+  return []
+}
+
+/**
+ * @deprecated 媒体名リストは使用しない設計に変更
+ */
+export function clearMediaNameCache(): void {
+  console.warn('clearMediaNameCache is deprecated. No cache exists.')
+}
+
+/**
+ * @deprecated 媒体名リストは使用しない設計に変更
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function addMediaName(name: string): void {
+  console.warn('addMediaName is deprecated. Media name detection is now handled by AI + Web Search.')
+}
+
+/**
+ * @deprecated 媒体名リストは使用しない設計に変更
+ */
+export function getMediaNames(): string[] {
+  console.warn('getMediaNames is deprecated. Media name detection is now handled by AI + Web Search.')
+  return []
 }

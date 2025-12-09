@@ -70,27 +70,23 @@ export function FilterDropdown({
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex flex-col items-start px-4 py-2.5 rounded-md border transition min-w-[130px] ${
+        className={`flex flex-col items-start px-2 py-1 rounded border transition text-[11px] w-[100px] ${
           isActive
-            ? 'border-teal-500 bg-teal-50'
-            : 'border-zinc-200 bg-white hover:border-zinc-300'
+            ? 'border-teal-500 bg-teal-50 text-teal-700'
+            : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-500'
         }`}
       >
-        <span className={`text-[13px] font-medium ${isActive ? 'text-teal-700' : 'text-zinc-700'}`}>
-          {label}
-        </span>
         <div className="flex items-center gap-1 w-full">
-          <span className={`text-[11px] px-1.5 py-0.5 rounded ${
-            isActive ? 'bg-teal-100 text-teal-700' : 'bg-zinc-100 text-zinc-500'
-          }`}>
-            {getDisplayText()}
-          </span>
-          <ChevronDown className={`w-3 h-3 ml-auto ${isActive ? 'text-teal-600' : 'text-zinc-400'}`} />
+          <span className="whitespace-nowrap truncate">{label}</span>
+          <ChevronDown className="w-3 h-3 flex-shrink-0" />
         </div>
+        <span className={`text-[10px] truncate w-full ${isActive ? 'text-teal-600' : 'text-zinc-400'}`}>
+          {getDisplayText()}
+        </span>
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+        <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg z-50 min-w-[180px]">
           {/* プリセット選択 */}
           <div className="p-1">
             {presets.map((preset, idx) => (
@@ -138,6 +134,128 @@ export function FilterDropdown({
   )
 }
 
+// マルチセレクトフィルター（チェックボックス選択）
+interface MultiSelectOption {
+  value: string
+  label: string
+  color?: string
+  bgColor?: string
+}
+
+interface MultiSelectFilterProps {
+  label: string
+  options: MultiSelectOption[]
+  selectedValues: string[]
+  onChange: (values: string[]) => void
+}
+
+export function MultiSelectFilterDropdown({
+  label,
+  options,
+  selectedValues,
+  onChange,
+}: MultiSelectFilterProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleToggle = (value: string) => {
+    if (selectedValues.includes(value)) {
+      onChange(selectedValues.filter((v) => v !== value))
+    } else {
+      onChange([...selectedValues, value])
+    }
+  }
+
+  const handleSelectAll = () => {
+    if (selectedValues.length === options.length) {
+      onChange([])
+    } else {
+      onChange(options.map((o) => o.value))
+    }
+  }
+
+  const isActive = selectedValues.length > 0
+  const getDisplayText = () => {
+    if (selectedValues.length === 0) return '指定なし'
+    if (selectedValues.length === options.length) return '全て'
+    if (selectedValues.length === 1) {
+      return options.find((o) => o.value === selectedValues[0])?.label || selectedValues[0]
+    }
+    return `${selectedValues.length}件`
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex flex-col items-start px-2 py-1 rounded border transition text-[11px] w-[100px] ${
+          isActive
+            ? 'border-teal-500 bg-teal-50 text-teal-700'
+            : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-500'
+        }`}
+      >
+        <div className="flex items-center gap-1 w-full">
+          <span className="whitespace-nowrap truncate">{label}</span>
+          <ChevronDown className="w-3 h-3 flex-shrink-0" />
+        </div>
+        <span className={`text-[10px] truncate w-full ${isActive ? 'text-teal-600' : 'text-zinc-400'}`}>
+          {getDisplayText()}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+          {/* 全選択/解除 */}
+          <div className="p-2 border-b border-zinc-100">
+            <button
+              onClick={handleSelectAll}
+              className="text-[12px] text-teal-600 hover:text-teal-700"
+            >
+              {selectedValues.length === options.length ? '全て解除' : '全て選択'}
+            </button>
+          </div>
+          {/* オプション */}
+          <div className="p-1 max-h-[200px] overflow-y-auto">
+            {options.map((option) => (
+              <label
+                key={option.value}
+                className="flex items-center gap-2 px-3 py-2 text-[13px] text-zinc-700 hover:bg-zinc-50 rounded cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedValues.includes(option.value)}
+                  onChange={() => handleToggle(option.value)}
+                  className="w-4 h-4 rounded border-zinc-300 text-teal-600 focus:ring-teal-500"
+                />
+                {option.color && option.bgColor ? (
+                  <span
+                    className="px-2 py-0.5 rounded text-[12px] font-medium"
+                    style={{ color: option.color, backgroundColor: option.bgColor }}
+                  >
+                    {option.label}
+                  </span>
+                ) : (
+                  <span>{option.label}</span>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // キーワードフィルター（テキスト入力）
 interface KeywordFilterProps {
   includeKeywords: string
@@ -177,32 +295,28 @@ export function KeywordFilterDropdown({
   const getDisplayText = () => {
     if (!isActive) return '指定なし'
     const parts = []
-    if (includeKeywords) parts.push(`含む: ${includeKeywords.split(/[\s\n]+/).length}件`)
-    if (excludeKeywords) parts.push(`除外: ${excludeKeywords.split(/[\s\n]+/).length}件`)
-    return parts.join(' / ') || '指定なし'
+    if (includeKeywords) parts.push(`含${includeKeywords.split(/[\s\n]+/).filter(Boolean).length}`)
+    if (excludeKeywords) parts.push(`除${excludeKeywords.split(/[\s\n]+/).filter(Boolean).length}`)
+    return parts.join('/') || '指定なし'
   }
 
   return (
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex flex-col items-start px-4 py-2.5 rounded-md border transition min-w-[130px] ${
+        className={`flex flex-col items-start px-2 py-1 rounded border transition text-[11px] w-[100px] ${
           isActive
-            ? 'border-teal-500 bg-teal-50'
-            : 'border-zinc-200 bg-white hover:border-zinc-300'
+            ? 'border-teal-500 bg-teal-50 text-teal-700'
+            : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-500'
         }`}
       >
-        <span className={`text-[13px] font-medium ${isActive ? 'text-teal-700' : 'text-zinc-700'}`}>
-          キーワード
-        </span>
         <div className="flex items-center gap-1 w-full">
-          <span className={`text-[11px] px-1.5 py-0.5 rounded ${
-            isActive ? 'bg-teal-100 text-teal-700' : 'bg-zinc-100 text-zinc-500'
-          }`}>
-            {getDisplayText()}
-          </span>
-          <ChevronDown className={`w-3 h-3 ml-auto ${isActive ? 'text-teal-600' : 'text-zinc-400'}`} />
+          <span className="whitespace-nowrap truncate">キーワード</span>
+          <ChevronDown className="w-3 h-3 flex-shrink-0" />
         </div>
+        <span className={`text-[10px] truncate w-full ${isActive ? 'text-teal-600' : 'text-zinc-400'}`}>
+          {getDisplayText()}
+        </span>
       </button>
 
       {isOpen && (

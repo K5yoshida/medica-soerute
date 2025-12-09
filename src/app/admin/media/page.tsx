@@ -18,11 +18,8 @@ import {
   ChevronLeft,
   ChevronRight,
   List,
-  RefreshCw,
-  Clock,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-react'
+import { ImportJobSidebar, useImportJobCount } from '@/components/admin/import-job-sidebar'
 
 /**
  * SC-904: 媒体マスター管理画面
@@ -93,40 +90,6 @@ type SortKey =
   | 'email_pct'
   | 'social_pct'
 
-// ジョブ関連の型定義
-type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
-
-interface ImportJob {
-  id: string
-  status: JobStatus
-  file_name: string
-  import_type: string
-  media_id: string | null
-  total_rows: number | null
-  processed_rows: number
-  success_count: number
-  error_count: number
-  current_step: string | null
-  created_at: string
-}
-
-const STATUS_LABELS: Record<JobStatus, string> = {
-  pending: '待機中',
-  processing: '処理中',
-  completed: '完了',
-  failed: '失敗',
-  cancelled: 'キャンセル',
-}
-
-const STEP_LABELS: Record<string, string> = {
-  parse: 'CSVパース',
-  db_lookup: 'DB検索',
-  rule_classification: 'ルール分類',
-  ai_classification: 'AI分類',
-  db_insert: 'データ保存',
-  finalize: '完了処理',
-}
-
 export default function MediaPage() {
   const router = useRouter()
   const [media, setMedia] = useState<Media[]>([])
@@ -163,47 +126,7 @@ export default function MediaPage() {
 
   // ジョブ一覧サイドモーダル
   const [showJobList, setShowJobList] = useState(false)
-  const [jobs, setJobs] = useState<ImportJob[]>([])
-  const [selectedJob, setSelectedJob] = useState<ImportJob | null>(null)
-
-  // ジョブ一覧取得
-  const fetchJobs = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/import/jobs?limit=10')
-      const data = await res.json()
-      if (data.success && data.data) {
-        setJobs(data.data.jobs)
-        // 選択中のジョブがあれば更新
-        if (selectedJob) {
-          const updatedJob = data.data.jobs.find((j: ImportJob) => j.id === selectedJob.id)
-          if (updatedJob) {
-            setSelectedJob(updatedJob)
-          }
-        }
-      }
-    } catch {
-      console.error('Failed to fetch jobs')
-    }
-  }, [selectedJob])
-
-  // 初回ジョブ取得（バッジ表示用）
-  useEffect(() => {
-    fetchJobs()
-  }, [fetchJobs])
-
-  // ジョブ一覧のポーリング
-  useEffect(() => {
-    if (!showJobList) return
-
-    const hasProcessingJob = jobs.some((j) => j.status === 'processing' || j.status === 'pending')
-    const interval = hasProcessingJob ? 2000 : 5000
-
-    const pollingInterval = setInterval(fetchJobs, interval)
-
-    return () => {
-      clearInterval(pollingInterval)
-    }
-  }, [fetchJobs, showJobList, jobs])
+  const processingJobCount = useImportJobCount()
 
   const fetchMedia = useCallback(async () => {
     setLoading(true)
@@ -672,7 +595,7 @@ export default function MediaPage() {
           >
             <List className="h-4 w-4" />
             ジョブ一覧
-            {jobs.filter((j) => j.status === 'processing').length > 0 && (
+            {processingJobCount > 0 && (
               <span
                 style={{
                   background: '#EF4444',
@@ -683,7 +606,7 @@ export default function MediaPage() {
                   fontWeight: 600,
                 }}
               >
-                {jobs.filter((j) => j.status === 'processing').length}
+                {processingJobCount}
               </span>
             )}
           </button>
@@ -1496,317 +1419,13 @@ export default function MediaPage() {
       )}
 
       {/* Job List Side Modal */}
-      {showJobList && (
-        <>
-          {/* Overlay */}
-          <div
-            onClick={() => {
-              setShowJobList(false)
-              setSelectedJob(null)
-            }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.3)',
-              zIndex: 50,
-            }}
-          />
-          {/* Side Panel */}
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: '400px',
-              background: '#FFFFFF',
-              boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
-              zIndex: 51,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {/* Header */}
-            <div
-              style={{
-                padding: '20px 24px',
-                borderBottom: '1px solid #E4E4E7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span style={{ fontSize: '16px', fontWeight: 600, color: '#18181B' }}>
-                ジョブ一覧
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  onClick={fetchJobs}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '6px 10px',
-                    background: '#FFFFFF',
-                    border: '1px solid #E4E4E7',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    color: '#52525B',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  更新
-                </button>
-                <button
-                  onClick={() => router.push('/admin/import')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '6px 10px',
-                    background: '#7C3AED',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    color: '#FFFFFF',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  新規インポート
-                </button>
-                <button
-                  onClick={() => {
-                    setShowJobList(false)
-                    setSelectedJob(null)
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '32px',
-                    height: '32px',
-                    background: '#F4F4F5',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <X className="h-4 w-4" style={{ color: '#52525B' }} />
-                </button>
-              </div>
-            </div>
-
-            {/* Job List */}
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              {jobs.length === 0 ? (
-                <div style={{ padding: '48px 24px', textAlign: 'center', color: '#A1A1AA' }}>
-                  <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p style={{ fontSize: '14px' }}>ジョブがありません</p>
-                  <button
-                    onClick={() => router.push('/admin/import')}
-                    style={{
-                      marginTop: '16px',
-                      padding: '8px 16px',
-                      background: '#7C3AED',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    CSVインポートを開始
-                  </button>
-                </div>
-              ) : selectedJob ? (
-                // ジョブ詳細表示
-                <div style={{ padding: '24px' }}>
-                  <button
-                    onClick={() => setSelectedJob(null)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '6px 10px',
-                      background: '#F4F4F5',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      color: '#52525B',
-                      cursor: 'pointer',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    ← 一覧に戻る
-                  </button>
-
-                  <div style={{ marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      {selectedJob.status === 'processing' && (
-                        <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#7C3AED' }} />
-                      )}
-                      {selectedJob.status === 'completed' && (
-                        <CheckCircle2 className="h-5 w-5" style={{ color: '#10B981' }} />
-                      )}
-                      {selectedJob.status === 'failed' && (
-                        <XCircle className="h-5 w-5" style={{ color: '#EF4444' }} />
-                      )}
-                      {selectedJob.status === 'pending' && (
-                        <Clock className="h-5 w-5" style={{ color: '#A1A1AA' }} />
-                      )}
-                      <span style={{ fontSize: '16px', fontWeight: 600, color: '#18181B' }}>
-                        {STATUS_LABELS[selectedJob.status]}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: '14px', color: '#52525B', wordBreak: 'break-all' }}>
-                      {selectedJob.file_name}
-                    </p>
-                  </div>
-
-                  {selectedJob.status === 'processing' && selectedJob.total_rows && (
-                    <div style={{ marginBottom: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '12px', color: '#71717A' }}>進捗</span>
-                        <span style={{ fontSize: '12px', color: '#52525B' }}>
-                          {selectedJob.processed_rows} / {selectedJob.total_rows}
-                        </span>
-                      </div>
-                      <div style={{ height: '8px', background: '#E4E4E7', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div
-                          style={{
-                            height: '100%',
-                            background: '#7C3AED',
-                            width: `${(selectedJob.processed_rows / selectedJob.total_rows) * 100}%`,
-                            transition: 'width 0.3s ease',
-                          }}
-                        />
-                      </div>
-                      {selectedJob.current_step && (
-                        <p style={{ fontSize: '12px', color: '#71717A', marginTop: '6px' }}>
-                          現在: {STEP_LABELS[selectedJob.current_step] || selectedJob.current_step}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div style={{ padding: '12px', background: '#F4F4F5', borderRadius: '6px' }}>
-                      <div style={{ fontSize: '11px', color: '#71717A', marginBottom: '4px' }}>成功</div>
-                      <div style={{ fontSize: '18px', fontWeight: 600, color: '#10B981' }}>
-                        {selectedJob.success_count.toLocaleString()}
-                      </div>
-                    </div>
-                    <div style={{ padding: '12px', background: '#F4F4F5', borderRadius: '6px' }}>
-                      <div style={{ fontSize: '11px', color: '#71717A', marginBottom: '4px' }}>エラー</div>
-                      <div style={{ fontSize: '18px', fontWeight: 600, color: selectedJob.error_count > 0 ? '#EF4444' : '#52525B' }}>
-                        {selectedJob.error_count.toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: '20px', fontSize: '12px', color: '#A1A1AA' }}>
-                    作成: {new Date(selectedJob.created_at).toLocaleString('ja-JP')}
-                  </div>
-                </div>
-              ) : (
-                // ジョブ一覧
-                jobs.map((job) => (
-                  <div
-                    key={job.id}
-                    onClick={() => setSelectedJob(job)}
-                    style={{
-                      padding: '16px 24px',
-                      borderBottom: '1px solid #F4F4F5',
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      transition: 'background 0.15s ease',
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.background = '#FAFAFA'
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.background = 'transparent'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                      {job.status === 'processing' && (
-                        <Loader2 className="h-4 w-4 animate-spin" style={{ color: '#7C3AED' }} />
-                      )}
-                      {job.status === 'completed' && (
-                        <CheckCircle2 className="h-4 w-4" style={{ color: '#10B981' }} />
-                      )}
-                      {job.status === 'failed' && (
-                        <XCircle className="h-4 w-4" style={{ color: '#EF4444' }} />
-                      )}
-                      {job.status === 'cancelled' && (
-                        <X className="h-4 w-4" style={{ color: '#A1A1AA' }} />
-                      )}
-                      {job.status === 'pending' && (
-                        <Clock className="h-4 w-4" style={{ color: '#A1A1AA' }} />
-                      )}
-                      <span
-                        style={{
-                          fontSize: '14px',
-                          fontWeight: 500,
-                          color: '#18181B',
-                          flex: 1,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {job.file_name}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginLeft: '26px' }}>
-                      <span style={{ fontSize: '12px', color: '#71717A' }}>
-                        {STATUS_LABELS[job.status]}
-                        {job.status === 'processing' && job.current_step && (
-                          <> - {STEP_LABELS[job.current_step] || job.current_step}</>
-                        )}
-                      </span>
-                      <span style={{ fontSize: '12px', color: '#A1A1AA' }}>
-                        {new Date(job.created_at).toLocaleString('ja-JP', {
-                          month: 'numeric',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    {job.status === 'processing' && job.total_rows && (
-                      <div
-                        style={{
-                          height: '4px',
-                          background: '#E4E4E7',
-                          borderRadius: '2px',
-                          marginTop: '8px',
-                          marginLeft: '26px',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: '100%',
-                            background: '#7C3AED',
-                            width: `${(job.processed_rows / job.total_rows) * 100}%`,
-                            transition: 'width 0.3s ease',
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
+      <ImportJobSidebar
+        isOpen={showJobList}
+        onClose={() => setShowJobList(false)}
+        onJobSelect={(jobId) => {
+          router.push(`/admin/import?job=${jobId}`)
+        }}
+      />
     </>
   )
 }

@@ -8,7 +8,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import {
   classifyQueryIntent,
   classifyQueryType,
-  classifyWithClaude,
+  classifyWithWebSearch,
   IntentClassification,
   QueryType,
 } from '@/lib/query-intent'
@@ -17,13 +17,13 @@ import { sendTrialExpirationNotification } from '@/lib/email'
 /**
  * バッチ処理のサイズ定数
  *
- * Vercel Functionsは60秒タイムアウト制限があるため、
- * 各step.run()内の処理が60秒以内に収まるよう設計
+ * Vercel Pro: maxDuration 300秒に設定
+ * 各step.run()内の処理が300秒以内に収まるよう設計
  */
 const DB_BATCH_SIZE = 500           // DB挿入: 1バッチあたりの件数
-const DB_LOOKUP_BATCH_SIZE = 1000   // DB検索: 1バッチあたりの件数（INクエリの上限考慮）
-const AI_BATCH_PER_STEP = 50        // AI分類: 1stepあたりの処理件数
-const AI_BATCH_SIZE = 50            // Claude API: 1リクエストあたりの件数
+const DB_LOOKUP_BATCH_SIZE = 200    // DB検索: 1バッチあたりの件数（日本語キーワードはURLエンコードで膨張するため小さめに設定）
+const AI_BATCH_PER_STEP = 30        // AI分類: 1stepあたりの処理件数（Vercel Pro 300秒対応）
+const AI_BATCH_SIZE = 30            // Claude API: 1リクエストあたりの件数
 const PROGRESS_UPDATE_INTERVAL = 500 // 進捗更新間隔
 
 /**
@@ -131,8 +131,11 @@ export const importCsvJob = inngest.createFunction(
       // BOM除去
       content = content.replace(/^\uFEFF/, '')
 
-      // CSVをパース
-      const lines = content.split('\n').filter((line) => line.trim())
+      // CSVをパース（Windows形式のCRLF改行に対応するため\rを除去）
+      const lines = content
+        .split('\n')
+        .map((line) => line.replace(/\r$/, ''))
+        .filter((line) => line.trim())
       if (lines.length < 2) {
         throw new Error('CSVにデータがありません')
       }
@@ -456,7 +459,9 @@ export const importCsvJob = inngest.createFunction(
         const result = classifyQueryIntent(keyword)
         results.set(keyword, result)
 
-        if (result.intent === 'unknown') {
+        // AI判定が必要なキーワード（ルールで確定できなかったもの）を収集
+        // classifyQueryIntentはAI判定が必要な場合、reason: 'AI判定が必要' を返す
+        if (result.reason === 'AI判定が必要') {
           unknownKeywords.push(keyword)
         }
       }
@@ -514,16 +519,17 @@ export const importCsvJob = inngest.createFunction(
         }
 
         try {
-          const results = await classifyWithClaude(keywords, AI_BATCH_SIZE)
+          // Claude Web Search を使用してSERP検証付きの高精度分類を実行
+          const results = await classifyWithWebSearch(keywords, AI_BATCH_SIZE)
           console.log(`AI分類バッチ ${batchIndex + 1} 完了: ${results.size}件`)
           return Object.fromEntries(results)
         } catch (error) {
           console.error(`AI分類バッチ ${batchIndex + 1} エラー:`, error)
-          // エラー時はunknownのまま返す
+          // エラー時はinformationalをデフォルトで返す
           const fallbackResults: Record<string, IntentClassification> = {}
           for (const kw of keywords) {
             fallbackResults[kw] = {
-              intent: 'unknown',
+              intent: 'informational',
               confidence: 'low',
               reason: 'AI分類エラー',
             }
@@ -696,81 +702,174 @@ export const importCsvJob = inngest.createFunction(
         }
       }
 
-      // media_idが指定されている場合はmedia_keywordsも作成
-      if (mediaId && parsedData.rows.length > 0) {
-        const normalizedKeywords = parsedData.rows.map((r) => r.normalizedKeyword)
+      // media_keywordsの挿入は別ステップ（insert-media-keywords）で実行
+      // 同じジョブで挿入したkeywordsのIDを取得して返す（並列実行問題の解決）
+      const insertedKeywordIds: Record<string, string> = {}
+      const normalizedKeywordsList = queryBatch.map(q => q.keyword_normalized)
 
-        // keywordsテーブルからIDを取得（バッチ処理で分割）
-        const keywordToId = new Map<string, string>()
-        for (let i = 0; i < normalizedKeywords.length; i += DB_LOOKUP_BATCH_SIZE) {
-          const batch = normalizedKeywords.slice(i, i + DB_LOOKUP_BATCH_SIZE)
-          const { data: keywordIds, error: lookupError } = await supabase
-            .from('keywords')
-            .select('id, keyword_normalized')
-            .in('keyword_normalized', batch)
+      for (let i = 0; i < normalizedKeywordsList.length; i += DB_LOOKUP_BATCH_SIZE) {
+        const batch = normalizedKeywordsList.slice(i, i + DB_LOOKUP_BATCH_SIZE)
+        const { data: keywordIds } = await supabase
+          .from('keywords')
+          .select('id, keyword_normalized')
+          .in('keyword_normalized', batch)
 
-          if (lookupError) {
-            console.warn('keywords lookup error:', lookupError.message)
-            continue
-          }
-
-          if (keywordIds) {
-            keywordIds.forEach((q: { id: string; keyword_normalized: string }) => {
-              keywordToId.set(q.keyword_normalized, q.id)
-            })
-          }
-        }
-
-        console.log(`media_keywords: ${keywordToId.size}件のキーワードIDを取得`)
-
-        if (keywordToId.size > 0) {
-          const mediaKeywordsBatch = parsedData.rows
-            .map((row) => {
-              const keywordId = keywordToId.get(row.normalizedKeyword)
-              if (!keywordId) return null
-
-              return {
-                keyword_id: keywordId,
-                media_id: mediaId,
-                ranking_position: row.searchRank,
-                monthly_search_volume: row.searchVolume,
-                estimated_traffic: row.traffic,
-                cpc: row.cpc,
-                competition_level: row.competition,
-                seo_difficulty: row.seoDifficulty,
-                landing_url: row.url,
-                source_file: fileName,
-              }
-            })
-            .filter(Boolean)
-
-          console.log(`media_keywords: ${mediaKeywordsBatch.length}件をupsert予定`)
-
-          let mediaKeywordsSuccess = 0
-          let mediaKeywordsError = 0
-
-          for (let i = 0; i < mediaKeywordsBatch.length; i += DB_BATCH_SIZE) {
-            const batch = mediaKeywordsBatch.slice(i, i + DB_BATCH_SIZE)
-            const { error: mediaError } = await supabase
-              .from('media_keywords')
-              .upsert(batch, {
-                onConflict: 'media_id,keyword_id',
-                ignoreDuplicates: false,
-              })
-
-            if (mediaError) {
-              console.warn('media_keywords batch error:', mediaError.message)
-              mediaKeywordsError += batch.length
-            } else {
-              mediaKeywordsSuccess += batch.length
-            }
-          }
-
-          console.log(`media_keywords: 完了 (成功: ${mediaKeywordsSuccess}, エラー: ${mediaKeywordsError})`)
+        if (keywordIds) {
+          keywordIds.forEach((k: { id: string; keyword_normalized: string }) => {
+            insertedKeywordIds[k.keyword_normalized] = k.id
+          })
         }
       }
 
-      return { successCount, errorCount, errors, uniqueCount: queryBatch.length, duplicateCount, verifiedSkippedCount }
+      console.log(`[db-insert] ${Object.keys(insertedKeywordIds).length}件のkeyword_idを取得`)
+
+      return { successCount, errorCount, errors, uniqueCount: queryBatch.length, duplicateCount, verifiedSkippedCount, insertedKeywordIds }
+    })
+
+    // =========================================
+    // Step 5.5: media_keywords挿入（新ステップとして分離）
+    // insertResult.insertedKeywordIdsを優先使用（並列実行問題の解決）
+    // =========================================
+    await step.run('insert-media-keywords', async () => {
+      console.log(`[insert-media-keywords] 開始: mediaId=${mediaId}, rows=${parsedData.rows.length}`)
+
+      // supabaseクライアントは先頭で初期化（upsertでも使用するため）
+      const supabase = createServiceClient()
+
+      if (!mediaId || parsedData.rows.length === 0) {
+        console.log(`[insert-media-keywords] スキップ: mediaId=${mediaId}, rows=${parsedData.rows.length}`)
+        return { inserted: 0, errors: 0 }
+      }
+
+      // キーワードIDマップ: 常にDBから取得（Inngestキャッシュ問題を回避）
+      // insertResultに依存しない設計に変更
+      const keywordToId = new Map<string, string>()
+
+      // 全ての正規化キーワードをDBから取得
+      const allNormalized = parsedData.rows.map((r) => r.normalizedKeyword)
+      // 重複を排除
+      const uniqueNormalized = Array.from(new Set(allNormalized))
+      console.log(`[insert-media-keywords] キーワードID取得: ${uniqueNormalized.length}件（重複排除後）`)
+
+      // 全キーワードをDBから取得（insertResultに依存しない）
+      if (uniqueNormalized.length > 0) {
+        const totalBatches = Math.ceil(uniqueNormalized.length / DB_LOOKUP_BATCH_SIZE)
+        console.log(`[insert-media-keywords] DBからキーワードID取得: ${uniqueNormalized.length}件 (${totalBatches}バッチ)`)
+
+        for (let i = 0; i < uniqueNormalized.length; i += DB_LOOKUP_BATCH_SIZE) {
+          const batchIndex = Math.floor(i / DB_LOOKUP_BATCH_SIZE) + 1
+          const batch = uniqueNormalized.slice(i, i + DB_LOOKUP_BATCH_SIZE)
+
+          try {
+            const { data: keywordIds, error: lookupError } = await supabase
+              .from('keywords')
+              .select('id, keyword_normalized')
+              .in('keyword_normalized', batch)
+
+            if (lookupError) {
+              console.error(`[insert-media-keywords] バッチ${batchIndex}/${totalBatches} エラー:`, {
+                message: lookupError.message,
+                code: lookupError.code,
+                details: lookupError.details,
+                hint: lookupError.hint,
+                batchSize: batch.length,
+                sampleKeyword: batch[0]?.substring(0, 50)
+              })
+              continue
+            }
+
+            if (keywordIds) {
+              keywordIds.forEach((q: { id: string; keyword_normalized: string }) => {
+                keywordToId.set(q.keyword_normalized, q.id)
+              })
+              if (batchIndex % 10 === 0 || batchIndex === totalBatches) {
+                console.log(`[insert-media-keywords] バッチ${batchIndex}/${totalBatches} 完了: ${keywordIds.length}件取得`)
+              }
+            }
+          } catch (err) {
+            console.error(`[insert-media-keywords] バッチ${batchIndex}/${totalBatches} 例外:`, err)
+            continue
+          }
+        }
+      }
+
+      console.log(`[insert-media-keywords] 合計${keywordToId.size}件のキーワードIDを取得`)
+
+      if (keywordToId.size === 0) {
+        console.log(`[insert-media-keywords] keywordToIdが空のためスキップ`)
+        return { inserted: 0, errors: 0 }
+      }
+
+      // 重複排除: 同じkeyword_idは後の行で上書き（CSVに同じキーワードが複数ある場合対策）
+      const mediaKeywordsMap = new Map<string, {
+        keyword_id: string
+        media_id: string
+        ranking_position: number | null
+        monthly_search_volume: number | null
+        estimated_traffic: number | null
+        cpc: number | null
+        competition_level: number | null
+        seo_difficulty: number | null
+        landing_url: string | null
+        source_file: string
+      }>()
+
+      for (const row of parsedData.rows) {
+        const keywordId = keywordToId.get(row.normalizedKeyword)
+        if (!keywordId) continue
+
+        // 同じkeyword_idがあれば上書き（後の行を採用）
+        mediaKeywordsMap.set(keywordId, {
+          keyword_id: keywordId,
+          media_id: mediaId,
+          ranking_position: row.searchRank,
+          monthly_search_volume: row.searchVolume,
+          estimated_traffic: row.traffic,
+          cpc: row.cpc,
+          competition_level: row.competition,
+          seo_difficulty: row.seoDifficulty,
+          landing_url: row.url,
+          source_file: fileName,
+        })
+      }
+
+      const mediaKeywordsBatch = Array.from(mediaKeywordsMap.values())
+      console.log(`[insert-media-keywords] 重複排除後: ${mediaKeywordsBatch.length}件 (元: ${parsedData.rows.length}件)`)
+
+      // デバッグ: 最初のデータをログ出力
+      if (mediaKeywordsBatch.length > 0) {
+        console.log(`[insert-media-keywords] サンプルデータ:`, JSON.stringify(mediaKeywordsBatch[0]))
+      }
+
+      let mediaKeywordsSuccess = 0
+      let mediaKeywordsError = 0
+      let firstErrorMessage = ''
+
+      // 小さいバッチサイズでupsert（エラー特定のため）
+      const MEDIA_KEYWORDS_BATCH_SIZE = 50
+
+      for (let i = 0; i < mediaKeywordsBatch.length; i += MEDIA_KEYWORDS_BATCH_SIZE) {
+        const batch = mediaKeywordsBatch.slice(i, i + MEDIA_KEYWORDS_BATCH_SIZE)
+        const { error: mediaError } = await supabase
+          .from('media_keywords')
+          .upsert(batch, {
+            onConflict: 'media_id,keyword_id',
+            ignoreDuplicates: false,
+          })
+
+        if (mediaError) {
+          console.error('[insert-media-keywords] batch error:', mediaError.message, mediaError.details, mediaError.hint)
+          if (!firstErrorMessage) {
+            firstErrorMessage = `${mediaError.message} | ${mediaError.details || ''} | ${mediaError.hint || ''}`
+          }
+          mediaKeywordsError += batch.length
+        } else {
+          mediaKeywordsSuccess += batch.length
+        }
+      }
+
+      console.log(`[insert-media-keywords] 完了: 成功=${mediaKeywordsSuccess}, エラー=${mediaKeywordsError}`)
+      return { inserted: mediaKeywordsSuccess, errors: mediaKeywordsError, firstError: firstErrorMessage || null }
     })
 
     // =========================================

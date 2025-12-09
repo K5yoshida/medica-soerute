@@ -78,20 +78,19 @@ export async function GET(request: Request) {
       )
     }
 
-    // 各媒体のキーワード数を取得
+    // 各媒体のキーワード数を取得（count集計を使用）
     const mediaIds = (mediaList || []).map((m: MediaMaster) => m.id)
 
     const keywordCounts: Record<string, number> = {}
     if (mediaIds.length > 0) {
-      const { data: keywordData } = await serviceClient
-        .from('media_keywords')
-        .select('media_id')
-        .in('media_id', mediaIds)
+      // 各媒体ごとにカウントを取得（全件取得ではなくcount集計）
+      for (const mediaId of mediaIds) {
+        const { count } = await serviceClient
+          .from('media_keywords')
+          .select('id', { count: 'exact', head: true })
+          .eq('media_id', mediaId)
 
-      if (keywordData) {
-        keywordData.forEach((k: { media_id: string }) => {
-          keywordCounts[k.media_id] = (keywordCounts[k.media_id] || 0) + 1
-        })
+        keywordCounts[mediaId] = count || 0
       }
     }
 
