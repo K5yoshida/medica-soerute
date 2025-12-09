@@ -65,13 +65,11 @@ interface RuleBasedResult {
 }
 
 /**
- * 確実にルールで判定できるパターンのみ分類
+ * ルールベース分類
  *
- * ルール判定対象:
- * - 「求人」「転職」「募集」を含む → transactional
- * - 「採用」+ B2Bワード → b2b
- *
- * それ以外（branded含む）は全てAI + SERP検証
+ * 設計方針:
+ * - 「求人」「募集」のみルールで transactional 確定
+ * - それ以外は全てAI + SERP検証に回す
  */
 function classifyByRule(keyword: string): RuleBasedResult {
   const k = keyword.toLowerCase().trim()
@@ -85,41 +83,21 @@ function classifyByRule(keyword: string): RuleBasedResult {
   }
 
   // ===========================================
-  // 1. 応募意図チェック（確実なパターン）
+  // 「求人」「募集」のみ transactional 確定
   // ===========================================
-  if (/求人|転職|募集/.test(k)) {
+  if (/求人|募集/.test(k)) {
     return {
       classification: {
         intent: 'transactional',
         confidence: 'high',
-        reason: '求人・転職関連キーワードを含む',
+        reason: '求人・募集キーワードを含む',
       },
       needsAI: false,
     }
   }
 
   // ===========================================
-  // 2. B2Bチェック（確実なパターン）
-  // ===========================================
-  // 「採用」+ 明確なB2Bワードの組み合わせ
-  if (/採用/.test(k)) {
-    const b2bModifiers = ['費用', '管理', '担当', 'ログイン', '辞退', '代行', 'コスト', '単価', '掲載', '料金']
-    const hasB2BModifier = b2bModifiers.some(mod => k.includes(mod))
-    if (hasB2BModifier) {
-      return {
-        classification: {
-          intent: 'b2b',
-          confidence: 'high',
-          reason: '採用 + 法人向けワードの組み合わせ',
-        },
-        needsAI: false,
-      }
-    }
-  }
-
-  // ===========================================
-  // 3. それ以外は全てAI + SERP検証が必要
-  // branded判定も含めて実際の検索結果で判断
+  // それ以外は全てAI + SERP検証に回す
   // ===========================================
   return {
     classification: null,
@@ -318,7 +296,7 @@ const anthropic = new Anthropic({
  */
 export async function classifyWithWebSearch(
   keywords: string[],
-  batchSize: number = 20  // Web検索はコストがかかるため小バッチ
+  batchSize: number = 10  // 小バッチでWeb検索の確実性を高める
 ): Promise<Map<string, IntentClassification>> {
   const results = new Map<string, IntentClassification>()
 
@@ -363,7 +341,12 @@ async function classifyBatchWithWebSearch(
   const keywordList = keywords.map((k, i) => `${i + 1}. ${k}`).join('\n')
 
   const systemPrompt = `あなたは検索クエリを分析する専門家です。
-Web検索ツールを使って実際のGoogle検索結果（SERP）を確認し、キーワードの意図を正確に分類してください。
+
+## 【最重要】Web検索の必須使用
+**必ずWeb検索ツールを使って実際のGoogle検索結果（SERP）を確認してから分類してください。**
+- 推測や知識だけで分類しないでください
+- 各キーワードについて、実際にWeb検索を実行し、上位の検索結果を確認してください
+- Web検索なしの分類は許可されていません
 
 ## 分類カテゴリ（6種類）
 
@@ -426,12 +409,18 @@ Web検索ツールを使って実際のGoogle検索結果（SERP）を確認し�
   ...
 ]`
 
-  const userPrompt = `以下の${keywords.length}件のキーワードを、Web検索で実際のSERPを確認して分類してください。
+  const userPrompt = `以下の${keywords.length}件のキーワードを分類してください。
+
+【重要】必ずWeb検索ツールを使用して、各キーワードの実際のGoogle検索結果を確認してから分類してください。推測で分類しないでください。
 
 キーワード:
 ${keywordList}
 
-各キーワードをWeb検索し、SERPの上位結果に基づいて正確に分類してください。
+手順:
+1. 上記のキーワードをWeb検索ツールで検索する
+2. SERPの上位結果を確認する
+3. 結果に基づいて分類する
+
 JSON配列のみを返してください。`
 
   try {
@@ -445,7 +434,7 @@ JSON配列のみを返してください。`
       tools: [{
         type: 'web_search_20250305',
         name: 'web_search',
-        max_uses: Math.min(keywords.length, 30),  // 1キーワードあたり最大1回のWeb検索（バッチ30件なら最大30回）
+        max_uses: 30,  // 十分な検索枠を確保
       }],
     })
 
@@ -499,10 +488,24 @@ JSON配列のみを返してください。`
       }
     }
 
-    // 使用状況をログ
+    // 使用状況をログ & 実際にWeb検索が使われたかチェック
+    let actualWebSearchCount = 0
     if (response.usage) {
       const serverToolUse = (response.usage as { server_tool_use?: { web_search_requests?: number } }).server_tool_use
-      console.log(`[classifyBatchWithWebSearch] Web検索回数: ${serverToolUse?.web_search_requests || 0}`)
+      actualWebSearchCount = serverToolUse?.web_search_requests || 0
+      console.log(`[classifyBatchWithWebSearch] Web検索回数: ${actualWebSearchCount}`)
+    }
+
+    // Web検索が1回も使われなかった場合、serpVerifiedをfalseに修正
+    if (actualWebSearchCount === 0) {
+      console.warn('[classifyBatchWithWebSearch] Web検索が使われませんでした。serpVerifiedをfalseに修正します。')
+      results.forEach((classification, keyword) => {
+        results.set(keyword, {
+          ...classification,
+          serpVerified: false,
+          reason: classification.reason.replace('[SERP]', '[AI分類]'),
+        })
+      })
     }
 
   } catch (error) {
