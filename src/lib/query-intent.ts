@@ -450,16 +450,18 @@ JSON配列のみを返してください。`
     }
 
   } catch (error) {
-    // エラー詳細をログ出力
+    // エラー詳細を取得
+    let errorDetail = ''
     if (error instanceof Anthropic.APIError) {
+      errorDetail = `${error.status}: ${error.message} | ${JSON.stringify(error.error).slice(0, 200)}`
       console.error('[classifyBatchWithWebSearch] API Error:', {
         status: error.status,
         message: error.message,
         error: JSON.stringify(error.error),
       })
     } else {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      console.error('[classifyBatchWithWebSearch] Error:', errorMessage)
+      errorDetail = error instanceof Error ? error.message : String(error)
+      console.error('[classifyBatchWithWebSearch] Error:', errorDetail)
     }
 
     // Web検索エラー時はWeb検索なしのAI分類にフォールバック
@@ -474,13 +476,21 @@ JSON配列のみを返してください。`
         })
       })
     } catch (fallbackError) {
-      console.error('[classifyBatchWithWebSearch] Fallback also failed:', fallbackError)
-      // フォールバックも失敗した場合はinformationalに
+      // フォールバックエラー詳細
+      let fallbackErrorDetail = ''
+      if (fallbackError instanceof Anthropic.APIError) {
+        fallbackErrorDetail = `${fallbackError.status}: ${fallbackError.message} | ${JSON.stringify(fallbackError.error).slice(0, 200)}`
+      } else {
+        fallbackErrorDetail = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+      }
+      console.error('[classifyBatchWithWebSearch] Fallback also failed:', fallbackErrorDetail)
+
+      // フォールバックも失敗した場合はinformationalに（エラー詳細を含める）
       for (const keyword of keywords) {
         results.set(keyword, {
           intent: 'informational',
           confidence: 'low',
-          reason: '分類エラー',
+          reason: `[エラー] Web: ${errorDetail.slice(0, 50)} | FB: ${fallbackErrorDetail.slice(0, 50)}`,
           serpVerified: false,
         })
       }
