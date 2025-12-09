@@ -450,17 +450,40 @@ JSON配列のみを返してください。`
     }
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[classifyBatchWithWebSearch] Error:', errorMessage)
-
-    // エラー時はすべてinformationalに
-    for (const keyword of keywords) {
-      results.set(keyword, {
-        intent: 'informational',
-        confidence: 'low',
-        reason: `分類エラー: ${errorMessage.slice(0, 30)}`,
-        serpVerified: false,
+    // エラー詳細をログ出力
+    if (error instanceof Anthropic.APIError) {
+      console.error('[classifyBatchWithWebSearch] API Error:', {
+        status: error.status,
+        message: error.message,
+        error: JSON.stringify(error.error),
       })
+    } else {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('[classifyBatchWithWebSearch] Error:', errorMessage)
+    }
+
+    // Web検索エラー時はWeb検索なしのAI分類にフォールバック
+    console.log('[classifyBatchWithWebSearch] Falling back to classifyWithClaude without web search')
+    try {
+      const fallbackResults = await classifyBatchWithClaude(keywords)
+      fallbackResults.forEach((classification, keyword) => {
+        results.set(keyword, {
+          ...classification,
+          serpVerified: false,
+          reason: `[フォールバック] ${classification.reason}`,
+        })
+      })
+    } catch (fallbackError) {
+      console.error('[classifyBatchWithWebSearch] Fallback also failed:', fallbackError)
+      // フォールバックも失敗した場合はinformationalに
+      for (const keyword of keywords) {
+        results.set(keyword, {
+          intent: 'informational',
+          confidence: 'low',
+          reason: '分類エラー',
+          serpVerified: false,
+        })
+      }
     }
   }
 
