@@ -1525,7 +1525,7 @@ export default function ImportPage() {
             {/* Filter */}
             <div style={{ padding: '12px 20px', borderBottom: '1px solid #F4F4F5' }}>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['all', 'branded', 'transactional', 'informational', 'b2b', 'unknown'].map((intent) => (
+                {['all', 'transactional', 'informational', 'b2b', 'branded_media', 'branded_customer', 'branded_ambiguous', 'unknown'].map((intent) => (
                   <button
                     key={intent}
                     onClick={() => {
@@ -1563,7 +1563,7 @@ export default function ImportPage() {
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B' }}>
                         キーワード
                       </th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '100px' }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '130px', minWidth: '130px' }}>
                         意図分類
                       </th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, color: '#52525B', width: '200px' }}>
@@ -1586,7 +1586,7 @@ export default function ImportPage() {
                         <td style={{ padding: '10px 16px', color: '#18181B' }}>
                           {item.keyword}
                         </td>
-                        <td style={{ padding: '10px 16px' }}>
+                        <td style={{ padding: '10px 16px', minWidth: '130px' }}>
                           <span
                             style={{
                               display: 'inline-block',
@@ -1594,6 +1594,7 @@ export default function ImportPage() {
                               borderRadius: '10px',
                               fontSize: '10px',
                               fontWeight: 500,
+                              whiteSpace: 'nowrap',
                               background: item.intent === 'unknown' ? '#F4F4F5' : `${INTENT_COLORS[item.intent as QueryIntent]}20`,
                               color: item.intent === 'unknown' ? '#52525B' : INTENT_COLORS[item.intent as QueryIntent],
                             }}
