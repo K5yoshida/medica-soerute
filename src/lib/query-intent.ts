@@ -13,13 +13,32 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 /**
- * クエリ意図の種類（4カテゴリ）
- * - branded: 指名検索（サービス名・媒体名・企業名を直接検索）
+ * クエリ意図の種類（6カテゴリ）
+ *
+ * 指名検索（3分類）:
+ * - branded_media: 指名検索（媒体）- 競合媒体への流出（ジョブメドレー、マイナビ看護師など）
+ * - branded_customer: 指名検索（顧客）- 採用活動中の施設（聖路加国際病院、〇〇クリニックなど）
+ * - branded_ambiguous: 指名検索（曖昧）- 特定できない指名検索（れいんぼー、charomなど）
+ *
+ * その他:
  * - transactional: 応募意図（求人・転職など応募意図が明確）
  * - informational: 情報収集（知識・ハウツー・一般情報・条件比較含む）
  * - b2b: 法人向け（採用担当者・人事向けの情報）
  */
-export type QueryIntent = 'branded' | 'transactional' | 'informational' | 'b2b'
+export type QueryIntent =
+  | 'branded_media'
+  | 'branded_customer'
+  | 'branded_ambiguous'
+  | 'transactional'
+  | 'informational'
+  | 'b2b'
+
+/**
+ * 指名検索かどうかを判定するヘルパー
+ */
+export function isBrandedIntent(intent: QueryIntent): boolean {
+  return intent === 'branded_media' || intent === 'branded_customer' || intent === 'branded_ambiguous'
+}
 
 /**
  * SEO標準のクエリタイプ（Do/Know/Go/Buy）
@@ -144,7 +163,9 @@ export function classifyQueryIntents(keywords: string[]): Map<string, IntentClas
  * 意図別のラベル（日本語表示用）
  */
 export const INTENT_LABELS: Record<QueryIntent, string> = {
-  branded: '指名検索',
+  branded_media: '指名検索（媒体）',
+  branded_customer: '指名検索（顧客）',
+  branded_ambiguous: '指名検索（曖昧）',
   transactional: '応募意図',
   informational: '情報収集',
   b2b: '法人向け',
@@ -154,10 +175,24 @@ export const INTENT_LABELS: Record<QueryIntent, string> = {
  * 意図別の説明
  */
 export const INTENT_DESCRIPTIONS: Record<QueryIntent, string> = {
-  branded: 'サービス名や媒体名を直接検索している',
+  branded_media: '競合媒体への流出（ジョブメドレー、マイナビ看護師など）',
+  branded_customer: '採用活動中の施設を検索（病院、クリニックなど）',
+  branded_ambiguous: '何かを探しているが特定できない指名検索',
   transactional: '求人への応募意欲が高い状態',
   informational: '一般的な情報や知識を求めている（条件比較含む）',
   b2b: '採用担当者・人事が検索している',
+}
+
+/**
+ * 意図別の色（UI表示用）
+ */
+export const INTENT_COLORS: Record<QueryIntent, { color: string; bgColor: string }> = {
+  branded_media: { color: '#7C3AED', bgColor: '#EDE9FE' },      // 紫（媒体）
+  branded_customer: { color: '#DB2777', bgColor: '#FCE7F3' },   // ピンク（顧客）
+  branded_ambiguous: { color: '#9333EA', bgColor: '#F3E8FF' },  // 薄紫（曖昧）
+  transactional: { color: '#E11D48', bgColor: '#FFE4E6' },      // 赤
+  informational: { color: '#0284C7', bgColor: '#E0F2FE' },      // 青
+  b2b: { color: '#059669', bgColor: '#D1FAE5' },                // 緑
 }
 
 /**
@@ -250,7 +285,9 @@ export function classifyQueryTypes(keywords: string[]): Map<string, QueryType> {
  */
 export function getQueryTypeFromIntent(intent: QueryIntent): QueryType | null {
   switch (intent) {
-    case 'branded':
+    case 'branded_media':
+    case 'branded_customer':
+    case 'branded_ambiguous':
       return 'Go'
     case 'transactional':
       return 'Do'
@@ -328,49 +365,60 @@ async function classifyBatchWithWebSearch(
   const systemPrompt = `あなたは求人・転職関連の検索クエリを分析する専門家です。
 Web検索ツールを使って実際のGoogle検索結果（SERP）を確認し、キーワードの意図を正確に分類してください。
 
-## 分類カテゴリ
+## 分類カテゴリ（6種類）
 
-### 1. branded（指名検索）
-特定のサービス名・媒体名・企業名・施設名を直接検索している。
+### 指名検索（3種類）
+特定の何かを探している検索。SERPで判断する。
 
-**判定方法**: Web検索で確認し、SERPの上位3件が同一サービス/企業の公式ページで占められている場合。
+#### 1. branded_media（指名検索・媒体）
+**求人媒体・転職サイト**を直接検索している。
+- 「ジョブメドレー」「マイナビ看護師」「Indeed」「ナース人材バンク」など
+- SERPに求人媒体の公式サイトが上位を占める
 
-例:
-- 「ジョブメドレー」→ SERPにジョブメドレー公式が並ぶ → branded
-- 「マイナビ看護師」→ SERPにマイナビ看護師公式が並ぶ → branded
-- 「聖路加国際病院」→ SERPに病院公式サイトが並ぶ → branded
+#### 2. branded_customer（指名検索・顧客）
+**病院・クリニック・施設**など、採用活動をしている組織を検索している。
+- 「聖路加国際病院」「〇〇クリニック」「〇〇法人」など
+- SERPに特定の医療機関・施設の公式サイトが上位を占める
 
-**重要**:
-- 「グリーン歯科」→ SERPに各地の「〇〇グリーン歯科」が並ぶ → informational（一般名詞として使われている）
-- 「Green 転職」→ SERPにGreen（転職サイト）公式が並ぶ → branded
+#### 3. branded_ambiguous（指名検索・曖昧）
+**何かを探しているが、媒体でも顧客でもない**指名検索。
+- 「れいんぼー」「charom」など、固有名詞っぽいが特定できない
+- SERPに特定サービスが上位を占めるが、上記2つに該当しない
+- SERPに同名の複数施設・サービスが並ぶ場合もこちら
 
-### 2. transactional（応募意図）
+### その他（3種類）
+
+#### 4. transactional（応募意図）
 求人への応募・転職意図が明確。
 - 「〇〇 求人」「〇〇 転職」「〇〇 募集」
 - 応募行動に直結するキーワード
 
-### 3. informational（情報収集）
+#### 5. informational（情報収集）
 一般的な情報・知識・ハウツー・条件比較を求めている。
 - 職種の説明、条件・待遇、ハウツー、比較・おすすめ
-- 一般的な職種名単体（応募意図なし）
+- 一般的な職種名単体（「看護師」「介護士」など）
 - SERPに多様なサイトが並ぶ（特定サービスが独占していない）
 
-### 4. b2b（法人向け）
+#### 6. b2b（法人向け）
 採用担当者・人事が検索するキーワード。
 - 採用コスト・費用、採用管理・システム、人材紹介手数料
 
-## 作業手順
+## 判定フロー
 
-1. 各キーワードについて、Web検索ツールで実際に検索
-2. SERPの上位結果を確認
-3. 上位が特定サービス/企業の公式で独占されているか確認
-4. 独占されていればbranded、そうでなければ内容に応じて分類
+1. SERPの上位が特定サービス/組織で独占されているか？
+   - NO → informational or transactional or b2b
+   - YES → 指名検索（次へ）
+
+2. 指名検索の場合、何を探している？
+   - 求人媒体・転職サイト → branded_media
+   - 病院・クリニック・医療施設・介護施設 → branded_customer
+   - 上記以外 or 判断できない → branded_ambiguous
 
 ## 出力形式
 
 必ず以下のJSON形式で返してください：
 [
-  {"keyword": "キーワード1", "intent": "branded|transactional|informational|b2b", "reason": "分類理由（SERP確認結果を含む、30文字以内）"},
+  {"keyword": "キーワード1", "intent": "branded_media|branded_customer|branded_ambiguous|transactional|informational|b2b", "reason": "分類理由（30文字以内）"},
   ...
 ]`
 
@@ -419,9 +467,13 @@ JSON配列のみを返してください。`
       reason: string
     }>
 
+    const validIntents: QueryIntent[] = [
+      'branded_media', 'branded_customer', 'branded_ambiguous',
+      'transactional', 'informational', 'b2b'
+    ]
     for (const item of classifications) {
       const intent = item.intent as QueryIntent
-      if (['branded', 'transactional', 'informational', 'b2b'].includes(intent)) {
+      if (validIntents.includes(intent)) {
         results.set(item.keyword, {
           intent,
           confidence: 'high',
@@ -450,17 +502,19 @@ JSON配列のみを返してください。`
     }
 
   } catch (error) {
-    // エラー詳細を取得
+    // エラー詳細を取得（完全なエラー情報をログ）
     let errorDetail = ''
     if (error instanceof Anthropic.APIError) {
-      errorDetail = `${error.status}: ${error.message} | ${JSON.stringify(error.error).slice(0, 200)}`
-      console.error('[classifyBatchWithWebSearch] API Error:', {
+      const fullError = JSON.stringify(error.error)
+      errorDetail = `${error.status}: ${fullError}`
+      console.error('[classifyBatchWithWebSearch] API Error FULL:', {
         status: error.status,
         message: error.message,
-        error: JSON.stringify(error.error),
+        headers: error.headers,
+        errorFull: fullError,
       })
     } else {
-      errorDetail = error instanceof Error ? error.message : String(error)
+      errorDetail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
       console.error('[classifyBatchWithWebSearch] Error:', errorDetail)
     }
 
@@ -476,21 +530,30 @@ JSON配列のみを返してください。`
         })
       })
     } catch (fallbackError) {
-      // フォールバックエラー詳細
+      // フォールバックエラー詳細（完全なエラー情報をログ）
       let fallbackErrorDetail = ''
       if (fallbackError instanceof Anthropic.APIError) {
-        fallbackErrorDetail = `${fallbackError.status}: ${fallbackError.message} | ${JSON.stringify(fallbackError.error).slice(0, 200)}`
+        const fullError = JSON.stringify(fallbackError.error)
+        fallbackErrorDetail = `${fallbackError.status}: ${fullError}`
+        console.error('[classifyBatchWithWebSearch] Fallback API Error FULL:', {
+          status: fallbackError.status,
+          message: fallbackError.message,
+          headers: fallbackError.headers,
+          errorFull: fullError,
+        })
       } else {
-        fallbackErrorDetail = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        fallbackErrorDetail = fallbackError instanceof Error ? `${fallbackError.name}: ${fallbackError.message}` : String(fallbackError)
       }
       console.error('[classifyBatchWithWebSearch] Fallback also failed:', fallbackErrorDetail)
 
       // フォールバックも失敗した場合はinformationalに（エラー詳細を含める）
+      // reasonに完全なエラー情報を保存（デバッグ用）
+      const combinedError = `[エラー] ${fallbackErrorDetail.slice(0, 100)}`
       for (const keyword of keywords) {
         results.set(keyword, {
           intent: 'informational',
           confidence: 'low',
-          reason: `[エラー] Web: ${errorDetail.slice(0, 50)} | FB: ${fallbackErrorDetail.slice(0, 50)}`,
+          reason: combinedError,
           serpVerified: false,
         })
       }
@@ -550,28 +613,38 @@ async function classifyBatchWithClaude(
   const systemPrompt = `あなたは求人・転職関連の検索クエリを分析する専門家です。
 医療・介護・福祉業界を中心に、あらゆる職種の求人検索キーワードを分析できます。
 
-検索キーワードを以下の4つの意図カテゴリに分類してください：
+検索キーワードを以下の6つの意図カテゴリに分類してください：
 
-## 1. branded（指名検索）
-特定のサービス名・媒体名・企業名・施設名を直接検索している。
-- 求人媒体: マイナビ、リクナビ、Indeed、ジョブメドレー、ナース人材バンク等
-- 企業名: ○○株式会社、○○法人、○○グループ等
-- 施設名: ○○病院、○○クリニック等（具体的な固有名詞）
+## 1. branded_media（指名検索：媒体）
+競合求人媒体・転職サービスへの指名検索。これらへの流入は自社媒体からの流出を意味する。
+- 競合媒体: ジョブメドレー、マイナビ看護師、ナース人材バンク、看護roo!、ナースではたらこ、e看護師求人、コメディカルドットコム、Indeed等
+- 判定: 媒体名、サービス名、媒体運営会社名を含む
 
-**重要**: 一般名詞（「病院」「クリニック」単体）はbrandedではない。
+## 2. branded_customer（指名検索：顧客）
+特定の医療機関・施設への指名検索。求人活動中の施設を示す重要な営業リード。
+- 施設: ○○病院、○○クリニック、○○会（医療法人）、○○園（福祉施設）等
+- 判定: 具体的な施設固有名詞を含む（「病院」「クリニック」単体は除く）
 
-## 2. transactional（応募意図）
+## 3. branded_ambiguous（指名検索：曖昧）
+固有名詞らしいが、媒体か顧客か判別できない指名検索。
+- 例: 略称、愛称、ローマ字表記、意味不明な固有名詞
+- 判定: 一般名詞ではないが、カテゴリ特定が困難
+
+## 4. transactional（応募意図）
 求人への応募・転職意図が明確。
+- 例: 「看護師 求人」「介護職 転職」「薬剤師 募集」
 
-## 3. informational（情報収集）
+## 5. informational（情報収集）
 一般的な情報・知識・ハウツー・条件比較を求めている。
+- 例: 「看護師 給料」「介護職 資格」「夜勤 きつい」
 
-## 4. b2b（法人向け）
+## 6. b2b（法人向け）
 採用担当者・人事が検索するキーワード。
+- 例: 「看護師 採用単価」「人材紹介 手数料」
 
 回答は必ず以下のJSON形式で返してください：
 [
-  {"keyword": "キーワード1", "intent": "branded|transactional|informational|b2b", "reason": "分類理由（20文字以内）"},
+  {"keyword": "キーワード1", "intent": "branded_media|branded_customer|branded_ambiguous|transactional|informational|b2b", "reason": "分類理由（20文字以内）"},
   ...
 ]`
 
@@ -607,9 +680,14 @@ JSON配列のみを返してください。`
       reason: string
     }>
 
+    const validIntents: QueryIntent[] = [
+      'branded_media', 'branded_customer', 'branded_ambiguous',
+      'transactional', 'informational', 'b2b'
+    ]
+
     for (const item of classifications) {
       const intent = item.intent as QueryIntent
-      if (['branded', 'transactional', 'informational', 'b2b'].includes(intent)) {
+      if (validIntents.includes(intent)) {
         results.set(item.keyword, {
           intent,
           confidence: 'high',
@@ -630,14 +708,27 @@ JSON配列のみを返してください。`
       }
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[classifyBatchWithClaude] Error:', errorMessage)
+    // 詳細なエラー情報をログ
+    let errorMessage = ''
+    if (error instanceof Anthropic.APIError) {
+      const fullError = JSON.stringify(error.error)
+      errorMessage = `${error.status}: ${fullError}`
+      console.error('[classifyBatchWithClaude] API Error FULL:', {
+        status: error.status,
+        message: error.message,
+        headers: error.headers,
+        errorFull: fullError,
+      })
+    } else {
+      errorMessage = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      console.error('[classifyBatchWithClaude] Error:', errorMessage)
+    }
 
     for (const keyword of keywords) {
       results.set(keyword, {
         intent: 'informational',
         confidence: 'low',
-        reason: `分類エラー: ${errorMessage.slice(0, 30)}`,
+        reason: `分類エラー: ${errorMessage.slice(0, 200)}`,
         serpVerified: false,
       })
     }

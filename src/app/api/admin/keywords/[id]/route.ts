@@ -70,8 +70,11 @@ export async function PATCH(
     // リクエストボディをパース
     const body: UpdateRequest = await request.json()
 
-    // バリデーション（4カテゴリ: branded, transactional, informational, b2b + unknown）
-    const validIntents: QueryIntentType[] = ['branded', 'transactional', 'informational', 'b2b', 'unknown']
+    // バリデーション（6カテゴリ + unknown）
+    const validIntents: QueryIntentType[] = [
+      'branded_media', 'branded_customer', 'branded_ambiguous',
+      'transactional', 'informational', 'b2b', 'unknown'
+    ]
     if (body.intent && !validIntents.includes(body.intent)) {
       return NextResponse.json(
         { success: false, error: { message: '無効な意図分類です' } },

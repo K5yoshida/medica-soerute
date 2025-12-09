@@ -17,8 +17,29 @@ export type UserRole = 'admin' | 'internal' | 'user'
 export type PlanType = 'medica' | 'enterprise' | 'trial' | 'starter' | 'professional'
 export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed'
 export type MediaCategory = 'general' | 'nursing' | 'pharmacy' | 'dental' | 'welfare' | 'rehabilitation'
-// クエリ意図: branded=指名検索, transactional=応募意図, informational=情報収集, b2b=法人向け
-export type QueryIntentType = 'branded' | 'transactional' | 'informational' | 'b2b' | 'unknown'
+// クエリ意図:
+// - branded_media=指名検索（媒体）: 競合媒体への流出
+// - branded_customer=指名検索（顧客）: 採用活動中の施設
+// - branded_ambiguous=指名検索（曖昧）: 特定できない指名検索
+// - transactional=応募意図, informational=情報収集, b2b=法人向け
+// - branded は後方互換性のため残すが、新規分類では使用しない
+export type QueryIntentType =
+  | 'branded_media'
+  | 'branded_customer'
+  | 'branded_ambiguous'
+  | 'branded'  // 後方互換性（マイグレーション中のみ）
+  | 'transactional'
+  | 'informational'
+  | 'b2b'
+  | 'unknown'
+
+// 指名検索のサブタイプ（UI表示・フィルタリング用）
+export type BrandedSubtype = 'branded_media' | 'branded_customer' | 'branded_ambiguous'
+
+// 指名検索かどうかを判定するヘルパー
+export function isBrandedIntent(intent: QueryIntentType): boolean {
+  return intent === 'branded_media' || intent === 'branded_customer' || intent === 'branded_ambiguous' || intent === 'branded'
+}
 // 分類ソース: rule=ルールベース, ai=Claude AI, manual=管理者手動, unknown=不明
 export type ClassificationSourceType = 'rule' | 'ai' | 'manual' | 'unknown'
 // PESOカテゴリ: GAP-021

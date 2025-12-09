@@ -21,7 +21,9 @@ interface StatsResponse {
       unknown: number
     }
     by_intent: {
-      branded: number
+      branded_media: number      // 指名検索（媒体）
+      branded_customer: number   // 指名検索（顧客）
+      branded_ambiguous: number  // 指名検索（曖昧）
       transactional: number
       informational: number
       b2b: number
@@ -113,11 +115,21 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
       .select('*', { count: 'exact', head: true })
       .eq('classification_source', 'unknown')
 
-    // 意図別集計
-    const { count: brandedCount } = await supabase
+    // 意図別集計（6カテゴリ + unknown）
+    const { count: brandedMediaCount } = await supabase
       .from('keywords')
       .select('*', { count: 'exact', head: true })
-      .eq('intent', 'branded')
+      .eq('intent', 'branded_media')
+
+    const { count: brandedCustomerCount } = await supabase
+      .from('keywords')
+      .select('*', { count: 'exact', head: true })
+      .eq('intent', 'branded_customer')
+
+    const { count: brandedAmbiguousCount } = await supabase
+      .from('keywords')
+      .select('*', { count: 'exact', head: true })
+      .eq('intent', 'branded_ambiguous')
 
     const { count: transactionalCount } = await supabase
       .from('keywords')
@@ -156,7 +168,9 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
           unknown: unknownSourceCount || 0,
         },
         by_intent: {
-          branded: brandedCount || 0,
+          branded_media: brandedMediaCount || 0,
+          branded_customer: brandedCustomerCount || 0,
+          branded_ambiguous: brandedAmbiguousCount || 0,
           transactional: transactionalCount || 0,
           informational: informationalCount || 0,
           b2b: b2bCount || 0,

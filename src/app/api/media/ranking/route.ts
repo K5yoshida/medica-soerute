@@ -7,13 +7,17 @@ interface RankingResult {
   domain: string | null
   matched_keyword_count: number
   total_estimated_traffic: number
-  // intent別の流入数（4カテゴリ: branded, transactional, informational, b2b）
-  branded_traffic: number        // 指名検索
-  transactional_traffic: number  // 応募意図
-  informational_traffic: number  // 情報収集
-  b2b_traffic: number            // 法人向け
+  // intent別の流入数（6カテゴリ）
+  branded_media_traffic: number      // 指名検索（媒体）
+  branded_customer_traffic: number   // 指名検索（顧客）
+  branded_ambiguous_traffic: number  // 指名検索（曖昧）
+  transactional_traffic: number      // 応募意図
+  informational_traffic: number      // 情報収集
+  b2b_traffic: number                // 法人向け
   // intent別のキーワード数
-  branded_count: number
+  branded_media_count: number
+  branded_customer_count: number
+  branded_ambiguous_count: number
   transactional_count: number
   informational_count: number
   b2b_count: number
@@ -45,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const keywords = searchParams.get('keywords')
-    // ソート基準: transactional (応募意図), total (総流入), informational (情報収集), b2b (法人向け), keyword_count
+    // ソート基準: transactional, total, branded_media, branded_customer, branded_ambiguous, informational, b2b, keyword_count
     const sortBy = searchParams.get('sort_by') || 'transactional'
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50)
 
@@ -195,13 +199,17 @@ async function executeRankingQuery(
       0
     )
 
-    // intent別の流入数を計算（4カテゴリ: branded, transactional, informational, b2b）
-    const brandedKeywords = media.keywords.filter(k => k.intent === 'branded')
+    // intent別の流入数を計算（6カテゴリ）
+    const brandedMediaKeywords = media.keywords.filter(k => k.intent === 'branded_media')
+    const brandedCustomerKeywords = media.keywords.filter(k => k.intent === 'branded_customer')
+    const brandedAmbiguousKeywords = media.keywords.filter(k => k.intent === 'branded_ambiguous')
     const transactionalKeywords = media.keywords.filter(k => k.intent === 'transactional')
     const informationalKeywords = media.keywords.filter(k => k.intent === 'informational')
     const b2bKeywords = media.keywords.filter(k => k.intent === 'b2b')
 
-    const brandedTraffic = brandedKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
+    const brandedMediaTraffic = brandedMediaKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
+    const brandedCustomerTraffic = brandedCustomerKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
+    const brandedAmbiguousTraffic = brandedAmbiguousKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
     const transactionalTraffic = transactionalKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
     const informationalTraffic = informationalKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
     const b2bTraffic = b2bKeywords.reduce((sum, k) => sum + (k.estimated_traffic || 0), 0)
@@ -225,11 +233,15 @@ async function executeRankingQuery(
       monthly_visits: media.monthly_visits,
       matched_keyword_count: matchedKeywordCount,
       total_estimated_traffic: totalEstimatedTraffic,
-      branded_traffic: brandedTraffic,
+      branded_media_traffic: brandedMediaTraffic,
+      branded_customer_traffic: brandedCustomerTraffic,
+      branded_ambiguous_traffic: brandedAmbiguousTraffic,
       transactional_traffic: transactionalTraffic,
       informational_traffic: informationalTraffic,
       b2b_traffic: b2bTraffic,
-      branded_count: brandedKeywords.length,
+      branded_media_count: brandedMediaKeywords.length,
+      branded_customer_count: brandedCustomerKeywords.length,
+      branded_ambiguous_count: brandedAmbiguousKeywords.length,
       transactional_count: transactionalKeywords.length,
       informational_count: informationalKeywords.length,
       b2b_count: b2bKeywords.length,
@@ -249,6 +261,24 @@ async function executeRankingQuery(
         return b.total_estimated_traffic - a.total_estimated_traffic
       case 'total':
         // 総流入数でソート
+        return b.total_estimated_traffic - a.total_estimated_traffic
+      case 'branded_media':
+        // 媒体指名検索の流入数でソート
+        if (b.branded_media_traffic !== a.branded_media_traffic) {
+          return b.branded_media_traffic - a.branded_media_traffic
+        }
+        return b.total_estimated_traffic - a.total_estimated_traffic
+      case 'branded_customer':
+        // 顧客指名検索の流入数でソート
+        if (b.branded_customer_traffic !== a.branded_customer_traffic) {
+          return b.branded_customer_traffic - a.branded_customer_traffic
+        }
+        return b.total_estimated_traffic - a.total_estimated_traffic
+      case 'branded_ambiguous':
+        // 曖昧指名検索の流入数でソート
+        if (b.branded_ambiguous_traffic !== a.branded_ambiguous_traffic) {
+          return b.branded_ambiguous_traffic - a.branded_ambiguous_traffic
+        }
         return b.total_estimated_traffic - a.total_estimated_traffic
       case 'informational':
         // 情報収集の流入数でソート

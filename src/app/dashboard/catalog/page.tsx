@@ -53,13 +53,17 @@ interface RankingResult {
   domain: string | null
   matched_keyword_count: number
   total_estimated_traffic: number
-  // intent別の流入数（4カテゴリ: branded, transactional, informational, b2b）
-  branded_traffic?: number
+  // intent別の流入数（6カテゴリ）
+  branded_media_traffic?: number
+  branded_customer_traffic?: number
+  branded_ambiguous_traffic?: number
   transactional_traffic?: number
   informational_traffic?: number
   b2b_traffic?: number
   // intent別のキーワード数
-  branded_count?: number
+  branded_media_count?: number
+  branded_customer_count?: number
+  branded_ambiguous_count?: number
   transactional_count?: number
   informational_count?: number
   b2b_count?: number

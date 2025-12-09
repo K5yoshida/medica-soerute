@@ -18,9 +18,11 @@ import {
   RotateCcw,
 } from 'lucide-react'
 
-// 検索段階ラベル（query_master.intent）- 4カテゴリ: branded, transactional, informational, b2b
+// 検索段階ラベル（keywords.intent）- 6カテゴリ
 const INTENT_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
-  branded: { label: '指名検索', color: '#7C3AED', bgColor: '#EDE9FE' },
+  branded_media: { label: '指名検索（媒体）', color: '#7C3AED', bgColor: '#EDE9FE' },
+  branded_customer: { label: '指名検索（顧客）', color: '#DB2777', bgColor: '#FCE7F3' },
+  branded_ambiguous: { label: '指名検索（曖昧）', color: '#9333EA', bgColor: '#F3E8FF' },
   transactional: { label: '応募意図', color: '#E11D48', bgColor: '#FFE4E6' },
   informational: { label: '情報収集', color: '#0284C7', bgColor: '#E0F2FE' },
   b2b: { label: '法人向け', color: '#059669', bgColor: '#D1FAE5' },

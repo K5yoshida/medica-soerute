@@ -18,13 +18,17 @@ interface RankingResult {
   domain: string | null
   matched_keyword_count: number
   total_estimated_traffic: number
-  // intent別の流入数（4カテゴリ: branded, transactional, informational, b2b）
-  branded_traffic?: number
+  // intent別の流入数（6カテゴリ）
+  branded_media_traffic?: number
+  branded_customer_traffic?: number
+  branded_ambiguous_traffic?: number
   transactional_traffic?: number
   informational_traffic?: number
   b2b_traffic?: number
   // intent別のキーワード数
-  branded_count?: number
+  branded_media_count?: number
+  branded_customer_count?: number
+  branded_ambiguous_count?: number
   transactional_count?: number
   informational_count?: number
   b2b_count?: number
@@ -40,7 +44,7 @@ interface RankingResultsProps {
   currentSort?: string
 }
 
-// ソートタブの定義（4カテゴリ: branded, transactional, informational, b2b）
+// ソートタブの定義（6カテゴリ対応）
 const SORT_TABS = [
   { id: 'total', label: '総流入数', icon: Users, description: '全体のトラフィック規模' },
   { id: 'transactional', label: '応募意図', icon: TrendingUp, description: '応募意欲が高いユーザーからの流入' },
@@ -60,11 +64,15 @@ function formatCompactNumber(num: number | null | undefined): string {
   return num.toLocaleString('ja-JP')
 }
 
-// intentラベル（4カテゴリ: branded, transactional, informational, b2b）
+// intentラベル（6カテゴリ）
 function getIntentLabel(intent: string): { label: string; color: string } {
   switch (intent) {
-    case 'branded':
-      return { label: '指名検索', color: '#8B5CF6' }
+    case 'branded_media':
+      return { label: '指名検索（媒体）', color: '#7C3AED' }
+    case 'branded_customer':
+      return { label: '指名検索（顧客）', color: '#DB2777' }
+    case 'branded_ambiguous':
+      return { label: '指名検索（曖昧）', color: '#9333EA' }
     case 'transactional':
       return { label: '応募意図', color: '#DC2626' }
     case 'informational':

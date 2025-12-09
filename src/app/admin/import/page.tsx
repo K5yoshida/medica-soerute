@@ -32,7 +32,7 @@ import { ImportJobSidebar, useImportJobCount } from '@/components/admin/import-j
  */
 
 type ImportType = 'rakko_keywords' | 'similarweb'
-type QueryIntent = 'branded' | 'transactional' | 'informational' | 'b2b' | 'unknown'
+type QueryIntent = 'branded_media' | 'branded_customer' | 'branded_ambiguous' | 'transactional' | 'informational' | 'b2b' | 'unknown'
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
 
 interface MediaOption {
@@ -84,7 +84,9 @@ interface ImportJob {
 }
 
 const INTENT_LABELS: Record<QueryIntent, string> = {
-  branded: '指名検索',
+  branded_media: '指名検索（媒体）',
+  branded_customer: '指名検索（顧客）',
+  branded_ambiguous: '指名検索（曖昧）',
   transactional: '応募意図',
   informational: '情報収集',
   b2b: '法人向け',
@@ -92,7 +94,9 @@ const INTENT_LABELS: Record<QueryIntent, string> = {
 }
 
 const INTENT_COLORS: Record<QueryIntent, string> = {
-  branded: '#8B5CF6',
+  branded_media: '#7C3AED',
+  branded_customer: '#DB2777',
+  branded_ambiguous: '#9333EA',
   transactional: '#10B981',
   informational: '#3B82F6',
   b2b: '#059669',

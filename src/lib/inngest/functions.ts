@@ -879,9 +879,11 @@ export const importCsvJob = inngest.createFunction(
       const supabase = createServiceClient()
 
       // 意図分類サマリを集計（重複排除後のデータで集計）
-      // 4カテゴリ: branded, transactional, informational, b2b + unknown
+      // 6カテゴリ + unknown
       const intentSummary = {
-        branded: 0,
+        branded_media: 0,
+        branded_customer: 0,
+        branded_ambiguous: 0,
         transactional: 0,
         informational: 0,
         b2b: 0,
