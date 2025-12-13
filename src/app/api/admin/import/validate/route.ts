@@ -2,10 +2,22 @@
 // Import Validate API
 // CSVファイルをプレビュー用にパースして返す
 // POST /api/admin/import/validate
+//
+// v2更新: URL列からドメインを抽出し、media_masterと照合して
+// 媒体を自動特定する機能を追加（ヒューマンエラー防止）
 // ===========================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+
+/**
+ * 自動検出された媒体情報
+ */
+interface DetectedMedia {
+  id: string
+  name: string
+  domain: string
+}
 
 /**
  * CSVプレビューレスポンス
@@ -16,9 +28,13 @@ interface ValidateResponse {
     totalRows: number
     previewRows: PreviewRow[]
     columns: string[]
+    // v2: 自動検出された媒体情報
+    detectedMedia: DetectedMedia | null
+    detectedDomain: string | null
   }
   error?: {
     message: string
+    code?: string // MEDIA_NOT_FOUND などのエラーコード
   }
 }
 
@@ -100,8 +116,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ValidateR
 
     content = content.replace(/^\uFEFF/, '')
 
-    // CSVをパース
-    const lines = content.split('\n').filter((line) => line.trim())
+    // CSVをパース（Windows形式のCRLF改行に対応するため\rを除去）
+    const lines = content
+      .split('\n')
+      .map((line) => line.replace(/\r$/, ''))
+      .filter((line) => line.trim())
     if (lines.length < 2) {
       return NextResponse.json(
         { success: false, error: { message: 'CSVにデータがありません' } },
@@ -219,12 +238,53 @@ export async function POST(request: NextRequest): Promise<NextResponse<ValidateR
       if (lines[i].trim()) totalRows++
     }
 
+    // v2: URL列からドメインを抽出し、media_masterと照合
+    let detectedMedia: DetectedMedia | null = null
+    let detectedDomain: string | null = null
+
+    if (actualUrlIndex !== -1 && previewRows.length > 0) {
+      // 最初のURL行からドメインを抽出
+      const firstUrl = previewRows.find((r) => r.url)?.url
+      if (firstUrl) {
+        detectedDomain = extractDomain(firstUrl)
+
+        if (detectedDomain) {
+          // media_masterからドメインで検索
+          const serviceClient = createServiceClient()
+          const { data: mediaData } = await serviceClient
+            .from('media_master')
+            .select('id, name, domain')
+            .eq('is_active', true)
+
+          if (mediaData && mediaData.length > 0) {
+            // ドメインマッチング（完全一致、またはwww.除去後の一致）
+            const normalizedDetected = normalizeDomain(detectedDomain)
+            const matchedMedia = mediaData.find((m: { id: string; name: string; domain: string | null }) => {
+              if (!m.domain) return false
+              const normalizedMedia = normalizeDomain(m.domain)
+              return normalizedMedia === normalizedDetected
+            })
+
+            if (matchedMedia) {
+              detectedMedia = {
+                id: matchedMedia.id,
+                name: matchedMedia.name,
+                domain: matchedMedia.domain,
+              }
+            }
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         totalRows,
         previewRows,
         columns: headers,
+        detectedMedia,
+        detectedDomain,
       },
     })
   } catch (error) {
@@ -279,4 +339,40 @@ function parseNumber(value: string | undefined): number | null {
   const cleaned = value.replace(/[^0-9.-]/g, '')
   const num = parseInt(cleaned, 10)
   return isNaN(num) ? null : num
+}
+
+/**
+ * URLからドメインを抽出
+ * 例: https://www.baitoru.com/kanto/tokyo/ → www.baitoru.com
+ */
+function extractDomain(url: string): string | null {
+  try {
+    // URLが相対パスの場合はnull
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      // プロトコルなしの場合、httpsを付けて試す
+      if (url.includes('.')) {
+        url = 'https://' + url
+      } else {
+        return null
+      }
+    }
+
+    const urlObj = new URL(url)
+    return urlObj.hostname
+  } catch {
+    return null
+  }
+}
+
+/**
+ * ドメインを正規化（比較用）
+ * - www. を除去
+ * - 小文字化
+ * 例: www.baitoru.com → baitoru.com
+ */
+function normalizeDomain(domain: string): string {
+  return domain
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .trim()
 }
