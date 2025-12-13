@@ -35,9 +35,11 @@ type ImportType = 'rakko_keywords' | 'similarweb'
 type QueryIntent = 'branded_media' | 'branded_customer' | 'branded_ambiguous' | 'transactional' | 'informational' | 'b2b' | 'unknown'
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
 
-interface MediaOption {
+// 自動検出された媒体情報
+interface DetectedMedia {
   id: string
   name: string
+  domain: string
 }
 
 interface PreviewRow {
@@ -129,7 +131,6 @@ export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null)
   const [importType, setImportType] = useState<ImportType>('rakko_keywords')
   const [selectedMediaId, setSelectedMediaId] = useState<string>('')
-  const [mediaList, setMediaList] = useState<MediaOption[]>([])
 
   // Preview state
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
@@ -137,6 +138,10 @@ export default function ImportPage() {
   const [_columns, setColumns] = useState<string[]>([])
   const [isValidating, setIsValidating] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+
+  // 自動検出された媒体
+  const [detectedMedia, setDetectedMedia] = useState<DetectedMedia | null>(null)
+  const [detectedDomain, setDetectedDomain] = useState<string | null>(null)
 
   // Job state
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
@@ -156,21 +161,6 @@ export default function ImportPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 媒体リストを取得
-  useEffect(() => {
-    const fetchMedia = async () => {
-      try {
-        const res = await fetch('/api/media')
-        const data = await res.json()
-        if (data.success && data.data) {
-          setMediaList(data.data.map((m: { id: string; name: string }) => ({ id: m.id, name: m.name })))
-        }
-      } catch {
-        console.error('Failed to fetch media list')
-      }
-    }
-    fetchMedia()
-  }, [])
 
   // ジョブ一覧を取得
   const fetchJobs = useCallback(async () => {
@@ -239,12 +229,14 @@ export default function ImportPage() {
     }
   }
 
-  // バリデーションAPI呼び出し
+  // バリデーションAPI呼び出し（媒体自動検出を含む）
   const validateFile = async () => {
     if (!file) return false
 
     setIsValidating(true)
     setValidationError(null)
+    setDetectedMedia(null)
+    setDetectedDomain(null)
 
     try {
       const formData = new FormData()
@@ -262,6 +254,26 @@ export default function ImportPage() {
         setPreviewRows(data.data.previewRows)
         setTotalRows(data.data.totalRows)
         setColumns(data.data.columns)
+
+        // 自動検出された媒体情報を設定
+        if (data.data.detectedMedia) {
+          setDetectedMedia(data.data.detectedMedia)
+          setSelectedMediaId(data.data.detectedMedia.id)
+        }
+        if (data.data.detectedDomain) {
+          setDetectedDomain(data.data.detectedDomain)
+        }
+
+        // 媒体が検出されなかった場合はエラー
+        if (!data.data.detectedMedia && data.data.detectedDomain) {
+          setValidationError(`ドメイン「${data.data.detectedDomain}」に一致する媒体が見つかりません。先に媒体を登録してください。`)
+          return false
+        }
+        if (!data.data.detectedDomain) {
+          setValidationError('CSVのURL列からドメインを検出できませんでした。URL列が含まれているか確認してください。')
+          return false
+        }
+
         return true
       } else {
         setValidationError(data.error?.message || 'バリデーションに失敗しました')
@@ -348,14 +360,17 @@ export default function ImportPage() {
 
   // 次のステップへ
   const nextStep = async () => {
-    // Step 2: 媒体選択の必須チェック
-    if (currentStep === 2) {
-      if (!selectedMediaId) {
-        setValidationError('対象媒体の選択は必須です')
-        return
-      }
+    // Step 1→2: ファイル検証と媒体自動検出
+    if (currentStep === 1) {
       const isValid = await validateFile()
       if (!isValid) return
+    }
+    // Step 2→3: 自動検出された媒体の確認
+    if (currentStep === 2) {
+      if (!selectedMediaId) {
+        setValidationError('媒体が検出されていません')
+        return
+      }
     }
     if (currentStep === 3) {
       await startImport()
@@ -380,6 +395,8 @@ export default function ImportPage() {
     setColumns([])
     setValidationError(null)
     setCurrentJobId(null)
+    setDetectedMedia(null)
+    setDetectedDomain(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -651,56 +668,145 @@ export default function ImportPage() {
                       </>
                     )}
                   </div>
+
+                  {/* バリデーションエラー表示 */}
+                  {validationError && (
+                    <div
+                      style={{
+                        marginTop: '16px',
+                        padding: '12px 16px',
+                        background: '#FEF2F2',
+                        border: '1px solid #FECACA',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                      }}
+                    >
+                      <XCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#EF4444', marginTop: '1px' }} />
+                      <div style={{ fontSize: '13px', color: '#991B1B' }}>
+                        {validationError}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ローディング表示 */}
+                  {isValidating && (
+                    <div
+                      style={{
+                        marginTop: '16px',
+                        padding: '16px',
+                        background: '#F5F3FF',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '10px',
+                      }}
+                    >
+                      <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#7C3AED' }} />
+                      <span style={{ fontSize: '13px', color: '#6D28D9' }}>
+                        CSVを検証し、媒体を自動検出中...
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Step 2: 設定 */}
+              {/* Step 2: 設定（自動検出された媒体の確認） */}
               {currentStep === 2 && (
                 <div>
                   <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#18181B', marginBottom: '16px' }}>
-                    インポート設定
+                    媒体の確認
                   </h2>
 
-                  {/* Media Selection - 必須 */}
-                  <div>
-                    <label
+                  {/* 自動検出された媒体の表示 */}
+                  {detectedMedia ? (
+                    <div
                       style={{
-                        display: 'block',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        color: '#52525B',
-                        marginBottom: '8px',
+                        padding: '16px',
+                        background: '#F0FDF4',
+                        border: '1px solid #86EFAC',
+                        borderRadius: '8px',
                       }}
                     >
-                      対象媒体 <span style={{ color: '#EF4444' }}>*</span>
-                    </label>
-                    <select
-                      value={selectedMediaId}
-                      onChange={(e) => setSelectedMediaId(e.target.value)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <CheckCircle2 className="h-5 w-5" style={{ color: '#22C55E' }} />
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#166534' }}>
+                          媒体を自動検出しました
+                        </span>
+                      </div>
+                      <div style={{ marginLeft: '28px' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 600, color: '#18181B', marginBottom: '4px' }}>
+                          {detectedMedia.name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#52525B' }}>
+                          ドメイン: {detectedMedia.domain}
+                        </div>
+                      </div>
+                    </div>
+                  ) : detectedDomain ? (
+                    <div
                       style={{
-                        width: '100%',
-                        padding: '12px',
-                        border: selectedMediaId ? '1px solid #E4E4E7' : '1px solid #FCA5A5',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        color: '#18181B',
-                        background: '#FFFFFF',
-                        cursor: 'pointer',
+                        padding: '16px',
+                        background: '#FEF2F2',
+                        border: '1px solid #FECACA',
+                        borderRadius: '8px',
                       }}
                     >
-                      <option value="">媒体を選択してください</option>
-                      {mediaList.map((media) => (
-                        <option key={media.id} value={media.id}>
-                          {media.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p style={{ fontSize: '11px', color: selectedMediaId ? '#A1A1AA' : '#EF4444', marginTop: '6px' }}>
-                      {selectedMediaId
-                        ? 'このCSVのキーワードは選択した媒体に紐付けられます'
-                        : '媒体の選択は必須です。媒体カタログに表示するために必要です'}
-                    </p>
-                  </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <XCircle className="h-5 w-5" style={{ color: '#EF4444' }} />
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#991B1B' }}>
+                          媒体が見つかりません
+                        </span>
+                      </div>
+                      <div style={{ marginLeft: '28px' }}>
+                        <div style={{ fontSize: '13px', color: '#7F1D1D', marginBottom: '8px' }}>
+                          検出されたドメイン「{detectedDomain}」に一致する媒体が登録されていません。
+                        </div>
+                        <button
+                          onClick={() => router.push('/admin/media')}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#EF4444',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          媒体を登録する
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: '16px',
+                        background: '#FEF3C7',
+                        border: '1px solid #FDE68A',
+                        borderRadius: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertCircle className="h-5 w-5" style={{ color: '#D97706' }} />
+                        <span style={{ fontSize: '13px', color: '#92400E' }}>
+                          CSVからドメインを検出できませんでした。URL列が含まれているか確認してください。
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 確認情報 */}
+                  {detectedMedia && (
+                    <div style={{ marginTop: '16px' }}>
+                      <p style={{ fontSize: '12px', color: '#A1A1AA' }}>
+                        このCSVのキーワードは上記の媒体に紐付けられます。問題なければ次へ進んでください。
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
