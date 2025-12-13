@@ -275,6 +275,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       competition: mk.competition_level, // 互換性のため
       seo_difficulty: mk.seo_difficulty,
       landing_url: mk.landing_url,
+      url: mk.landing_url, // 互換性のため
     }))
 
     // 統計情報を計算

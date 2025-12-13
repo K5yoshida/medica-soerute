@@ -1,18 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-interface KeywordWithMedia {
+/**
+ * media_keywords と keywords を JOIN した結果の型
+ * 新スキーマ: media_keywords (媒体×キーワード紐付け) → keywords (キーワードマスター)
+ */
+interface MediaKeywordWithRelation {
   id: string
+  keyword_id: string
   media_id: string
-  keyword: string
+  ranking_position: number | null
   monthly_search_volume: number | null
-  search_rank: number | null
   estimated_traffic: number | null
+  cpc: number | null
+  competition_level: number | null
   seo_difficulty: number | null
-  cpc_usd: number | null
-  competition: number | null
-  url: string | null
-  intent: string | null
+  landing_url: string | null
+  keywords: {
+    id: string
+    keyword: string
+    intent: string | null
+    query_type: string | null
+  } | null
   media_master: {
     id: string
     name: string
@@ -20,7 +29,7 @@ interface KeywordWithMedia {
     category: string
     monthly_visits: number | null
     is_active: boolean
-  }
+  } | null
 }
 
 // キーワード横断検索API
@@ -47,8 +56,8 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50', 10)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
-    // ラッコキーワード風フィルターパラメータ
-    const intent = searchParams.get('intent') // A,B,C のカンマ区切り
+    // フィルターパラメータ
+    const intent = searchParams.get('intent') // カンマ区切り
     const seoDifficultyMin = searchParams.get('seo_difficulty_min')
     const seoDifficultyMax = searchParams.get('seo_difficulty_max')
     const searchVolumeMin = searchParams.get('search_volume_min')
@@ -65,11 +74,27 @@ export async function GET(request: Request) {
       )
     }
 
-    // キーワードをmedia_masterと結合して検索
+    // 新スキーマ: media_keywords → keywords, media_master を JOIN
+    // keywords テーブルのキーワードで検索
     let keywordQuery = supabase
-      .from('keywords')
+      .from('media_keywords')
       .select(`
-        *,
+        id,
+        keyword_id,
+        media_id,
+        ranking_position,
+        monthly_search_volume,
+        estimated_traffic,
+        cpc,
+        competition_level,
+        seo_difficulty,
+        landing_url,
+        keywords!inner (
+          id,
+          keyword,
+          intent,
+          query_type
+        ),
         media_master!inner (
           id,
           name,
@@ -79,7 +104,7 @@ export async function GET(request: Request) {
           is_active
         )
       `, { count: 'exact' })
-      .ilike('keyword', `%${query}%`)
+      .ilike('keywords.keyword', `%${query}%`)
       .eq('media_master.is_active', true)
 
     // カテゴリフィルター
@@ -87,10 +112,10 @@ export async function GET(request: Request) {
       keywordQuery = keywordQuery.eq('media_master.category', category)
     }
 
-    // 応募意図フィルター
+    // 意図分類フィルター
     if (intent) {
-      const intentArray = intent.split(',').map((i) => i.trim().toUpperCase())
-      keywordQuery = keywordQuery.in('intent', intentArray)
+      const intentArray = intent.split(',').map((i) => i.trim().toLowerCase())
+      keywordQuery = keywordQuery.in('keywords.intent', intentArray)
     }
 
     // SEO難易度フィルター
@@ -111,28 +136,29 @@ export async function GET(request: Request) {
 
     // 検索順位フィルター
     if (rankMin) {
-      keywordQuery = keywordQuery.gte('search_rank', parseInt(rankMin, 10))
+      keywordQuery = keywordQuery.gte('ranking_position', parseInt(rankMin, 10))
     }
     if (rankMax) {
-      keywordQuery = keywordQuery.lte('search_rank', parseInt(rankMax, 10))
+      keywordQuery = keywordQuery.lte('ranking_position', parseInt(rankMax, 10))
     }
 
     // 競合性フィルター
     if (competitionMin) {
-      keywordQuery = keywordQuery.gte('competition', parseInt(competitionMin, 10))
+      keywordQuery = keywordQuery.gte('competition_level', parseInt(competitionMin, 10))
     }
     if (competitionMax) {
-      keywordQuery = keywordQuery.lte('competition', parseInt(competitionMax, 10))
+      keywordQuery = keywordQuery.lte('competition_level', parseInt(competitionMax, 10))
     }
 
     // ソート
     const ascending = sortOrder === 'asc'
     switch (sortBy) {
       case 'keyword':
-        keywordQuery = keywordQuery.order('keyword', { ascending })
+        keywordQuery = keywordQuery.order('keywords(keyword)', { ascending })
         break
       case 'search_rank':
-        keywordQuery = keywordQuery.order('search_rank', { ascending, nullsFirst: false })
+      case 'ranking_position':
+        keywordQuery = keywordQuery.order('ranking_position', { ascending, nullsFirst: false })
         break
       case 'estimated_traffic':
         keywordQuery = keywordQuery.order('estimated_traffic', { ascending, nullsFirst: false })
@@ -140,8 +166,9 @@ export async function GET(request: Request) {
       case 'seo_difficulty':
         keywordQuery = keywordQuery.order('seo_difficulty', { ascending, nullsFirst: false })
         break
+      case 'cpc':
       case 'cpc_usd':
-        keywordQuery = keywordQuery.order('cpc_usd', { ascending, nullsFirst: false })
+        keywordQuery = keywordQuery.order('cpc', { ascending, nullsFirst: false })
         break
       case 'media_name':
         keywordQuery = keywordQuery.order('media_master(name)', { ascending })
@@ -155,7 +182,7 @@ export async function GET(request: Request) {
     // ページネーション
     keywordQuery = keywordQuery.range(offset, offset + limit - 1)
 
-    const { data: keywords, error: keywordsError, count } = await keywordQuery
+    const { data: mediaKeywords, error: keywordsError, count } = await keywordQuery
 
     if (keywordsError) {
       console.error('Failed to search keywords:', keywordsError)
@@ -166,32 +193,37 @@ export async function GET(request: Request) {
     }
 
     // 型キャスト
-    const typedKeywords = keywords as KeywordWithMedia[] | null
+    const typedKeywords = mediaKeywords as MediaKeywordWithRelation[] | null
 
     // 検索結果の統計を計算
     const stats = {
       total_results: count || 0,
-      media_count: new Set(typedKeywords?.map((k: KeywordWithMedia) => k.media_id)).size,
+      media_count: new Set(typedKeywords?.map((k) => k.media_id)).size,
     }
 
-    // レスポンスデータを整形
-    const formattedKeywords = typedKeywords?.map((k: KeywordWithMedia) => ({
-      id: k.id,
-      keyword: k.keyword,
-      monthly_search_volume: k.monthly_search_volume,
-      search_rank: k.search_rank,
-      estimated_traffic: k.estimated_traffic,
-      seo_difficulty: k.seo_difficulty,
-      cpc_usd: k.cpc_usd,
-      competition: k.competition,
-      url: k.url,
-      intent: k.intent,
+    // レスポンスデータを整形（フロントエンドの期待する形式に変換）
+    const formattedKeywords = typedKeywords?.map((mk) => ({
+      id: mk.id,
+      keyword: mk.keywords?.keyword || '',
+      monthly_search_volume: mk.monthly_search_volume,
+      search_rank: mk.ranking_position, // 互換性のため
+      ranking_position: mk.ranking_position,
+      estimated_traffic: mk.estimated_traffic,
+      seo_difficulty: mk.seo_difficulty,
+      cpc_usd: mk.cpc, // 互換性のため
+      cpc: mk.cpc,
+      competition: mk.competition_level, // 互換性のため
+      competition_level: mk.competition_level,
+      url: mk.landing_url, // landing_url を url として返す
+      landing_url: mk.landing_url,
+      intent: mk.keywords?.intent || 'unknown',
+      query_type: mk.keywords?.query_type || null,
       media: {
-        id: k.media_master.id,
-        name: k.media_master.name,
-        domain: k.media_master.domain,
-        category: k.media_master.category,
-        monthly_visits: k.media_master.monthly_visits,
+        id: mk.media_master?.id || '',
+        name: mk.media_master?.name || '',
+        domain: mk.media_master?.domain || null,
+        category: mk.media_master?.category || '',
+        monthly_visits: mk.media_master?.monthly_visits || null,
       },
     }))
 
