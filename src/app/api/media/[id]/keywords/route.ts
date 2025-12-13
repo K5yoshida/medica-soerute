@@ -116,7 +116,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         )
       }
 
-      // intentフィルタ（検索段階）
+      // intentフィルタ（検索カテゴリ）
       if (intent) {
         const intentArray = intent.split(',').map((i) => i.trim().toLowerCase())
         filteredKeywordRecords = filteredKeywordRecords.filter(

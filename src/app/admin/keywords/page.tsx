@@ -18,7 +18,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 
-// 検索段階ラベル（keywords.intent）- 6カテゴリ
+// 検索カテゴリラベル（keywords.intent）- 6カテゴリ
 const INTENT_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
   branded_media: { label: '指名検索（媒体）', color: '#7C3AED', bgColor: '#EDE9FE' },
   branded_customer: { label: '指名検索（顧客）', color: '#DB2777', bgColor: '#FCE7F3' },
@@ -537,7 +537,7 @@ export default function KeywordsPage() {
                     検索目的
                   </th>
                   <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
-                    検索段階
+                    検索カテゴリ
                   </th>
                   <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '12px', fontWeight: 500, color: '#52525B', whiteSpace: 'nowrap', background: '#FAFAFA' }}>
                     ソース
@@ -627,7 +627,7 @@ export default function KeywordsPage() {
                           <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
                         )}
                       </td>
-                      {/* 検索段階 */}
+                      {/* 検索カテゴリ */}
                       <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                         {kw.intent && INTENT_LABELS[kw.intent] ? (
                           <span

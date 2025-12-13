@@ -85,7 +85,7 @@ const QUERY_TYPE_LABELS: Record<string, { label: string; color: string; bgColor:
   Buy: { label: 'Buy', color: '#D97706', bgColor: '#FEF3C7' },
 }
 
-// 検索段階ラベル（keywords.intent）- 6カテゴリ
+// 検索カテゴリラベル（keywords.intent）- 6カテゴリ
 const INTENT_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
   branded_media: { label: '指名検索（媒体）', color: '#7C3AED', bgColor: '#EDE9FE' },
   branded_customer: { label: '指名検索（顧客）', color: '#DB2777', bgColor: '#FCE7F3' },
@@ -235,7 +235,7 @@ export default function MediaDetailPage() {
       if (competition.min !== null) params.set('competition_min', String(competition.min))
       if (competition.max !== null) params.set('competition_max', String(competition.max))
 
-      // 検索目的・検索段階フィルター
+      // 検索目的・検索カテゴリフィルター
       if (selectedQueryTypes.length > 0) params.set('query_type', selectedQueryTypes.join(','))
       if (selectedIntents.length > 0) params.set('intent', selectedIntents.join(','))
 
@@ -527,9 +527,9 @@ export default function MediaDetailPage() {
             onChange={(values) => { setSelectedQueryTypes(values); setCurrentPage(1) }}
           />
 
-          {/* 検索段階フィルター */}
+          {/* 検索カテゴリフィルター */}
           <MultiSelectFilterDropdown
-            label="検索段階"
+            label="検索カテゴリ"
             options={Object.entries(INTENT_LABELS).map(([value, { label, color, bgColor }]) => ({
               value,
               label,
@@ -685,7 +685,7 @@ export default function MediaDetailPage() {
                       background: '#FAFAFA',
                     }}
                   >
-                    検索段階
+                    検索カテゴリ
                   </th>
                   <SortableHeader label="SEO難易度" columnId="seo_difficulty" />
                   <SortableHeader label="月間検索数" columnId="monthly_search_volume" />
@@ -763,7 +763,7 @@ export default function MediaDetailPage() {
                           <span style={{ fontSize: '12px', color: '#A1A1AA' }}>-</span>
                         )}
                       </td>
-                      {/* 検索段階 */}
+                      {/* 検索カテゴリ */}
                       <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                         {kw.intent && INTENT_LABELS[kw.intent] ? (
                           <span

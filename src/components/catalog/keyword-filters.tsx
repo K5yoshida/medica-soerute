@@ -37,7 +37,7 @@ export const defaultFilters: KeywordFilters = {
   estimatedTrafficMax: null,
 }
 
-// 検索段階ラベル（4カテゴリ: branded, transactional, informational, b2b）
+// 検索カテゴリラベル（4カテゴリ: branded, transactional, informational, b2b）
 const INTENT_LABELS: Record<string, { label: string; color: string }> = {
   branded: { label: '指名検索', color: 'bg-purple-100 text-purple-700 border-purple-200' },
   transactional: { label: '応募意図', color: 'bg-rose-100 text-rose-700 border-rose-200' },
@@ -78,10 +78,10 @@ export function KeywordFiltersBar({
 
   return (
     <div className={`flex items-center gap-2 flex-wrap ${compact ? '' : 'py-2'}`}>
-      {/* 検索段階フィルター */}
+      {/* 検索カテゴリフィルター */}
       {showIntentFilter && (
         <div className="flex items-center gap-1">
-          <span className="text-[11px] text-zinc-400 mr-1">段階:</span>
+          <span className="text-[11px] text-zinc-400 mr-1">カテゴリ:</span>
           {Object.entries(INTENT_LABELS).map(([key, { label, color }]) => (
             <button
               key={key}
