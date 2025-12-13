@@ -8,7 +8,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import {
   classifyQueryIntent,
   classifyQueryType,
-  classifyWithWebSearch,
+  classifyWithHybrid,
   IntentClassification,
   QueryType,
 } from '@/lib/query-intent'
@@ -23,7 +23,6 @@ import { sendTrialExpirationNotification } from '@/lib/email'
 const DB_BATCH_SIZE = 500           // DB挿入: 1バッチあたりの件数
 const DB_LOOKUP_BATCH_SIZE = 200    // DB検索: 1バッチあたりの件数（日本語キーワードはURLエンコードで膨張するため小さめに設定）
 const AI_BATCH_PER_STEP = 30        // AI分類: 1stepあたりの処理件数（Vercel Pro 300秒対応）
-const AI_BATCH_SIZE = 30            // Claude API: 1リクエストあたりの件数
 const PROGRESS_UPDATE_INTERVAL = 500 // 進捗更新間隔
 
 /**
@@ -519,8 +518,8 @@ export const importCsvJob = inngest.createFunction(
         }
 
         try {
-          // Claude Web Search を使用してSERP検証付きの高精度分類を実行
-          const results = await classifyWithWebSearch(keywords, AI_BATCH_SIZE)
+          // 3層ハイブリッド分類: ルールベース → AI判定 → Web検索（branded_ambiguousのみ）
+          const results = await classifyWithHybrid(keywords)
           console.log(`AI分類バッチ ${batchIndex + 1} 完了: ${results.size}件`)
           return Object.fromEntries(results)
         } catch (error) {
