@@ -679,9 +679,14 @@ export function classifyQueryTypes(keywords: string[]): Map<string, QueryType> {
 }
 
 /**
- * @deprecated intentからqueryTypeを導出（非推奨：独立分類を使用すること）
+ * intentからqueryTypeを導出
+ *
+ * マッピング:
+ * - branded_* → Go（特定サイトへの訪問意図）
+ * - transactional → Do（応募行動意図）
+ * - informational/b2b → Know（情報収集意図）
  */
-export function getQueryTypeFromIntent(intent: QueryIntent): QueryType | null {
+export function getQueryTypeFromIntent(intent: QueryIntent): QueryType {
   switch (intent) {
     case 'branded_media':
     case 'branded_customer':
@@ -691,6 +696,9 @@ export function getQueryTypeFromIntent(intent: QueryIntent): QueryType | null {
       return 'Do'
     case 'informational':
     case 'b2b':
+      return 'Know'
+    default:
+      // 型安全のためのフォールバック（実際には到達しない）
       return 'Know'
   }
 }
@@ -899,6 +907,7 @@ JSON配列のみを返してください。`
           intent,
           confidence: 'high',
           reason: `[SERP] ${item.reason}`,  // Web検索でSERP確認済みであることを明示
+          queryType: getQueryTypeFromIntent(intent),  // intentからqueryTypeを導出
           serpVerified: true,
         })
       }
@@ -911,6 +920,7 @@ JSON配列のみを返してください。`
           intent: 'informational',
           confidence: 'low',
           reason: 'AI分類失敗',
+          queryType: 'Know',  // informationalのデフォルト
           serpVerified: false,
         })
       }
@@ -1146,6 +1156,7 @@ JSON配列のみを返してください。`
           intent,
           confidence: 'high',
           reason: item.reason,
+          queryType: getQueryTypeFromIntent(intent),  // intentからqueryTypeを導出
           serpVerified: false,
         })
       }
@@ -1157,6 +1168,7 @@ JSON配列のみを返してください。`
           intent: 'informational',
           confidence: 'low',
           reason: 'AI分類失敗',
+          queryType: 'Know',  // informationalのデフォルト
           serpVerified: false,
         })
       }
@@ -1183,6 +1195,7 @@ JSON配列のみを返してください。`
         intent: 'informational',
         confidence: 'low',
         reason: `分類エラー: ${errorMessage.slice(0, 200)}`,
+        queryType: 'Know',  // エラー時のデフォルト
         serpVerified: false,
       })
     }
@@ -1270,6 +1283,7 @@ export async function classifyWithHybrid(
             intent: 'informational',
             confidence: 'low',
             reason: 'Web検索エラー、フォールバック',
+            queryType: 'Know',  // informationalのデフォルト
             serpVerified: false,
           })
         }
